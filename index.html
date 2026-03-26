@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
+  <title>rehab.ai · AI tools for rehabilitation</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/auth.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-left">
+        <span class="logo-icon" aria-hidden="true">⚕️</span>
+        <div class="logo-text">
+          <span class="logo-lop">rehab.ai</span>
+          <span class="logo-full">intelligent tools</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <button class="icon-btn" id="searchToggle" aria-label="search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        
+        <!-- Login Button (shown when logged out) -->
+        <button class="btn-login" id="loginBtn" style="display:none">Login</button>
+        
+        <!-- Profile Button (shown when logged in) -->
+        <div class="profile-dropdown" id="profileDropdown" style="display: none;">
+          <button class="btn-profile" id="profileBtn">
+            <span class="profile-icon" id="profileIcon">👤</span>
+            <span class="profile-name" id="profileName"></span>
+          </button>
+          <div class="dropdown-menu" id="dropdownMenu">
+            <button class="dropdown-item" id="profileMenuItem">
+              <span>👤</span> My Profile
+            </button>
+            <button class="dropdown-item" id="settingsMenuItem">
+              <span>⚙️</span> Settings
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="logoutMenuItem">
+              <span>🚪</span> Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="hero-content">
+        <h1 id="heroTitle">rehab.ai <span class="hero-accent">AI tools</span></h1>
+        <p class="hero-sub">Intelligent assistance for rehabilitation professionals</p>
+      </div>
+    </header>
+
+    <!-- Search bar -->
+    <section class="search-section">
+      <div class="search-wrapper">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="searchInput" class="search-bar" placeholder="Search tools by name or description…" aria-label="search tools">
+      </div>
+    </section>
+
+    <!-- Card grid - Static HTML cards -->
+    <section class="tool-grid-section">
+      <div id="toolGrid" class="tool-grid">
+        <!-- Assessment Format Generator Card -->
+        <a href="format.html" class="tool-card-link" data-tool="assessment">
+          <article class="tool-card">
+            <div class="tool-icon">📋</div>
+            <h3 class="tool-title">Assessment Format Generator</h3>
+            <p class="tool-description">Automatically create structured assessment formats based on patient data and clinical guidelines.</p>
+            <div class="tool-meta">
+              <span>⚡ AI · Forms</span>
+            </div>
+          </article>
+        </a>
+        
+        
+        <a href="standardized.html" class="tool-card-link">
+  <div class="tool-card">
+    <div class="tool-icon">📋</div>
+    <h2 class="tool-title">Standardized Tools</h2>
+    <p class="tool-description">Generate complete copies of standardized assessments like MMSE, Berg Balance Scale, and more.</p>
+    <div class="tool-meta">
+      <span>⚕️ PDF download</span>
+    </div>
+  </div>
+</a>
+
+        <!-- Documentation Assistant Card -->
+        <a href="documentation.html" class="tool-card-link" data-tool="documentation">
+          <article class="tool-card">
+            <div class="tool-icon">🎙️</div>
+            <h3 class="tool-title">Documentation Assistant</h3>
+            <p class="tool-description">Dictate, upload files, or upload record sessions – AI transcribes and organizes your clinical notes effortlessly.</p>
+            <div class="tool-meta">
+              <span>⚡ Speech‑to‑text · Files</span>
+            </div>
+          </article>
+        </a>
+
+        <!-- Gait Monitor Card -->
+        <a href="/tools/gait-monitor" class="tool-card-link" data-tool="gait">
+          <article class="tool-card">
+            <div class="tool-icon">🎥</div>
+            <h3 class="tool-title">Gait Monitor</h3>
+            <p class="tool-description">Upload a video of a patient's gait for AI‑powered analysis and feedback on movement patterns.</p>
+            <div class="tool-meta">
+              <span>⚡ Video analysis · Biomechanics</span>
+            </div>
+          </article>
+        </a>
+
+        <!-- Presentation Maker Card -->
+        <a href="/tools/presentation-maker" class="tool-card-link" data-tool="presentation">
+          <article class="tool-card">
+            <div class="tool-icon">📊</div>
+            <h3 class="tool-title">Presentation Maker</h3>
+            <p class="tool-description">Turn your notes or research into professional presentations with AI‑generated slides and visuals.</p>
+            <div class="tool-meta">
+              <span>⚡ AI slides · Export</span>
+            </div>
+          </article>
+        </a>
+      </div>
+      <div id="emptyMessage" class="empty-state hidden">No matching tools found.</div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© rehab.ai — AI tools for rehabilitation</p>
+  </footer>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Welcome Animation Overlay -->
+  <div id="welcomeOverlay" class="welcome-overlay hidden">
+    <div class="welcome-card glass">
+      <div class="welcome-content">
+        <h2>🎉 Welcome to rehab.ai! 🎉</h2>
+        <p>Your intelligent rehabilitation assistant</p>
+        <div class="welcome-icon">⚕️</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal">
+    <div class="modal-content glass">
+      <button class="modal-close" id="closeModal">&times;</button>
+      
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="loginTab">Login</button>
+        <button class="auth-tab" id="registerTab">Register</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form active">
+        <h2>Welcome Back</h2>
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <div class="form-footer">
+          <a href="#" class="forgot-link" id="forgotPassword">Forgot password?</a>
+        </div>
+        <button type="submit" class="auth-btn" id="loginSubmitBtn">Login</button>
+        <div id="loginError" class="error-message"></div>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" class="auth-form">
+        <h2>Join rehab.ai</h2>
+        <div class="form-group">
+          <label for="regName">Full Name</label>
+          <input type="text" id="regName" required placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="regRepeatPassword">Repeat Password</label>
+          <input type="password" id="regRepeatPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="voiceRange">Specialization</label>
+          <select id="voiceRange" required>
+            <option value="">Select your area</option>
+            <option value="physical">Physical Therapy</option>
+            <option value="occupational">Occupational Therapy</option>
+            <option value="speech">Speech Therapy</option>
+            <option value="neurological">Neurological Rehabilitation</option>
+            <option value="pediatric">Pediatric Rehabilitation</option>
+          </select>
+        </div>
+        <div class="form-group checkbox">
+          <input type="checkbox" id="terms" required>
+          <label for="terms">I agree to the <a href="#">terms and conditions</a></label>
+        </div>
+        <button type="submit" class="auth-btn" id="registerSubmitBtn">Create Account</button>
+        <div id="registerError" class="error-message"></div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Floating AI Button -->
+<a href="ai.html" class="floating-ai-btn" id="floatingAiBtn" aria-label="AI Assistant">
+  <div class="ai-btn-content">
+    <span class="ai-icon">🤖</span>
+    <span class="ai-text">AI Assistant</span>
+  </div>
+  <div class="ai-pulse"></div>
+</a>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

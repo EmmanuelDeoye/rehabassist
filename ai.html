@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+  <title>rehab.ai · AI Assistant</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <!-- Markdown Library -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Global Styles -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <!-- Page Specific Styles -->
+  <link rel="stylesheet" href="css/ai.css">
+</head>
+<body>
+  <!-- Navbar (same as homepage) -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-left">
+        <span class="logo-icon" aria-hidden="true">⚕️</span>
+        <div class="logo-text">
+          <span class="logo-lop">rehab.ai</span>
+          <span class="logo-full">AI assistant</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <button class="icon-btn" id="historyToggle" aria-label="history">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </button>
+        
+        <button class="icon-btn" id="newConversationBtn" aria-label="new conversation">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+</button>
+
+        <!-- New Specialty/Category Toggle -->
+        <button class="icon-btn" id="specialtyBtn" aria-label="specialty and category">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 7h-4.5A2.5 2.5 0 0 1 13 4.5V3"/>
+            <path d="M4 7h4.5A2.5 2.5 0 0 0 11 4.5V3"/>
+            <path d="M12 21v-6"/>
+            <path d="M12 9v2"/>
+            <circle cx="12" cy="12" r="3"/>
+            <circle cx="12" cy="12" r="9"/>
+          </svg>
+        </button>
+        
+        <!-- Login / Profile (reused from auth.js) -->
+        <button class="btn-login" id="loginBtn" style="display:none">Login</button>
+        <div class="profile-dropdown" id="profileDropdown" style="display: none;">
+          <button class="btn-profile" id="profileBtn">
+            <span class="profile-icon" id="profileIcon">👤</span>
+            <span class="profile-name" id="profileName"></span>
+          </button>
+          <div class="dropdown-menu" id="dropdownMenu">
+              <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>change theme
+        </button>
+            <button class="dropdown-item" id="profileMenuItem"><span>👤</span> My Profile</button>
+            <button class="dropdown-item" id="settingsMenuItem"><span>⚙️</span> Settings</button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="logoutMenuItem"><span>🚪</span> Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Specialty/Category Modal -->
+  <div id="specialtyModal" class="modal">
+    <div class="modal-content glass" style="max-width: 500px;">
+      <h3>Select Role & Context</h3>
+      <div class="specialty-section">
+        <label>Specialty</label>
+        <div class="specialty-grid">
+          <button class="specialty-option" data-specialty="occupational">Occupational Therapist</button>
+          <button class="specialty-option" data-specialty="consultant">Consultant</button>
+          <button class="specialty-option" data-specialty="nurse">Nurse</button>
+          <button class="specialty-option" data-specialty="psychologist">Psychologist</button>
+          <button class="specialty-option" data-specialty="physiotherapist">Physiotherapist</button>
+          <button class="specialty-option" data-specialty="speech">Speech Therapist</button>
+          <button class="specialty-option" data-specialty="behavioural">Behavioural Therapist</button>
+        </div>
+      </div>
+      <div class="specialty-section">
+        <label>Category</label>
+        <div class="specialty-grid">
+          <button class="category-option" data-category="general">General</button>
+          <button class="category-option" data-category="psychiatry">Psychiatry</button>
+          <button class="category-option" data-category="paediatrics">Paediatrics</button>
+          <button class="category-option" data-category="orthopaedics">Orthopaedics</button>
+          <button class="category-option" data-category="geriatrics">Geriatrics</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn cancel" id="closeSpecialtyBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Chat Area -->
+  <main class="chat-main">
+    <div class="chat-container">
+      <!-- Messages will be injected here -->
+      <div id="chatMessages" class="chat-messages">
+        <!-- Welcome message -->
+        <div class="message assistant">
+          <div class="message-content">
+            <p>Hello! I'm your rehabilitation AI assistant. How can I help you today?</p>
+            <span class="message-time">Just now</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Input Area -->
+  <div class="chat-input-area">
+    <!-- File preview bar -->
+    <div class="file-preview" id="filePreview" style="display: none;">
+      <div class="preview-info">
+        <span class="preview-icon" id="previewIcon">📄</span>
+        <span class="preview-name" id="previewName"></span>
+        <span class="preview-size" id="previewSize"></span>
+      </div>
+      <div class="preview-actions">
+        <button class="preview-remove" id="removeFileBtn" aria-label="Remove file">✕</button>
+      </div>
+    </div>
+
+    <div class="input-wrapper">
+      <button class="attach-btn" id="attachBtn" aria-label="Attach files">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+        </svg>
+      </button>
+      <input type="text" id="messageInput" class="message-input" placeholder="Type a message or hold to speak" autocomplete="off">
+      <button class="send-btn" id="sendBtn" aria-label="Send message">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+    <!-- Hidden file inputs -->
+    <input type="file" id="audioInput" accept="audio/*" capture="microphone" style="display: none">
+    <input type="file" id="imageInput" accept="image/*" capture="environment" style="display: none">
+    <input type="file" id="documentInput" accept=".txt,.pdf,.doc,.docx,.rtf" style="display: none">
+    
+    <!-- Attachment options popup -->
+    <div class="attach-popup" id="attachPopup">
+      <button class="attach-option" data-type="audio">
+        <span>🎤</span> Audio
+      </button>
+      <button class="attach-option" data-type="image">
+        <span>📷</span> Image
+      </button>
+      <button class="attach-option" data-type="document">
+        <span>📄</span> Document
+      </button>
+    </div>
+  </div>
+
+  <!-- History Drawer (similar to format.js) -->
+  <div class="history-drawer" id="historyDrawer">
+    <div class="drawer-header">
+      <h3>Conversation History</h3>
+      <button class="drawer-close" id="closeDrawer">&times;</button>
+    </div>
+    <div class="drawer-search">
+      <input type="text" id="historySearch" placeholder="Search conversations...">
+    </div>
+    <div class="drawer-stats">
+      <span>Total: <span id="totalCount">0</span></span>
+      <span>Latest: <span id="latestDate">-</span></span>
+    </div>
+    <div class="drawer-content" id="historyList">
+      <!-- History items will be injected -->
+      <div class="empty-history">No conversations yet</div>
+    </div>
+    <div class="drawer-footer">
+      <button class="clear-history-btn" id="clearHistoryBtn">Clear all history</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Delete Confirmation Modal (reused) -->
+  <div id="deleteConfirmModal" class="modal">
+    <div class="modal-content glass">
+      <h3>Delete History</h3>
+      <p>Are you sure you want to delete this conversation?</p>
+      <div class="modal-actions">
+        <button class="modal-btn cancel" id="cancelDeleteBtn">Cancel</button>
+        <button class="modal-btn confirm" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal">
+    <div class="modal-content glass">
+      <button class="modal-close" id="closeModal">&times;</button>
+      
+      <!-- Tabs -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="loginTab">Login</button>
+        <button class="auth-tab" id="registerTab">Register</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form active">
+        <h2>Welcome Back</h2>
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <div class="form-footer">
+          <a href="#" class="forgot-link" id="forgotPassword">Forgot password?</a>
+        </div>
+        <button type="submit" class="auth-btn" id="loginSubmitBtn">Login</button>
+        <div id="loginError" class="error-message"></div>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" class="auth-form">
+        <h2>Join rehab.ai</h2>
+        <div class="form-group">
+          <label for="regName">Full Name</label>
+          <input type="text" id="regName" required placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="regRepeatPassword">Repeat Password</label>
+          <input type="password" id="regRepeatPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="voiceRange">Specialization</label>
+          <select id="voiceRange" required>
+            <option value="">Select your area</option>
+            <option value="physical">Physical Therapy</option>
+            <option value="occupational">Occupational Therapy</option>
+            <option value="speech">Speech Therapy</option>
+            <option value="neurological">Neurological Rehabilitation</option>
+            <option value="pediatric">Pediatric Rehabilitation</option>
+          </select>
+        </div>
+        <div class="form-group checkbox">
+          <input type="checkbox" id="terms" required>
+          <label for="terms">I agree to the <a href="#">terms and conditions</a></label>
+        </div>
+        <button type="submit" class="auth-btn" id="registerSubmitBtn">Create Account</button>
+        <div id="registerError" class="error-message"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/ai.js"></script>
+</body>
+</html>

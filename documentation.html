@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+    <title>rehab.ai · Documentation Assistant</title>
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- Markdown library -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- PDF.js for PDF extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs" type="module"></script>
+    <!-- docx for export -->
+    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- rehab.ai global styles -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/documentation.css">
+</head>
+<body>
+    <!-- Navbar with history button integrated -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <span class="logo-icon" aria-hidden="true">⚕️</span>
+                <div class="logo-text">
+                    <span class="logo-lop">rehabassist</span>
+                    <span class="logo-full">doc. assistant</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <!-- Home Button -->
+                <a href="index.html" class="icon-btn home-icon" aria-label="Home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
+          </svg>
+        </a>
+                
+                <!-- History Button (moved to navbar) -->
+                 <button class="icon-btn" id="toggleHistoryBtn" aria-label="history">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
+          </svg>
+        </button>
+                
+                <!-- Theme Toggle -->
+                <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+                    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                
+                <!-- Login Button (shown when logged out) -->
+                <button class="btn-login" id="loginBtn" style="display:none">Login</button>
+                
+                <!-- Profile Button (shown when logged in) -->
+                <div class="profile-dropdown" id="profileDropdown" style="display: none;">
+                    <button class="btn-profile" id="profileBtn">
+                        <span class="profile-icon" id="profileIcon">👤</span>
+                        <span class="profile-name" id="profileName"></span>
+                    </button>
+                    <div class="dropdown-menu" id="dropdownMenu">
+                        <button class="dropdown-item" id="profileMenuItem"><span>👤</span> My Profile</button>
+                        <button class="dropdown-item" id="settingsMenuItem"><span>⚙️</span> Settings</button>
+                        <div class="dropdown-divider"></div>
+                        <button class="dropdown-item" id="logoutMenuItem"><span>🚪</span> Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Removed the separate history toggle button from here -->
+            
+            <!-- Upload Type Tabs (Text, Document, Audio) -->
+            <div class="upload-type-container">
+                <div class="switch-toggle">
+                    <button class="switch-btn active" data-type="text">
+                        <i class="fas fa-keyboard"></i> Text
+                    </button>
+                    <button class="switch-btn" data-type="document">
+                        <i class="fas fa-file-medical"></i> Document
+                    </button>
+                    <button class="switch-btn" data-type="audio">
+                        <i class="fas fa-microphone-alt"></i> Audio
+                    </button>
+                </div>
+            </div>
+
+            <!-- Workspace Grid: left side upload area, right side config -->
+            <div class="workspace-grid">
+                <div class="glass-card upload-area">
+                    <!-- Text Upload Section -->
+                    <div class="upload-view" id="textUploadSection">
+                        <div class="text-input-container">
+                            <div class="text-header">
+                                <i class="fas fa-paste"></i>
+                                <h3>Paste or type your text</h3>
+                            </div>
+                            <textarea id="plainTextInput" rows="12" placeholder="Paste clinical notes, reports, or any text here..."></textarea>
+                            <div class="text-footer">
+                                <span id="textWordCount">0 words</span>
+                                <button class="clear-text-btn" id="clearTextBtn">Clear</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Upload Section -->
+                    <div class="upload-view" id="documentUploadSection" style="display: none;">
+                        <div class="drop-zone" id="dropZone">
+                            <div class="drop-content">
+                                <div class="icon-pulse">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                </div>
+                                <h3>Upload Medical Report</h3>
+                                <p>Drag & drop PDF, DOCX, or TXT</p>
+                                <button class="browse-btn" id="browseDocumentBtn">
+                                    <i class="fas fa-folder-open"></i> Browse Files
+                                </button>
+                            </div>
+                            <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt" hidden>
+                        </div>
+                        <div class="file-info-card" id="fileInfo"></div>
+                    </div>
+
+                    <!-- Audio Upload Section -->
+                    <div class="upload-view" id="audioUploadSection" style="display: none;">
+                        <div class="audio-upload-zone" id="audioDropZone">
+                            <div class="drop-content">
+                                <div class="icon-pulse">
+                                    <i class="fas fa-file-audio"></i>
+                                </div>
+                                <h3>Upload Audio File</h3>
+                                <p>MP3, WAV, M4A, or other audio formats</p>
+                                <button class="browse-btn" id="browseAudioBtn">
+                                    <i class="fas fa-folder-open"></i> Choose Audio
+                                </button>
+                            </div>
+                            <input type="file" id="audioFileInput" accept="audio/*" hidden>
+                        </div>
+                        <div class="file-info-card" id="audioFileInfo" style="display: none;"></div>
+                        <div class="transcript-preview" id="audioTranscriptPreview" style="display: none;">
+                            <div class="transcript-header">
+                                <i class="fas fa-comment-dots"></i> Transcription Preview
+                            </div>
+                            <div class="transcript-content" id="transcriptPreviewText"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card config-area">
+                    <div class="config-section">
+                        <h3><i class='bx bx-category'></i> Document Type</h3>
+                        <div class="chips-grid">
+                            <button class="chip-btn" data-type="medical">Medical</button>
+                            <button class="chip-btn" data-type="psychology">Psychology</button>
+                            <button class="chip-btn" data-type="occupational">Occupational</button>
+                            <button class="chip-btn" data-type="physio">Physio</button>
+                            <button class="chip-btn" data-type="speech">Speech</button>
+                        </div>
+                    </div>
+
+                    <div class="config-section">
+                        <h3><i class='bx bx-search-alt'></i> Analysis Focus</h3>
+                        <div class="quick-tags">
+                            <span class="tag" data-request="Summarize findings">Summary</span>
+                            <span class="tag" data-request="Create treatment plan">Treatment Plan</span>
+                            <span class="tag" data-request="Diagnosis & Differential">Diagnosis</span>
+                            <span class="tag" data-request="Identify red flags">Red Flags</span>
+                        </div>
+                        <textarea id="analysisRequest" rows="4" placeholder="Describe specific insights needed..."></textarea>
+                    </div>
+
+                    <button id="analyzeBtn" class="analyze-btn" disabled>
+                        <span>Analyze</span>
+                        <i class="fas fa-magic"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="analysisResultsContainer" class="analysis-results-container" style="display: none;">
+                <div class="analysis-loading" id="loadingIndicator">
+                    <div class="dna-spinner"></div>
+                    <h3>Synthesizing Clinical Intelligence</h3>
+                    <p class="loading-text">Analyzing patterns and generating insights...</p>
+                </div>
+                <div class="analysis-paper" id="reportContentArea" style="display: none;">
+                    <div class="paper-toolbar">
+                        <div class="meta-info">
+                            <span class="badge-ai">rehab.ai AI</span>
+                            <span class="date-generated" id="reportDate"></span>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button class="tool-btn" id="downloadReport">
+                                <i class="fas fa-file-pdf"></i> Export doc.
+                            </button>
+                            <button class="tool-btn secondary" id="closeResultsBtn">
+                                <i class="fas fa-times"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="paper-body typography-clean" id="resultsContent"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content glass">
+            <button class="modal-close" id="closeModal">&times;</button>
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="loginTab">Login</button>
+                <button class="auth-tab" id="registerTab">Register</button>
+            </div>
+            <form id="loginForm" class="auth-form active">
+                <h2>Welcome Back</h2>
+                <div class="form-group">
+                    <label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" required placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required placeholder="••••••••">
+                </div>
+                <div class="form-footer">
+                    <a href="#" class="forgot-link" id="forgotPassword">Forgot password?</a>
+                </div>
+                <button type="submit" class="auth-btn" id="loginSubmitBtn">Login</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+            <form id="registerForm" class="auth-form">
+                <h2>Join rehab.ai</h2>
+                <div class="form-group">
+                    <label for="regName">Full Name</label>
+                    <input type="text" id="regName" required placeholder="Your name">
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">Email</label>
+                    <input type="email" id="regEmail" required placeholder="your@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" required placeholder="••••••••" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="regRepeatPassword">Repeat Password</label>
+                    <input type="password" id="regRepeatPassword" required placeholder="••••••••" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="voiceRange">Specialization</label>
+                    <select id="voiceRange" required>
+                        <option value="">Select your area</option>
+                        <option value="physical">Physical Therapy</option>
+                        <option value="occupational">Occupational Therapy</option>
+                        <option value="speech">Speech Therapy</option>
+                        <option value="neurological">Neurological Rehabilitation</option>
+                        <option value="pediatric">Pediatric Rehabilitation</option>
+                    </select>
+                </div>
+                <div class="form-group checkbox">
+                    <input type="checkbox" id="terms" required>
+                    <label for="terms">I agree to the <a href="#">terms and conditions</a></label>
+                </div>
+                <button type="submit" class="auth-btn" id="registerSubmitBtn">Create Account</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- History Drawer -->
+    <aside class="history-drawer" id="historyDrawer">
+        <div class="drawer-header">
+            <h3><i class='bx bx-time-five'></i> Analysis History</h3>
+            <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
+        </div>
+        <div class="history-content" id="historyList">
+            <div class="empty-state">
+                <i class='bx bx-folder-open'></i>
+                <p>No history found</p>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/documentation.js"></script>
+</body>
+</html>

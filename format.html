@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
+  <title>rehab.ai · Assessment Format Generator</title>
+  <!-- Firebase SDK (compat version) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/format.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-left">
+        <span class="logo-icon" aria-hidden="true">⚕️</span>
+        <div class="logo-text">
+          <span class="logo-lop">rehabassist</span>
+          <span class="logo-full">intelligent tools</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <a href="index.html" class="icon-btn home-icon" aria-label="Home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
+          </svg>
+        </a>
+        <button class="icon-btn history-nav-btn" id="historyNavBtn" aria-label="History">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
+          </svg>
+        </button>
+        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        
+        <!-- Login Button (shown when logged out) -->
+        <button class="btn-login" id="loginBtn" style="display:none"">Login</button>
+        
+        <!-- Profile Button (shown when logged in) -->
+        <div class="profile-dropdown" id="profileDropdown" style="display: none;">
+          <button class="btn-profile" id="profileBtn">
+            <span class="profile-icon" id="profileIcon">👤</span>
+            <span class="profile-name" id="profileName"></span>
+          </button>
+          <div class="dropdown-menu" id="dropdownMenu">
+            <button class="dropdown-item" id="profileMenuItem"><span>👤</span> My Profile</button>
+            <button class="dropdown-item" id="settingsMenuItem"><span>⚙️</span> Settings</button>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="logoutMenuItem"><span>🚪</span> Logout</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="hero-content">
+        <h1>Assessment <span class="hero-accent">Format Generator</span></h1>
+        <p class="hero-sub">Fill in the details below to generate a professional assessment template.</p>
+      </div>
+    </header>
+
+    <section class="format-section">
+      <div class="format-container">
+        <!-- Form Card -->
+        <div class="format-card">
+          <h2>Patient & Assessment Information</h2>
+          <form id="assessmentForm">
+            <!-- 1. Patient Biodata -->
+            <div class="form-card">
+              <h3>1. Patient Biodata</h3>
+              <div class="form-group">
+                <label for="patientName">Patient Name *</label>
+                <input type="text" id="patientName" class="form-input" placeholder="e.g. John Doe" required>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="patientAge">Age *</label>
+                  <input type="number" id="patientAge" class="form-input" placeholder="e.g. 45" min="1" max="150" required>
+                </div>
+                <div class="form-group">
+                  <label for="patientGender">Gender *</label>
+                  <select id="patientGender" class="form-input" required>
+                    <option value="">Select gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="patientDiagnosis">Diagnosis / Chief Complaint</label>
+                <input type="text" id="patientDiagnosis" class="form-input" placeholder="e.g. Stroke, Autism, Fracture...">
+              </div>
+            </div>
+
+            <!-- 2. Assessment Details -->
+            <div class="form-card">
+              <h3>2. Assessment Details</h3>
+             <div class="form-group">
+  <label for="assessmentType">Assessment Type *</label>
+  <select id="assessmentType" class="form-input" required>
+    <option value="">Select type</option>
+    <option value="Initial Evaluation">Initial Evaluation</option>
+    <option value="Comprehensive Assessment">Comprehensive Assessment</option>
+    <option value="Functional Assessment">Functional Assessment</option>
+    <option value="Progress Note">Progress Note</option>
+    <option value="Reassessment">Reassessment</option>
+    <option value="Discharge Summary">Discharge Summary</option>
+  </select>
+</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="categorySelect">Category</label>
+                  <select id="categorySelect" class="form-input">
+                    <option value="General">General</option>
+                    <option value="Medical">Medical</option>
+                    <option value="Orthopaedic">Orthopaedic</option>
+                    <option value="Paediatric">Paediatric</option>
+                    <option value="Psychiatry">Psychiatry</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="deptSelect">Department *</label>
+                  <select id="deptSelect" class="form-input" required>
+                    <option value="Occupational Therapy">Occupational Therapy</option>
+                    <option value="Physiotherapy">Physiotherapy</option>
+                    <option value="Speech Therapy">Speech Therapy</option>
+                    <option value="Nursing">Nursing</option>
+                    <option value="Clinical Psychology">Clinical Psychology</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Estimated Length (Pages)</label>
+                <div class="range-slider">
+                  <input type="range" id="pageCount" min="1" max="10" value="2">
+                  <span id="pageVal">2</span> Pages
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Clinical Notes -->
+            <div class="form-card">
+              <h3>3. Clinical Notes</h3>
+              <div class="form-group">
+                <label for="clinicalNotes">Clinical Notes / Special Instructions</label>
+                <textarea id="clinicalNotes" rows="4" class="form-input" placeholder="Any specific areas to focus on, patient history, or special considerations..."></textarea>
+              </div>
+              <div class="form-group checkbox">
+                <input type="checkbox" id="includeStandardSections" checked>
+                <label for="includeStandardSections">Include standard SOAP sections (Subjective, Objective, Assessment, Plan)</label>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" id="generateBtn">
+                <span class="btn-text">Generate Format</span>
+                <span class="loading-spinner-small" style="display: none;"></span>
+              </button>
+              <button type="button" class="btn-secondary" id="clearBtn">Clear</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Result Preview Card (appears after generation) -->
+        <div class="result-preview-card" id="resultPreviewCard" style="display: none;">
+          <div class="preview-header">
+            <h3>Latest Generated Assessment</h3>
+            <span class="preview-badge">New</span>
+          </div>
+          <div class="preview-content" id="resultPreview"></div>
+          <div class="preview-footer">
+            <button class="btn-primary preview-btn" id="viewFullBtn">📖 View Full Assessment</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© rehab.ai — AI tools for rehabilitation</p>
+  </footer>
+
+  <!-- History Side Drawer (replaces modal) -->
+  <div class="history-drawer" id="historyDrawer">
+    <div class="drawer-header">
+      <h2>Your Assessment History</h2>
+      <button class="drawer-close" id="closeDrawer">&times;</button>
+    </div>
+    <div class="drawer-stats" id="drawerStats">
+      <span class="stat-item">📊 Total: <span id="totalCount">0</span></span>
+      <span class="stat-item">📅 Latest: <span id="latestDate">-</span></span>
+    </div>
+    <div class="drawer-search">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="historySearch" placeholder="Search history..." class="drawer-search-input">
+    </div>
+    <div class="drawer-list" id="historyList">
+      <div class="loading-state history-loading">
+        <div class="loading-spinner"></div>
+        <p>Loading history...</p>
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn-secondary" id="clearHistoryBtn">Clear All History</button>
+    </div>
+  </div>
+
+  <!-- Download Format Modal (simple prompt) -->
+  <div id="downloadModal" class="modal download-modal">
+    <div class="modal-content glass download-content">
+      <h3>Choose Download Format</h3>
+      <div class="download-options">
+        <button class="btn-primary" id="downloadWordOption">📄 Word Document</button>
+        <button class="btn-primary" id="downloadPdfOption">🖨️ PDF Document</button>
+        <button class="btn-secondary" id="cancelDownload">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteConfirmModal" class="modal delete-confirm-modal">
+    <div class="modal-content glass delete-confirm-content">
+      <div class="warning-icon">⚠️</div>
+      <h3>Delete History Item</h3>
+      <p>Are you sure you want to delete this assessment? This action cannot be undone.</p>
+      <div class="delete-actions">
+        <button class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
+        <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Welcome Animation Overlay -->
+  <div id="welcomeOverlay" class="welcome-overlay hidden">
+    <div class="welcome-card glass">
+      <div class="welcome-content">
+        <h2>🎉 Welcome to rehab.ai! 🎉</h2>
+        <p>Your intelligent rehabilitation assistant</p>
+        <div class="welcome-icon">⚕️</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal (unchanged) -->
+  <div id="authModal" class="modal">
+    <div class="modal-content glass">
+      <button class="modal-close" id="closeModal">&times;</button>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="loginTab">Login</button>
+        <button class="auth-tab" id="registerTab">Register</button>
+      </div>
+      <form id="loginForm" class="auth-form active">
+        <h2>Welcome Back</h2>
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required placeholder="••••••••">
+        </div>
+        <div class="form-footer">
+          <a href="#" class="forgot-link" id="forgotPassword">Forgot password?</a>
+        </div>
+        <button type="submit" class="auth-btn" id="loginSubmitBtn">Login</button>
+        <div id="loginError" class="error-message"></div>
+      </form>
+      <form id="registerForm" class="auth-form">
+        <h2>Join rehab.ai</h2>
+        <div class="form-group">
+          <label for="regName">Full Name</label>
+          <input type="text" id="regName" required placeholder="Your name">
+        </div>
+        <div class="form-group">
+          <label for="regEmail">Email</label>
+          <input type="email" id="regEmail" required placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="regRepeatPassword">Repeat Password</label>
+          <input type="password" id="regRepeatPassword" required placeholder="••••••••" minlength="6">
+        </div>
+        <div class="form-group">
+          <label for="voiceRange">Specialization</label>
+          <select id="voiceRange" required>
+            <option value="">Select your area</option>
+            <option value="Physical Therapy">Physical Therapy</option>
+            <option value="Occupational Therapy">Occupational Therapy</option>
+            <option value="Speech Therapy">Speech Therapy</option>
+            <option value="Neurological Rehabilitation">Neurological Rehabilitation</option>
+            <option value="Pediatric Rehabilitation">Pediatric Rehabilitation</option>
+          </select>
+        </div>
+        <div class="form-group checkbox">
+          <input type="checkbox" id="terms" required>
+          <label for="terms">I agree to the <a href="#">terms and conditions</a></label>
+        </div>
+        <button type="submit" class="auth-btn" id="registerSubmitBtn">Create Account</button>
+        <div id="registerError" class="error-message"></div>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/format.js"></script>
+  <script>
+    // Theme toggle logic (unchanged)
+    (function() {
+      const themeToggle = document.getElementById('themeToggle');
+      const htmlElement = document.documentElement;
+      function initTheme() {
+        const stored = localStorage.getItem('rehab-theme');
+        if (stored === 'dark' || stored === 'light') {
+          htmlElement.setAttribute('data-theme', stored);
+        } else {
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          htmlElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
+          localStorage.setItem('rehab-theme', 'system');
+        }
+      }
+      function cycleTheme() {
+        const current = htmlElement.getAttribute('data-theme');
+        let newTheme = 'light';
+        if (current === 'light') newTheme = 'dark';
+        else if (current === 'dark') newTheme = 'system';
+        else newTheme = 'light';
+        if (newTheme === 'system') {
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          htmlElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
+          localStorage.setItem('rehab-theme', 'system');
+        } else {
+          htmlElement.setAttribute('data-theme', newTheme);
+          localStorage.setItem('rehab-theme', newTheme);
+        }
+      }
+      if (themeToggle) themeToggle.addEventListener('click', cycleTheme);
+      initTheme();
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (localStorage.getItem('rehab-theme') === 'system') {
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          htmlElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
