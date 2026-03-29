@@ -1,6 +1,7 @@
-// js/ai.js - With proper timestamps
+// js/ai.js - AI Assistant with Message Actions (Copy, Regenerate, Edit, PDF)
+
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('AI Assistant loaded – with proper timestamps');
+  console.log('AI Assistant loaded – with message actions');
 
   // DOM elements
   const chatMessages = document.getElementById('chatMessages');
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let itemToDelete = null;
   let selectedSpecialty = localStorage.getItem('rehab-specialty') || 'physiotherapist';
   let selectedCategory = localStorage.getItem('rehab-category') || 'general';
+  let isRegenerating = false;
 
   // Helper function to format timestamp
   function formatTimestamp(timestamp) {
@@ -59,14 +61,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    // For very recent messages
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
-    // For older messages, show date and time
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString();
+  }
+
+  // Helper function for relative time in history cards
+  function getRelativeTime(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
   }
 
   // Scroll to bottom function
@@ -88,12 +103,137 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
   }
 
-  // Enhanced addMessageToUI with timestamp parameter
-  function addMessageToUI(content, role, fileInfo = null, isTemp = false, timestamp = null) {
+  // Copy message to clipboard
+  async function copyMessage(content) {
+    try {
+      // Extract text from HTML if needed
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+      const plainText = tempDiv.textContent || tempDiv.innerText;
+      await navigator.clipboard.writeText(plainText);
+      showToast('✅ Message copied to clipboard', false, 2000);
+    } catch (err) {
+      showToast('Failed to copy message', true);
+    }
+  }
+
+  // Regenerate last AI response
+  async function regenerateLastResponse() {
+    if (isRegenerating) {
+      showToast('Please wait, already regenerating...', true);
+      return;
+    }
+    
+    // Find the last user message
+    let lastUserMessage = null;
+    let lastUserMessageIndex = -1;
+    for (let i = currentMessages.length - 1; i >= 0; i--) {
+      if (currentMessages[i].role === 'user') {
+        lastUserMessage = currentMessages[i];
+        lastUserMessageIndex = i;
+        break;
+      }
+    }
+    
+    if (!lastUserMessage) {
+      showToast('No user message to regenerate response for', true);
+      return;
+    }
+    
+    // Remove the last assistant message(s) after the user message
+    const messagesToKeep = currentMessages.slice(0, lastUserMessageIndex + 1);
+    const removedMessages = currentMessages.slice(lastUserMessageIndex + 1);
+    currentMessages = messagesToKeep;
+    
+    // Remove the corresponding assistant messages from UI
+    const allMessages = chatMessages.children;
+    const messagesToRemove = [];
+    for (let i = allMessages.length - 1; i >= 0; i--) {
+      const msg = allMessages[i];
+      if (msg.classList.contains('assistant') && !msg.classList.contains('temp-message')) {
+        messagesToRemove.push(msg);
+      } else if (msg.classList.contains('user')) {
+        break;
+      }
+    }
+    messagesToRemove.forEach(msg => msg.remove());
+    
+    // Regenerate response
+    await generateResponse(lastUserMessage.content);
+  }
+
+  // Edit and resend user message
+  function editAndResendMessage(messageContent, messageElement) {
+    // Populate input with the message content
+    messageInput.value = messageContent;
+    messageInput.focus();
+    
+    // Scroll to input
+    messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Optional: Highlight the message being edited
+    messageElement.style.opacity = '0.5';
+    setTimeout(() => {
+      messageElement.style.opacity = '';
+    }, 1000);
+    
+    showToast('Edit the message and press send to update', false, 3000);
+  }
+
+  // Generate PDF from message
+  async function generatePDF(content, messageElement) {
+    if (typeof html2pdf === 'undefined') {
+      showToast('PDF library not loaded', true);
+      return;
+    }
+    
+    const originalContent = messageElement.querySelector('.message-content').cloneNode(true);
+    const timeElement = originalContent.querySelector('.message-time');
+    if (timeElement) timeElement.remove();
+    
+    const actionsElement = originalContent.querySelector('.message-actions');
+    if (actionsElement) actionsElement.remove();
+    
+    const tempDiv = document.createElement('div');
+    tempDiv.style.padding = '20px';
+    tempDiv.style.fontFamily = 'Arial, sans-serif';
+    tempDiv.style.maxWidth = '800px';
+    tempDiv.style.margin = '0 auto';
+    tempDiv.innerHTML = `
+      <h1 style="color: #00695c; border-bottom: 2px solid #00695c; padding-bottom: 10px;">rehab.ai Assistant Response</h1>
+      <div style="margin: 20px 0;">
+        ${originalContent.innerHTML}
+      </div>
+      <hr>
+      <p style="font-size: 12px; color: #666;">Generated on ${new Date().toLocaleString()} by rehab.ai</p>
+    `;
+    
+    const opt = {
+      margin: [0.5, 0.5, 0.5, 0.5],
+      filename: `rehab_ai_response_${Date.now()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, letterRendering: true },
+      jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+    };
+    
+    try {
+      await html2pdf().set(opt).from(tempDiv).save();
+      showToast('✅ PDF saved successfully', false, 2000);
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      showToast('Failed to generate PDF', true);
+    }
+  }
+
+  // Enhanced addMessageToUI with action buttons for assistant messages
+  function addMessageToUI(content, role, fileInfo = null, isTemp = false, timestamp = null, messageId = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
-    // Use provided timestamp or generate current time for temp messages
+    if (messageId) {
+      messageDiv.dataset.messageId = messageId;
+    }
+    
     const messageTime = timestamp || (isTemp ? null : new Date().toISOString());
     const timeDisplay = messageTime ? formatTimestamp(messageTime) : (isTemp ? 'Processing...' : 'Just now');
 
@@ -102,15 +242,90 @@ document.addEventListener('DOMContentLoaded', function() {
       fileHtml = `<div class="message-file"><span>📎</span> ${escapeHtml(fileInfo.name)}</div>`;
     }
 
-    if (role === 'assistant') {
+    if (role === 'assistant' && !isTemp) {
       const formattedContent = formatAssistantMessage(content);
+      // Generate a unique ID for this message
+      const msgId = messageId || `msg_${Date.now()}_${Math.random()}`;
+      if (!messageId) messageDiv.dataset.messageId = msgId;
+      
       messageDiv.innerHTML = `
         <div class="message-content formatted">
           ${formattedContent}
           ${fileHtml}
+          <div class="message-actions">
+            <button class="msg-action-btn copy" title="Copy message">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Copy</span>
+            </button>
+            <button class="msg-action-btn regenerate" title="Regenerate response">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span>Regenerate</span>
+            </button>
+            <button class="msg-action-btn pdf" title="Save as PDF">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+              <span>PDF</span>
+            </button>
+          </div>
           <span class="message-time">${timeDisplay}</span>
         </div>
       `;
+      
+      // Add event listeners to action buttons
+      setTimeout(() => {
+        const copyBtn = messageDiv.querySelector('.msg-action-btn.copy');
+        const regenerateBtn = messageDiv.querySelector('.msg-action-btn.regenerate');
+        const pdfBtn = messageDiv.querySelector('.msg-action-btn.pdf');
+        
+        if (copyBtn) {
+          copyBtn.addEventListener('click', () => copyMessage(content));
+        }
+        if (regenerateBtn) {
+          regenerateBtn.addEventListener('click', () => regenerateLastResponse());
+        }
+        if (pdfBtn) {
+          pdfBtn.addEventListener('click', () => generatePDF(content, messageDiv));
+        }
+      }, 0);
+      
+    } else if (role === 'user' && !isTemp) {
+      const msgId = messageId || `msg_${Date.now()}_${Math.random()}`;
+      if (!messageId) messageDiv.dataset.messageId = msgId;
+      
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <p>${escapeHtml(content)}</p>
+          ${fileHtml}
+          <div class="message-actions user-actions">
+            <button class="msg-action-btn edit" title="Edit message">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 3l4 4-7 7H10v-4l7-7z"></path>
+                <path d="M4 20h16"></path>
+              </svg>
+              <span>Edit</span>
+            </button>
+          </div>
+          <span class="message-time">${timeDisplay}</span>
+        </div>
+      `;
+      
+      setTimeout(() => {
+        const editBtn = messageDiv.querySelector('.msg-action-btn.edit');
+        if (editBtn) {
+          editBtn.addEventListener('click', () => editAndResendMessage(content, messageDiv));
+        }
+      }, 0);
+      
     } else {
       messageDiv.innerHTML = `
         <div class="message-content">
@@ -123,7 +338,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (isTemp) messageDiv.classList.add('temp-message');
     
-    // Store timestamp as data attribute for reference
     if (messageTime && !isTemp) {
       messageDiv.dataset.timestamp = messageTime;
     }
@@ -213,10 +427,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   async function saveCurrentConversation() {
     if (!currentUser || !currentConversationId) return;
+    if (currentMessages.length === 0) return;
+    
     const convRef = database.ref(`assistant_conversations/${currentUser.uid}/${currentConversationId}`);
     const conversation = {
       id: currentConversationId,
-      title: currentMessages[0]?.content?.substring(0, 40) || 'New conversation',
+      title: currentMessages[0]?.content?.substring(0, 40) || 'Conversation',
       messages: currentMessages,
       updatedAt: new Date().toISOString(),
       createdAt: currentMessages[0]?.timestamp || new Date().toISOString()
@@ -233,15 +449,6 @@ document.addEventListener('DOMContentLoaded', function() {
     chatMessages.innerHTML = '';
     currentMessages = [];
     currentConversationId = Date.now().toString();
-    const now = new Date().toISOString();
-    const welcomeMsg = {
-      role: 'assistant',
-      content: "Hello! I'm your rehabilitation AI assistant. How can I help you today?",
-      timestamp: now
-    };
-    currentMessages.push(welcomeMsg);
-    addMessageToUI(welcomeMsg.content, 'assistant', null, false, welcomeMsg.timestamp);
-    await saveCurrentConversation();
     showToast('New conversation started');
     scrollToBottom(false);
   }
@@ -256,7 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
         currentMessages = conv.messages || [];
         chatMessages.innerHTML = '';
         currentMessages.forEach(msg => {
-          addMessageToUI(msg.content, msg.role, msg.fileInfo, false, msg.timestamp);
+          addMessageToUI(msg.content, msg.role, msg.fileInfo, false, msg.timestamp, msg.id);
         });
         
         setTimeout(() => {
@@ -308,14 +515,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     historyList.innerHTML = filtered.map(conv => {
-      const date = new Date(conv.updatedAt);
-      const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-      const preview = conv.messages && conv.messages.length > 1 ? conv.messages[1]?.content?.substring(0, 80) : '';
+      const relativeTime = getRelativeTime(conv.updatedAt);
       return `
         <div class="history-item" data-id="${conv.id}">
           <div class="history-item-title">${escapeHtml(conv.title || 'Conversation')}</div>
-          <div class="history-item-date">${formattedDate}</div>
-          <div class="history-item-preview">${escapeHtml(preview)}</div>
+          <div class="history-item-date">${relativeTime}</div>
           <div class="history-item-actions">
             <button class="history-item-btn load" onclick="window.loadConversationById('${conv.id}')">Load</button>
             <button class="history-item-btn delete" onclick="window.deleteConversationById('${conv.id}')">Delete</button>
@@ -552,6 +756,42 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // Generate response (used for both new messages and regeneration)
+  async function generateResponse(userPrompt, fileData = null, fileType = null) {
+    try {
+      const assistantTimestamp = new Date().toISOString();
+      let reply = '';
+      
+      if (fileData && fileType === 'image') {
+        console.log('Calling Vision API with image...');
+        reply = await callVisionAPI(userPrompt, fileData);
+      } else {
+        reply = await callChatAPI(userPrompt);
+      }
+      
+      // Remove thinking message if it exists
+      removeTempMessage();
+      
+      // Add assistant reply with timestamp and action buttons
+      const messageId = `msg_${Date.now()}_${Math.random()}`;
+      addMessageToUI(reply, 'assistant', null, false, assistantTimestamp, messageId);
+      
+      const assistantMsgObj = {
+        id: messageId,
+        role: 'assistant',
+        content: reply,
+        timestamp: assistantTimestamp
+      };
+      currentMessages.push(assistantMsgObj);
+      await saveCurrentConversation();
+      
+    } catch (error) {
+      console.error('Generate response error:', error);
+      removeTempMessage();
+      addMessageToUI(`Sorry, I encountered an error: ${error.message || 'Please try again.'}`, 'assistant', null, false, new Date().toISOString());
+    }
+  }
+
   // ========== SEND MESSAGE WITH PROPER TIMESTAMPS ==========
 
   async function sendUserMessage(userText) {
@@ -561,81 +801,81 @@ document.addEventListener('DOMContentLoaded', function() {
       showToast('Please wait, file still processing', true);
       return;
     }
+    
+    if (isRegenerating) {
+      showToast('Please wait, response is being regenerated', true);
+      return;
+    }
 
     let finalMessage = userText || '';
     let fileInfo = null;
     let useVisionAPI = false;
     let imageDataForAPI = null;
     const userTimestamp = new Date().toISOString();
+    let fileDataForResponse = null;
+    let fileTypeForResponse = null;
 
     if (processedFileData && pendingFile) {
       fileInfo = { name: pendingFile.name, type: pendingFile.type };
       
       if (processedFileType === 'audio') {
         finalMessage = `Transcription: "${processedFileData}"\n\nUser request: ${userText || 'Summarize and interpret this audio.'}`;
+        fileDataForResponse = processedFileData;
+        fileTypeForResponse = 'audio';
       } 
       else if (processedFileType === 'image') {
         useVisionAPI = true;
         imageDataForAPI = processedFileData;
         finalMessage = userText || 'Please analyze this image and describe what you see. Provide relevant rehabilitation insights if applicable.';
+        fileDataForResponse = processedFileData;
+        fileTypeForResponse = 'image';
       } 
       else if (processedFileType === 'document') {
         finalMessage = `Document content:\n${processedFileData}\n\nUser request: ${userText || 'Summarize this document and provide key insights.'}`;
+        fileDataForResponse = processedFileData;
+        fileTypeForResponse = 'document';
       }
     }
 
     // Add user message to UI with timestamp
     const displayText = userText || (pendingFile ? `Uploaded ${pendingFile.name}` : '');
-    addMessageToUI(displayText, 'user', fileInfo, false, userTimestamp);
+    const userMessageId = `msg_${Date.now()}_${Math.random()}`;
+    addMessageToUI(displayText, 'user', fileInfo, false, userTimestamp, userMessageId);
     
     const userMsgObj = {
+      id: userMessageId,
       role: 'user',
       content: displayText,
       timestamp: userTimestamp,
       fileInfo: fileInfo
     };
     currentMessages.push(userMsgObj);
-    await saveCurrentConversation();
+    
+    // Save new conversation if this is the first message
+    const isNewConversation = currentMessages.length === 1;
+    if (isNewConversation) {
+      await saveCurrentConversation();
+    } else {
+      await saveCurrentConversation();
+    }
 
     messageInput.value = '';
     hideFilePreview();
 
-    // Add thinking indicator (temp message with no timestamp)
+    // Add thinking indicator
     addMessageToUI('Thinking...', 'assistant', null, true);
 
     try {
-      const assistantTimestamp = new Date().toISOString();
-      let reply = '';
-      
       if (useVisionAPI && imageDataForAPI) {
-        console.log('Calling Vision API with image...');
-        reply = await callVisionAPI(finalMessage, imageDataForAPI);
+        await generateResponse(finalMessage, imageDataForAPI, 'image');
       } else {
-        reply = await callChatAPI(finalMessage);
+        await generateResponse(finalMessage, fileDataForResponse, fileTypeForResponse);
       }
-      
-      // Remove thinking message
-      removeTempMessage();
-      
-      // Add assistant reply with timestamp
-      addMessageToUI(reply, 'assistant', null, false, assistantTimestamp);
-      
-      const assistantMsgObj = {
-        role: 'assistant',
-        content: reply,
-        timestamp: assistantTimestamp
-      };
-      currentMessages.push(assistantMsgObj);
-      await saveCurrentConversation();
-      
-    } catch (error) {
-      console.error('Send message error:', error);
-      removeTempMessage();
-      addMessageToUI(`Sorry, I encountered an error: ${error.message || 'Please try again.'}`, 'assistant', null, false, new Date().toISOString());
     } finally {
       pendingFile = null;
       processedFileData = null;
       processedFileType = null;
+      isRegenerating = false;
     }
   }
 
@@ -650,11 +890,14 @@ document.addEventListener('DOMContentLoaded', function() {
         showToast('Failed to load API credentials', true);
       }
       await loadConversations();
-      if (!currentConversationId && conversations.length === 0) {
-        await createNewConversation();
-      } else if (conversations.length > 0 && !currentConversationId) {
+      if (conversations.length === 0) {
+        // Start with empty conversation, no welcome message
+        chatMessages.innerHTML = '';
+        currentMessages = [];
+        currentConversationId = Date.now().toString();
+      } else if (!currentConversationId) {
         await loadConversation(conversations[0].id);
-      } else if (currentConversationId) {
+      } else {
         await loadConversation(currentConversationId);
       }
       

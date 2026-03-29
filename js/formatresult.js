@@ -1,5 +1,5 @@
 // js/formatresult.js - Complete Assessment Result Page with Rich Text Editor
-// Fixed version with proper TinyMCE initialization and no docx library conflicts
+// Enhanced version with public/private sharing toggle, fixed checkboxes, and Android input support
 
 // Theme toggle
 (function() {
@@ -50,6 +50,8 @@ let currentAssessmentText = '';
 let currentAssessmentData = null;
 let editor = null;
 let editorInitialized = false;
+let currentIsOwner = false;
+let currentAssessmentOwnerId = null;
 
 // Get assessment ID from URL
 const urlParams = new URLSearchParams(window.location.search);
@@ -145,6 +147,14 @@ async function initEditor() {
             ed.setContent(window.pendingContent);
             delete window.pendingContent;
           }
+          
+          // Set read-only mode if not owner
+          if (!currentIsOwner && currentAssessmentId) {
+            ed.mode.set('readonly');
+            if (currentAssessmentData && currentAssessmentData.ownerId !== currentUser?.uid) {
+              showToast('You are viewing a shared assessment (read-only).', false, 4000);
+            }
+          }
         });
       }
     });
@@ -154,7 +164,59 @@ async function initEditor() {
   }
 }
 
-// Load assessment from Firebase
+// Show/hide public toggle for owner only
+function updatePublicToggleVisibility() {
+  const container = document.getElementById('publicToggleContainer');
+  const toggle = document.getElementById('publicToggle');
+  if (!container || !toggle) return;
+
+  if (currentIsOwner && currentAssessmentData) {
+    container.style.display = 'flex';
+    toggle.checked = currentAssessmentData.isPublic === true;
+  } else {
+    container.style.display = 'none';
+  }
+}
+
+// Toggle public/private status
+async function togglePublic(event) {
+  const isChecked = event.target.checked;
+  if (!currentUser || !currentAssessmentId || !currentIsOwner) {
+    showToast('You are not the owner of this assessment.', true);
+    event.target.checked = !isChecked;
+    return;
+  }
+
+  try {
+    const updates = {
+      isPublic: isChecked,
+      lastModified: new Date().toISOString()
+    };
+    await firebase.database().ref(`history/${currentUser.uid}/${currentAssessmentId}`).update(updates);
+    currentAssessmentData.isPublic = isChecked;
+
+    if (isChecked) {
+      // Create a public copy
+      const publicData = { 
+        ...currentAssessmentData, 
+        ownerId: currentUser.uid,
+        lastModified: new Date().toISOString()
+      };
+      await firebase.database().ref(`publicAssessments/${currentAssessmentId}`).set(publicData);
+      showToast('✅ Assessment is now public. Anyone with the link can view it.', false, 4000);
+    } else {
+      // Remove public copy
+      await firebase.database().ref(`publicAssessments/${currentAssessmentId}`).remove();
+      showToast('🔒 Assessment is now private.', false, 4000);
+    }
+  } catch (error) {
+    console.error('Error toggling public status:', error);
+    showToast('Failed to update sharing setting', true);
+    event.target.checked = !isChecked; // revert
+  }
+}
+
+// Load assessment from Firebase with public/private support
 async function loadAssessmentFromFirebase(id) {
   try {
     // Check if Firebase is available
@@ -164,42 +226,85 @@ async function loadAssessmentFromFirebase(id) {
       return;
     }
     
-    // Try to get from current user's history first
+    let data = null;
+    let ownerId = null;
+    let isPublicCopy = false;
+
+    // First, try to load from current user's history (if logged in)
     if (currentUser) {
       const snapshot = await firebase.database().ref(`history/${currentUser.uid}/${id}`).once('value');
-      const data = snapshot.val();
+      data = snapshot.val();
       if (data) {
-        currentAssessmentData = data;
-        currentAssessmentText = data.generatedText || '';
-        currentAssessmentId = id;
-        
-        // Update UI with assessment data
-        updateUIWithData(data);
-        
-        // Load content into editor if ready, otherwise queue it
-        if (editor && editorInitialized) {
-          editor.setContent(currentAssessmentText);
-        } else {
-          window.pendingContent = currentAssessmentText;
-        }
-        
-        return;
+        ownerId = currentUser.uid;
+        currentIsOwner = true;
+        console.log('Loaded from owner history');
       }
     }
-    
-    // If not found in current user, show error
-    const outputDiv = document.getElementById('assessmentOutput');
-    if (outputDiv) {
-      outputDiv.innerHTML = '<p style="color: #dc2626; text-align: center;">Assessment not found or you don\'t have permission to view it.</p>';
-      outputDiv.style.display = 'block';
+
+    // If not found and not owner, try public path
+    if (!data) {
+      const publicSnapshot = await firebase.database().ref(`publicAssessments/${id}`).once('value');
+      data = publicSnapshot.val();
+      if (data) {
+        ownerId = data.ownerId;
+        currentIsOwner = currentUser && currentUser.uid === ownerId;
+        isPublicCopy = true;
+        console.log('Loaded from public assessments');
+      }
     }
-    showToast('Assessment not found', true);
+
+    if (!data) {
+      const outputDiv = document.getElementById('assessmentOutput');
+      if (outputDiv) {
+        outputDiv.innerHTML = '<p style="color: #dc2626; text-align: center;">❌ Assessment not found or it is private.</p>';
+        outputDiv.style.display = 'block';
+      }
+      const editorContainer = document.querySelector('.editor-container');
+      if (editorContainer) editorContainer.style.display = 'none';
+      showToast('Assessment not found or access denied', true);
+      return;
+    }
+
+    // Store data
+    currentAssessmentData = data;
+    currentAssessmentText = data.generatedText || '';
+    currentAssessmentId = id;
+    currentAssessmentOwnerId = ownerId || data.ownerId;
+
+    // Update UI with assessment data
+    updateUIWithData(data);
+    updatePublicToggleVisibility(); // Show/hide toggle based on ownership
+    
+    // Show editor container
+    const editorContainer = document.querySelector('.editor-container');
+    if (editorContainer) editorContainer.style.display = 'block';
+    const outputDiv = document.getElementById('assessmentOutput');
+    if (outputDiv) outputDiv.style.display = 'none';
+    
+    // Load content into editor if ready, otherwise queue it
+    if (editor && editorInitialized) {
+      editor.setContent(currentAssessmentText);
+      // Set read-only mode if not owner
+      if (!currentIsOwner) {
+        editor.mode.set('readonly');
+        showToast('📖 You are viewing a shared assessment (read-only).', false, 4000);
+      } else {
+        editor.mode.set('design');
+      }
+    } else {
+      window.pendingContent = currentAssessmentText;
+    }
+    
+    // Show sharing status for non-owners
+    if (!currentIsOwner && data.isPublic) {
+      showToast(`🔗 Shared assessment from ${data.patientName || 'another user'}`, false, 3000);
+    }
     
   } catch (error) {
     console.error('Error loading assessment:', error);
     const outputDiv = document.getElementById('assessmentOutput');
     if (outputDiv) {
-      outputDiv.innerHTML = '<p style="color: #dc2626; text-align: center;">Error loading assessment</p>';
+      outputDiv.innerHTML = '<p style="color: #dc2626; text-align: center;">❌ Error loading assessment</p>';
       outputDiv.style.display = 'block';
     }
     showToast('Failed to load assessment', true);
@@ -265,12 +370,35 @@ function updateUIWithData(data) {
     }
     diagnosisBadge.textContent = `🩺 ${data.diagnosis}`;
   }
+  
+  // Add public badge if applicable
+  if (data.isPublic) {
+    let publicBadge = document.getElementById('publicBadge');
+    if (!publicBadge) {
+      publicBadge = document.createElement('span');
+      publicBadge.className = 'badge public-badge';
+      publicBadge.id = 'publicBadge';
+      const badgesContainer = document.getElementById('resultBadges');
+      if (badgesContainer) {
+        badgesContainer.appendChild(publicBadge);
+      }
+    }
+    publicBadge.textContent = `🌍 Public`;
+  } else {
+    const publicBadge = document.getElementById('publicBadge');
+    if (publicBadge) publicBadge.remove();
+  }
 }
 
-// Save changes to Firebase
+// Save changes to Firebase with public copy sync
 async function saveChanges() {
   if (!currentUser) {
     showToast('Please login to save changes', true);
+    return;
+  }
+  
+  if (!currentIsOwner) {
+    showToast('You cannot edit a shared assessment. Only the owner can make changes.', true);
     return;
   }
   
@@ -298,6 +426,16 @@ async function saveChanges() {
       currentAssessmentData.lastModified = new Date().toISOString();
     }
     
+    // If public, update the public copy
+    if (currentAssessmentData && currentAssessmentData.isPublic) {
+      const publicData = { 
+        ...currentAssessmentData, 
+        ownerId: currentUser.uid,
+        lastModified: new Date().toISOString()
+      };
+      await firebase.database().ref(`publicAssessments/${currentAssessmentId}`).set(publicData);
+    }
+    
     // Show success modal
     const saveModal = document.getElementById('saveConfirmModal');
     if (saveModal) {
@@ -307,7 +445,7 @@ async function saveChanges() {
       }, 2000);
     }
     
-    showToast('Changes saved successfully!');
+    showToast('✅ Changes saved successfully!');
     
   } catch (error) {
     console.error('Error saving changes:', error);
@@ -326,7 +464,7 @@ function copyToClipboard() {
   const plainText = content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
   
   navigator.clipboard.writeText(plainText).then(() => {
-    showToast('Copied to clipboard!');
+    showToast('📋 Copied to clipboard!');
   }).catch(() => {
     showToast('Failed to copy', true);
   });
@@ -384,7 +522,7 @@ function downloadAsWord() {
   
   const blob = new Blob([fullHtml], { type: 'application/msword' });
   saveAs(blob, generateFilename('doc'));
-  showToast('Word document saved!');
+  showToast('📄 Word document saved!');
 }
 
 // Download as HTML
@@ -418,7 +556,7 @@ function downloadAsHtml() {
   
   const blob = new Blob([fullHtml], { type: 'text/html' });
   saveAs(blob, generateFilename('html'));
-  showToast('HTML document saved!');
+  showToast('🌐 HTML document saved!');
 }
 
 // Download as Plain Text
@@ -437,7 +575,7 @@ function downloadAsTxt() {
   const header = `rehab.ai Assessment\nGenerated: ${new Date().toLocaleString()}\n${'='.repeat(50)}\n\n`;
   const blob = new Blob([header + plainText], { type: 'text/plain' });
   saveAs(blob, generateFilename('txt'));
-  showToast('Text file saved!');
+  showToast('📝 Text file saved!');
 }
 
 // Print functionality
@@ -555,6 +693,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             outputDiv.innerHTML = '<p style="color: #dc2626; text-align: center;">No assessment found. Please generate one first.</p>';
             outputDiv.style.display = 'block';
           }
+          const editorContainer = document.querySelector('.editor-container');
+          if (editorContainer) editorContainer.style.display = 'none';
         }
       }
     });
@@ -590,6 +730,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const shareBtn = document.getElementById('shareBtn');
   if (shareBtn) {
     shareBtn.addEventListener('click', shareAssessment);
+  }
+  
+  // Public toggle button
+  const publicToggle = document.getElementById('publicToggle');
+  if (publicToggle) {
+    publicToggle.addEventListener('change', togglePublic);
   }
   
   // Download button - show modal
@@ -668,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (shareLink) {
         shareLink.select();
         navigator.clipboard.writeText(shareLink.value).then(() => {
-          showToast('Link copied to clipboard!');
+          showToast('🔗 Link copied to clipboard!');
         });
       }
     });
@@ -688,7 +834,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Ctrl+S to save
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
       e.preventDefault();
-      saveChanges();
+      if (currentIsOwner) {
+        saveChanges();
+      } else {
+        showToast('Read-only mode: cannot save changes', false, 2000);
+      }
     }
     // Escape to close modals
     if (e.key === 'Escape') {
@@ -705,6 +855,15 @@ document.addEventListener('DOMContentLoaded', () => {
       printAssessment();
     }
   });
+  
+  // Android input focus fix - ensure all inputs are focusable
+  const allInputs = document.querySelectorAll('input, textarea, select, [contenteditable="true"]');
+  allInputs.forEach(input => {
+    input.addEventListener('touchstart', function(e) {
+      // Allow touch to focus inputs on Android
+      this.focus();
+    });
+  });
 });
 
-console.log('formatresult.js loaded with rich text editor support');
+console.log('formatresult.js loaded with rich text editor support, public/private sharing, and mobile fixes');

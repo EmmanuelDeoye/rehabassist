@@ -233,7 +233,7 @@ REQUIREMENTS:
 5. CRITICAL: AUTO-EXPANDING TEXTAREAS
    - ALL textareas must have the following attributes and JavaScript for auto-expansion:
      - Add: oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"
-     - Set initial rows="7" but allow growth up to max-height
+     - Set initial rows="10" but allow growth up to max-height
    - Full textarea code example:
      <textarea rows="7" 
                style="width:100%; resize:vertical; min-height:150px; max-height:500px; overflow-y:auto;" 
@@ -313,7 +313,7 @@ REQUIREMENTS:
 ${getPrintableDepartmentContent(data.department, data.category)}
 
 10. Final Section - Standardized Assessment Tools:
-    List 5 REAL standardized assessment tools relevant to "${data.diagnosis}" with:
+    You must List 5 REAL standardized assessment tools relevant to "${data.diagnosis}" with:
     - Tool name (as heading)
     - Short clinical purpose (small text)
     - Clickable link (<a href="" target="_blank">)

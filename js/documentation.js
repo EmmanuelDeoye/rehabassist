@@ -462,7 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
 2. Notable quotes or exchanges
 3. Clinical recommendations
 4. Areas for follow-up
-Do NOT use tables. Use bullet points, numbered lists, and headings only.`;
+Use tables when necessary. Use bullet points, numbered lists, and headings only.`;
         }
         
         let userContent = `**User Request:** ${userRequest || 'Please analyze this content thoroughly.'}\n\n**Content:**\n${safeContent}`;
