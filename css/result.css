@@ -1,0 +1,583 @@
+/* css/result.css - Enhanced Assessment Result Page with Better Content Display */
+
+.result-container {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.result-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  padding: 0.8rem 1.5rem;
+  border-radius: 2rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-2px);
+}
+
+.action-btn.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.action-btn.primary:hover {
+  background: #00695c;
+  box-shadow: 0 8px 20px var(--accent-soft);
+}
+
+/* ===== ASSESSMENT OUTPUT - Enhanced like documentation page ===== */
+#assessmentOutput {
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  border-radius: 1.5rem;
+  border: 1px solid var(--border-light);
+  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.assessment-paper {
+  background: var(--surface);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  width: 100%;
+}
+
+.assessment-toolbar {
+  background: var(--card-bg);
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.assessment-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.assessment-badge {
+  background: var(--accent);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 2rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.assessment-date {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.assessment-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.assessment-btn {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.assessment-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Assessment Content Styling - Professional Readability */
+.assessment-content {
+  padding: 2.5rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  max-width: 900px;
+  margin: 0 auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}
+
+/* Typography for the Generated Content */
+.assessment-content h1,
+.assessment-content h2,
+.assessment-content h3,
+.assessment-content h4 {
+  color: var(--text-primary);
+  margin-top: 1.5em;
+  margin-bottom: 0.8em;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.assessment-content h1 {
+  font-size: 2rem;
+  border-bottom: 3px solid var(--accent);
+  padding-bottom: 0.5rem;
+  margin-top: 0;
+}
+
+.assessment-content h2 {
+  font-size: 1.6rem;
+  border-bottom: 2px solid var(--accent-soft);
+  padding-bottom: 0.3rem;
+}
+
+.assessment-content h3 {
+  font-size: 1.3rem;
+}
+
+.assessment-content h4 {
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.assessment-content p {
+  margin-bottom: 1.2em;
+  line-height: 1.8;
+}
+
+.assessment-content strong {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.assessment-content em {
+  font-style: italic;
+}
+
+.assessment-content ul,
+.assessment-content ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.assessment-content li {
+  margin: 0.5em 0;
+  line-height: 1.6;
+}
+
+/* Table Styling */
+.assessment-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1.5em 0;
+  background: var(--surface);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.assessment-content th,
+.assessment-content td {
+  border: 1px solid var(--border-light);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.assessment-content th {
+  background: var(--accent-soft);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.assessment-content tr:nth-child(even) {
+  background: var(--bg-page);
+}
+
+/* Checkbox styling */
+.assessment-content input[type="checkbox"] {
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Underline fields for filling */
+.assessment-content .underline-field {
+  display: inline-block;
+  min-width: 100px;
+  border-bottom: 1px solid var(--text-secondary);
+  margin: 0 0.25rem;
+}
+
+/* Code/Pre blocks */
+.assessment-content pre {
+  background: var(--bg-page);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  border: 1px solid var(--border-light);
+}
+
+.assessment-content code {
+  background: var(--accent-soft);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+}
+
+/* Blockquote styling */
+.assessment-content blockquote {
+  border-left: 4px solid var(--accent);
+  margin: 1em 0;
+  padding: 0.5em 1em;
+  background: var(--accent-soft);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+}
+
+/* Horizontal rule */
+.assessment-content hr {
+  border: none;
+  border-top: 2px solid var(--border-light);
+  margin: 2em 0;
+}
+
+/* Loading state */
+.loading-state {
+  text-align: center;
+  padding: 4rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  border-radius: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 1rem;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Print styles */
+.print-header {
+  display: none;
+}
+
+@media print {
+  .no-print { 
+    display: none !important; 
+  }
+  
+  .print-header { 
+    display: block; 
+    text-align: center;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border-bottom: 2px solid #000;
+  }
+  
+  .print-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+  
+  .assessment-content {
+    padding: 0;
+    max-width: 100%;
+  }
+  
+  .assessment-content table {
+    page-break-inside: avoid;
+  }
+  
+  .assessment-content pre {
+    page-break-inside: avoid;
+  }
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-light);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  max-width: 450px;
+  width: 90%;
+  margin: 0 auto;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.download-modal h3 {
+  color: var(--text-primary);
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+.download-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.download-options button {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#downloadDocxOption {
+  background: #2b5797;
+  color: white;
+}
+
+#downloadDocxOption:hover {
+  background: #1e3f6e;
+  transform: translateY(-2px);
+}
+
+#downloadWordOption {
+  background: #2b5797;
+  color: white;
+  opacity: 0.9;
+}
+
+#downloadWordOption:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+#downloadRtfOption {
+  background: #009688;
+  color: white;
+}
+
+#downloadRtfOption:hover {
+  background: #00695c;
+  transform: translateY(-2px);
+}
+
+#downloadTxtOption {
+  background: var(--surface);
+  border: 2px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+#downloadTxtOption:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#cancelDownload {
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+}
+
+#cancelDownload:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Share Modal */
+.share-modal .modal-content {
+  max-width: 500px;
+}
+
+.share-link-container {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+.share-link-container input {
+  flex: 1;
+  padding: 1rem;
+  border: 2px solid var(--border-light);
+  border-radius: 2rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.share-link-container button {
+  padding: 1rem 1.5rem;
+  border-radius: 2rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.share-link-container button:hover {
+  background: #00695c;
+  transform: translateY(-2px);
+}
+
+.share-note {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .result-container {
+    padding: 0 1rem;
+  }
+  
+  .assessment-content {
+    padding: 1.5rem;
+  }
+  
+  .assessment-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .assessment-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .result-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .result-actions {
+    justify-content: space-between;
+  }
+  
+  .action-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .assessment-content {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .assessment-content h1 {
+    font-size: 1.5rem;
+  }
+  
+  .assessment-content h2 {
+    font-size: 1.3rem;
+  }
+  
+  .assessment-content h3 {
+    font-size: 1.1rem;
+  }
+  
+  .assessment-content table {
+    font-size: 0.85rem;
+  }
+  
+  .assessment-content th,
+  .assessment-content td {
+    padding: 0.5rem;
+  }
+}
+
+/* Ensure body and html don't overflow */
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

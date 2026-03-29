@@ -762,7 +762,7 @@ main { flex: 1; }
 
 
 
-/* Floating AI Button */
+/* Modern Floating AI Button for AI Page */
 .floating-ai-btn {
   position: fixed;
   bottom: 2rem;
@@ -770,7 +770,7 @@ main { flex: 1; }
   z-index: 1000;
   background: linear-gradient(135deg, var(--accent) 0%, #00b8a9 100%);
   border-radius: 3rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.8rem 1.8rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -778,17 +778,18 @@ main { flex: 1; }
   color: white;
   font-weight: 600;
   font-size: 1rem;
-  box-shadow: 0 8px 20px rgba(0, 150, 136, 0.3);
+  box-shadow: 0 8px 20px rgba(0, 150, 136, 0.4);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   border: none;
   backdrop-filter: blur(8px);
   overflow: hidden;
+  font-family: inherit;
 }
 
 .floating-ai-btn:hover {
   transform: translateY(-4px) scale(1.05);
-  box-shadow: 0 12px 28px rgba(0, 150, 136, 0.4);
+  box-shadow: 0 12px 28px rgba(0, 150, 136, 0.5);
   color: white;
 }
 
@@ -799,19 +800,20 @@ main { flex: 1; }
 .ai-btn-content {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   position: relative;
   z-index: 2;
 }
 
 .ai-icon {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   animation: floatIcon 3s ease-in-out infinite;
 }
 
 .ai-text {
   font-size: 1rem;
   letter-spacing: 0.3px;
+  font-weight: 500;
 }
 
 /* Pulse animation */
@@ -833,7 +835,7 @@ main { flex: 1; }
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-3px);
+    transform: translateY(-4px);
   }
 }
 
@@ -857,7 +859,7 @@ main { flex: 1; }
   .floating-ai-btn {
     bottom: 1.5rem;
     right: 1.5rem;
-    padding: 0.6rem 1.2rem;
+    padding: 0.7rem 1.4rem;
   }
   
   .ai-text {
@@ -865,7 +867,7 @@ main { flex: 1; }
   }
   
   .ai-icon {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
   }
 }
 
@@ -873,7 +875,7 @@ main { flex: 1; }
   .floating-ai-btn {
     bottom: 1rem;
     right: 1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.6rem 1.2rem;
   }
   
   .ai-text {
@@ -881,14 +883,14 @@ main { flex: 1; }
   }
   
   .ai-icon {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
   }
 }
 
 /* Dark mode adjustments */
 [data-theme="dark"] .floating-ai-btn {
-  box-shadow: 0 8px 20px rgba(20, 184, 166, 0.4);
   background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  box-shadow: 0 8px 20px rgba(20, 184, 166, 0.4);
 }
 
 [data-theme="dark"] .floating-ai-btn:hover {
