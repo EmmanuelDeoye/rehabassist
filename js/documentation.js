@@ -1,4 +1,4 @@
-// documentation.js - Enhanced with audio loading, table-free AI, improved export, auto-scroll
+// documentation.js - Enhanced with image upload, removable files, full persistence, and scroll indicators
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 1. DOM ELEMENTS
@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const textUploadSection = document.getElementById('textUploadSection');
     const documentUploadSection = document.getElementById('documentUploadSection');
     const audioUploadSection = document.getElementById('audioUploadSection');
+    const imageUploadSection = document.getElementById('imageUploadSection');
     const plainTextInput = document.getElementById('plainTextInput');
     const textWordCount = document.getElementById('textWordCount');
     const clearTextBtn = document.getElementById('clearTextBtn');
@@ -22,6 +23,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const audioFileInfo = document.getElementById('audioFileInfo');
     const audioTranscriptPreview = document.getElementById('audioTranscriptPreview');
     const transcriptPreviewText = document.getElementById('transcriptPreviewText');
+
+    const imageDropZone = document.getElementById('imageDropZone');
+    const imageFileInput = document.getElementById('imageFileInput');
+    const cameraBtn = document.getElementById('cameraBtn');
+    const galleryBtn = document.getElementById('galleryBtn');
+    const imageFileInfo = document.getElementById('imageFileInfo');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImage = document.getElementById('previewImage');
 
     const chipBtns = document.querySelectorAll('.chip-btn');
     const tags = document.querySelectorAll('.tag');
@@ -44,14 +53,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     let aiConfig = { token: null, endpoint: null, model: "openai/gpt-4.1" };
     let currentUser = null;
-    let activeMode = 'text'; // 'text', 'document', 'audio'
+    let activeMode = 'text'; // 'text', 'document', 'audio', 'image'
     let documentType = null;
     let uploadedFile = null;
     let extractedDocumentText = "";
     let uploadedAudioFile = null;
     let audioTranscript = "";
+    let uploadedImageFile = null;
+    let imageDataURL = null;
     let analysisResults = null;
     let isTranscribing = false;
+    let saveTimeout = null;
     const STORAGE_KEY = 'rehab_doc_assistant_state';
     
     // Token limit settings
@@ -106,6 +118,8 @@ document.addEventListener('DOMContentLoaded', function() {
             hasContent = (uploadedFile !== null) || (extractedDocumentText.length > 0);
         } else if (activeMode === 'audio') {
             hasContent = audioTranscript.length > 0;
+        } else if (activeMode === 'image') {
+            hasContent = imageDataURL !== null;
         }
         const hasType = documentType !== null;
         const hasRequest = activeMode === 'audio' ? true : analysisTextarea.value.trim().length > 0;
@@ -113,7 +127,44 @@ document.addEventListener('DOMContentLoaded', function() {
         analyzeBtn.disabled = !shouldEnable;
     }
 
-    function saveProgress() {
+    // =========================================================================
+    // 3.5. SCROLL INDICATORS FOR HORIZONTAL TABS
+    // =========================================================================
+    function initScrollIndicators() {
+        const uploadContainer = document.querySelector('.upload-type-container');
+        if (uploadContainer) {
+            function updateScrollIndicators() {
+                const isScrollable = uploadContainer.scrollWidth > uploadContainer.clientWidth;
+                if (isScrollable) {
+                    const isAtStart = uploadContainer.scrollLeft <= 10;
+                    const isAtEnd = uploadContainer.scrollLeft + uploadContainer.clientWidth >= uploadContainer.scrollWidth - 10;
+                    
+                    if (isAtStart) {
+                        uploadContainer.classList.remove('is-scrollable-start');
+                    } else {
+                        uploadContainer.classList.add('is-scrollable-start');
+                    }
+                    
+                    if (isAtEnd) {
+                        uploadContainer.classList.remove('is-scrollable-end');
+                    } else {
+                        uploadContainer.classList.add('is-scrollable-end');
+                    }
+                } else {
+                    uploadContainer.classList.remove('is-scrollable-start', 'is-scrollable-end');
+                }
+            }
+            
+            uploadContainer.addEventListener('scroll', updateScrollIndicators);
+            window.addEventListener('resize', updateScrollIndicators);
+            updateScrollIndicators();
+        }
+    }
+
+    // =========================================================================
+    // 4. STATE PERSISTENCE (Save & Load) - ENHANCED WITH LOGGING
+    // =========================================================================
+    function saveProgressImmediate() {
         const state = {
             activeMode: activeMode,
             documentType: documentType,
@@ -123,54 +174,152 @@ document.addEventListener('DOMContentLoaded', function() {
             fileName: uploadedFile ? uploadedFile.name : null,
             audioTranscript: audioTranscript,
             audioFileName: uploadedAudioFile ? uploadedAudioFile.name : null,
+            imageDataURL: imageDataURL,
+            imageFileName: uploadedImageFile ? uploadedImageFile.name : null,
             analysisResults: analysisResults,
-            reportDate: reportDate.textContent
+            reportDate: reportDate.textContent,
+            timestamp: Date.now()
         };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        
+        console.log('[SAVE] Saving state:', {
+            mode: state.activeMode,
+            docType: state.documentType,
+            plainTextLength: state.plainText?.length,
+            hasDoc: !!state.fileName,
+            hasAudio: !!state.audioFileName,
+            hasImage: !!state.imageFileName,
+            timestamp: state.timestamp
+        });
+        
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            console.log('[SAVE] Success');
+        } catch (e) {
+            console.error('[SAVE] Error:', e);
+            if (e.name === 'QuotaExceededError') {
+                showToast('Storage limit reached. Large images may not persist after reload.', 'warning');
+                const stateWithoutImage = { ...state, imageDataURL: null };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(stateWithoutImage));
+            }
+        }
     }
 
-    function loadProgress() {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) return;
-        try {
-            const state = JSON.parse(saved);
-            if (state.activeMode) {
-                const targetBtn = document.querySelector(`.switch-btn[data-type="${state.activeMode}"]`);
-                if (targetBtn) targetBtn.click();
+    // Debounced save to avoid excessive writes during rapid typing
+    function saveProgress() {
+        if (saveTimeout) {
+            clearTimeout(saveTimeout);
+        }
+        saveTimeout = setTimeout(() => {
+            saveProgressImmediate();
+        }, 300);
+    }
+
+    function restoreModeContent(state) {
+        // This function restores content specific to the current activeMode
+        // It is called after the mode is set to ensure the correct section is visible
+        if (activeMode === 'text') {
+            if (state.plainText) {
+                plainTextInput.value = state.plainText;
+                updateWordCount();
+                console.log('[LOAD] Restored text content');
             }
-            if (state.documentType) {
-                documentType = state.documentType;
-                chipBtns.forEach(btn => {
-                    if (btn.dataset.type === state.documentType) btn.classList.add('active');
-                    else btn.classList.remove('active');
-                });
-            }
-            if (state.analysisRequest) analysisTextarea.value = state.analysisRequest;
-            if (state.plainText) plainTextInput.value = state.plainText;
-            if (state.extractedDocumentText) extractedDocumentText = state.extractedDocumentText;
+        } else if (activeMode === 'document') {
             if (state.fileName) {
                 uploadedFile = { name: state.fileName, mock: true };
                 displayFileInfo(uploadedFile);
-            }
-            if (state.audioTranscript) {
-                audioTranscript = state.audioTranscript;
-                if (audioTranscript) {
-                    audioTranscriptPreview.style.display = 'block';
-                    transcriptPreviewText.textContent = audioTranscript;
+                if (state.extractedDocumentText) {
+                    extractedDocumentText = state.extractedDocumentText;
                 }
+                console.log('[LOAD] Restored document');
             }
+        } else if (activeMode === 'audio') {
             if (state.audioFileName) {
                 uploadedAudioFile = { name: state.audioFileName, mock: true };
                 displayAudioFileInfo(uploadedAudioFile);
             }
+            if (state.audioTranscript) {
+                audioTranscript = state.audioTranscript;
+                audioTranscriptPreview.style.display = 'block';
+                transcriptPreviewText.textContent = audioTranscript;
+                console.log('[LOAD] Restored audio transcript');
+            }
+        } else if (activeMode === 'image') {
+            if (state.imageDataURL && state.imageFileName) {
+                uploadedImageFile = { name: state.imageFileName };
+                imageDataURL = state.imageDataURL;
+                displayImagePreview(imageDataURL, state.imageFileName);
+                console.log('[LOAD] Restored image');
+            }
+        }
+        updateAnalyzeButtonState();
+    }
+
+    function loadProgress() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) {
+            console.log('[LOAD] No saved state found');
+            return;
+        }
+        try {
+            const state = JSON.parse(saved);
+            console.log('[LOAD] Loaded state:', {
+                mode: state.activeMode,
+                docType: state.documentType,
+                plainTextLength: state.plainText?.length,
+                hasDoc: !!state.fileName,
+                hasAudio: !!state.audioFileName,
+                hasImage: !!state.imageFileName,
+                timestamp: state.timestamp
+            });
+            
+            // Restore active mode (this will change UI)
+            if (state.activeMode) {
+                const targetBtn = document.querySelector(`.switch-btn[data-type="${state.activeMode}"]`);
+                if (targetBtn) {
+                    targetBtn.click();
+                    // After mode switch, restore content for that mode
+                    setTimeout(() => {
+                        restoreModeContent(state);
+                    }, 50);
+                } else {
+                    restoreModeContent(state);
+                }
+            } else {
+                restoreModeContent(state);
+            }
+            
+            // Restore document type (independent of mode)
+            if (state.documentType) {
+                documentType = state.documentType;
+                chipBtns.forEach(btn => {
+                    if (btn.dataset.type === state.documentType) {
+                        btn.classList.add('active');
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                console.log('[LOAD] Restored document type:', documentType);
+            }
+            
+            // Restore analysis request textarea
+            if (state.analysisRequest) {
+                analysisTextarea.value = state.analysisRequest;
+                console.log('[LOAD] Restored analysis request');
+            }
+            
+            // Restore analysis results if present
             if (state.analysisResults) {
                 analysisResults = state.analysisResults;
                 displayResults(analysisResults);
                 reportDate.textContent = state.reportDate || new Date().toLocaleString();
+                console.log('[LOAD] Restored analysis results');
             }
-            updateWordCount();
+            
             updateAnalyzeButtonState();
-        } catch (e) { console.error('Load error', e); }
+            console.log('[LOAD] Restoration complete');
+        } catch (e) {
+            console.error('[LOAD] Error:', e);
+        }
     }
 
     function updateWordCount() {
@@ -181,15 +330,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 4. MODE SWITCHING
+    // 5. MODE SWITCHING
     // =========================================================================
     function setActiveMode(mode) {
         activeMode = mode;
         textUploadSection.style.display = mode === 'text' ? 'block' : 'none';
         documentUploadSection.style.display = mode === 'document' ? 'block' : 'none';
         audioUploadSection.style.display = mode === 'audio' ? 'block' : 'none';
+        imageUploadSection.style.display = mode === 'image' ? 'block' : 'none';
         updateAnalyzeButtonState();
-        saveProgress();
+        saveProgress(); // Save mode change
     }
 
     switchBtns.forEach(btn => {
@@ -201,34 +351,54 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================================
-    // 5. TEXT MODE
+    // 6. TEXT MODE - SAVE ON EVERY INPUT
     // =========================================================================
     plainTextInput.addEventListener('input', () => {
         updateWordCount();
-        saveProgress();
+        saveProgress(); // Save on every keystroke
         updateAnalyzeButtonState();
     });
     
     clearTextBtn.addEventListener('click', () => {
         plainTextInput.value = '';
         updateWordCount();
-        saveProgress();
+        saveProgress(); // Save after clearing
         updateAnalyzeButtonState();
         showToast('Text cleared', 'info');
     });
 
     // =========================================================================
-    // 6. DOCUMENT MODE
+    // 7. DOCUMENT MODE (with remove functionality)
     // =========================================================================
     function displayFileInfo(file) {
         fileInfo.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-file-alt" style="color: var(--accent);"></i>
-                <strong>${file.name}</strong>
-                ${!file.mock ? `<span style="font-size:0.8rem;">(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-file-alt" style="color: var(--accent);"></i>
+                    <strong>${file.name}</strong>
+                    ${!file.mock ? `<span style="font-size:0.8rem;">(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
+                </div>
+                <button class="remove-file-btn" id="removeDocumentBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove document">
+                    <i class="fas fa-times-circle"></i>
+                </button>
             </div>
         `;
         fileInfo.style.display = 'block';
+        
+        const removeBtn = document.getElementById('removeDocumentBtn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', removeDocument);
+        }
+    }
+
+    function removeDocument() {
+        uploadedFile = null;
+        extractedDocumentText = "";
+        fileInfo.style.display = 'none';
+        fileInfo.innerHTML = '';
+        updateAnalyzeButtonState();
+        saveProgress(); // Save after removal
+        showToast('Document removed', 'info');
     }
 
     function handleFileUpload(file) {
@@ -246,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         readFileAsText(file).then(text => {
             extractedDocumentText = truncateContent(text);
-            saveProgress();
+            saveProgress(); // Save after extraction
             updateAnalyzeButtonState();
             showToast('Document loaded successfully', 'success');
         }).catch(err => {
@@ -301,17 +471,39 @@ document.addEventListener('DOMContentLoaded', function() {
     fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFileUpload(fileInput.files[0]); });
 
     // =========================================================================
-    // 7. AUDIO MODE - Enhanced with loading animation
+    // 8. AUDIO MODE (with remove functionality)
     // =========================================================================
     function displayAudioFileInfo(file) {
         audioFileInfo.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <i class="fas fa-file-audio" style="color: var(--accent);"></i>
-                <strong>${file.name}</strong>
-                ${!file.mock ? `<span>(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-file-audio" style="color: var(--accent);"></i>
+                    <strong>${file.name}</strong>
+                    ${!file.mock ? `<span>(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
+                </div>
+                <button class="remove-file-btn" id="removeAudioBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove audio">
+                    <i class="fas fa-times-circle"></i>
+                </button>
             </div>
         `;
         audioFileInfo.style.display = 'block';
+        
+        const removeBtn = document.getElementById('removeAudioBtn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', removeAudio);
+        }
+    }
+
+    function removeAudio() {
+        uploadedAudioFile = null;
+        audioTranscript = "";
+        audioFileInfo.style.display = 'none';
+        audioFileInfo.innerHTML = '';
+        audioTranscriptPreview.style.display = 'none';
+        transcriptPreviewText.textContent = '';
+        updateAnalyzeButtonState();
+        saveProgress(); // Save after removal
+        showToast('Audio file removed', 'info');
     }
 
     function showTranscriptionLoading() {
@@ -374,6 +566,7 @@ document.addEventListener('DOMContentLoaded', function() {
             transcriptPreviewText.textContent = audioTranscript;
             audioTranscriptPreview.style.display = 'block';
             hideTranscriptionLoading();
+            saveProgress(); // Save after transcription
             showToast('Transcription complete! Ready for analysis.', 'success');
             if (!analysisTextarea.value.trim()) {
                 analysisTextarea.value = "Analyze this session transcript and provide key insights, clinical observations, and recommendations.";
@@ -413,7 +606,112 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================================
-    // 8. ANALYSIS (AI CALL) - Table‑free prompt
+    // 9. IMAGE MODE (with camera, gallery, and remove functionality)
+    // =========================================================================
+    function displayImagePreview(dataURL, fileName) {
+        previewImage.src = dataURL;
+        imageFileInfo.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-image" style="color: var(--accent);"></i>
+                    <strong>${fileName}</strong>
+                </div>
+                <button class="remove-file-btn" id="removeImageBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove image">
+                    <i class="fas fa-times-circle"></i>
+                </button>
+            </div>
+        `;
+        imageFileInfo.style.display = 'block';
+        imagePreview.style.display = 'block';
+        
+        const removeBtn = document.getElementById('removeImageBtn');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', removeImage);
+        }
+    }
+
+    function removeImage() {
+        uploadedImageFile = null;
+        imageDataURL = null;
+        imageFileInfo.style.display = 'none';
+        imagePreview.style.display = 'none';
+        previewImage.src = '';
+        updateAnalyzeButtonState();
+        saveProgress(); // Save after removal
+        showToast('Image removed', 'info');
+    }
+
+    async function handleImageUpload(file) {
+        if (!file.type.startsWith('image/')) {
+            showToast('Please select an image file', 'error');
+            return;
+        }
+        
+        uploadedImageFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            imageDataURL = e.target.result;
+            displayImagePreview(imageDataURL, file.name);
+            saveProgress(); // Save after image load
+            updateAnalyzeButtonState();
+            showToast('Image loaded successfully', 'success');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    async function capturePhoto() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            await video.play();
+            
+            // Create a temporary canvas to capture the photo
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Stop all tracks
+            stream.getTracks().forEach(track => track.stop());
+            
+            // Convert to blob and create file
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+            const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            
+            handleImageUpload(file);
+        } catch (err) {
+            console.error('Camera error:', err);
+            showToast('Unable to access camera. Please check permissions.', 'error');
+        }
+    }
+
+    imageDropZone.addEventListener('dragover', e => { e.preventDefault(); imageDropZone.style.borderColor = 'var(--accent)'; });
+    imageDropZone.addEventListener('dragleave', () => { imageDropZone.style.borderColor = 'var(--border-light)'; });
+    imageDropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        imageDropZone.style.borderColor = 'var(--border-light)';
+        if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
+    });
+    
+    if (cameraBtn) {
+        cameraBtn.addEventListener('click', capturePhoto);
+    }
+    
+    if (galleryBtn) {
+        galleryBtn.addEventListener('click', () => imageFileInput.click());
+    }
+    
+    imageFileInput.addEventListener('change', () => { 
+        if (imageFileInput.files && imageFileInput.files.length) {
+            handleImageUpload(imageFileInput.files[0]);
+        }
+        imageFileInput.value = '';
+    });
+
+    // =========================================================================
+    // 10. ANALYSIS (AI CALL) - Supports text, document, audio, and image
     // =========================================================================
     async function analyzeWithOpenAI(messages) {
         if (!aiConfig.token || !aiConfig.endpoint) throw new Error('API not ready');
@@ -421,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let totalLength = JSON.stringify(messages).length;
         if (totalLength > 50000) {
             const userMsg = messages.find(m => m.role === 'user');
-            if (userMsg && userMsg.content.length > 15000) {
+            if (userMsg && userMsg.content && typeof userMsg.content === 'string' && userMsg.content.length > 15000) {
                 userMsg.content = truncateContent(userMsg.content, 15000);
             }
         }
@@ -453,7 +751,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function buildMessages(content, docType, userRequest) {
-        const safeContent = truncateContent(content);
         let systemPrompt = `You are rehab.ai, a medical AI assistant. Analyze the following ${docType} content. Provide professional, structured output with headings, bullet points, and lists. Do NOT use tables. Use clear section titles (e.g., "Key Findings", "Recommendations") and format content for easy reading.`;
         
         if (activeMode === 'audio') {
@@ -462,15 +759,37 @@ document.addEventListener('DOMContentLoaded', function() {
 2. Notable quotes or exchanges
 3. Clinical recommendations
 4. Areas for follow-up
-Use tables when necessary. Use bullet points, numbered lists, and headings only.`;
+Use bullet points, numbered lists, and headings only.`;
+        } else if (activeMode === 'image') {
+            systemPrompt = `You are rehab.ai, a medical AI assistant specializing in medical image analysis. Analyze the provided medical image (X-ray, wound, posture, etc.) and provide:
+1. Key observations and findings
+2. Clinical significance
+3. Recommendations for further action
+4. Any notable features or abnormalities
+Format your response with clear headings and bullet points.`;
         }
         
-        let userContent = `**User Request:** ${userRequest || 'Please analyze this content thoroughly.'}\n\n**Content:**\n${safeContent}`;
+        let userContent = `**User Request:** ${userRequest || 'Please analyze this content thoroughly.'}\n\n`;
         
-        return [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent.substring(0, 50000) }
-        ];
+        if (activeMode === 'image') {
+            // For images, we need a special structure
+            return [
+                { role: "system", content: systemPrompt },
+                { 
+                    role: "user", 
+                    content: [
+                        { type: "text", text: userContent },
+                        { type: "image_url", image_url: { url: imageDataURL } }
+                    ]
+                }
+            ];
+        } else {
+            userContent += `**Content:**\n${content}`;
+            return [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userContent.substring(0, 50000) }
+            ];
+        }
     }
 
     async function performAnalysis() {
@@ -481,8 +800,11 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
             content = extractedDocumentText;
         } else if (activeMode === 'audio') {
             content = audioTranscript;
+        } else if (activeMode === 'image') {
+            if (!imageDataURL) throw new Error('No image to analyze');
         }
-        if (!content) throw new Error('No content to analyze');
+        
+        if (activeMode !== 'image' && !content) throw new Error('No content to analyze');
         
         let userRequest = analysisTextarea.value.trim();
         if (activeMode === 'audio' && !userRequest) {
@@ -496,7 +818,6 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
     function startAnalysisUI() {
         analyzeBtn.disabled = true;
         analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-        // Show loading state in the results container
         const resultsContainer = document.getElementById('analysisResultsContainer');
         resultsContainer.style.display = 'block';
         loadingIndicator.style.display = 'flex';
@@ -510,7 +831,15 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         updateAnalyzeButtonState();
     }
 
-    // Function to show preview card instead of full results
+    function displayResults(results) {
+        if (!resultsContent) return;
+        // Convert markdown to HTML using marked
+        const htmlContent = marked.parse(results);
+        resultsContent.innerHTML = htmlContent;
+        reportDate.textContent = new Date().toLocaleString();
+        reportContentArea.style.display = 'block';
+    }
+
     function showPreviewCard(fullText, historyKey) {
         const resultsContainer = document.getElementById('analysisResultsContainer');
         let previewCard = document.getElementById('previewCard');
@@ -541,16 +870,13 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         const viewBtn = document.getElementById('viewFullBtn');
         const downloadBtn = document.getElementById('previewDownloadBtn');
         
-        // Show a truncated preview (strip HTML tags)
         const previewText = fullText.replace(/<[^>]*>/g, ' ').substring(0, 200) + '...';
         previewContent.innerHTML = `<p>${previewText}</p>`;
         
-        // View full button opens docresult.html with the history key
         viewBtn.onclick = () => {
             window.open(`docresult.html?id=${historyKey}`, '_blank');
         };
         
-        // Download button: directly download the result as docx
         downloadBtn.onclick = async () => {
             if (!analysisResults) return;
             const original = downloadBtn.innerHTML;
@@ -583,7 +909,6 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         };
         
         previewCard.style.display = 'block';
-        // Hide the old results container
         if (resultsContainer) resultsContainer.style.display = 'none';
     }
 
@@ -669,15 +994,14 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         return paragraphs;
     }
 
-    // Modified autoSaveToHistory to return the key
     async function autoSaveToHistory(contentType, fileName, results, transcription = null) {
         if (!currentUser) return null;
         const userId = currentUser.uid;
         const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
             contentType,
-            fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : 'Document')),
+            fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
             documentType,
-            request: analysisTextarea.value || (contentType === 'audio' ? 'Session Analysis' : 'Text Analysis'),
+            request: analysisTextarea.value || (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
             results,
             transcription,
             timestamp: firebase.database.ServerValue.TIMESTAMP,
@@ -689,7 +1013,7 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
     }
 
     // =========================================================================
-    // 9. ANALYZE BUTTON CLICK HANDLER (Updated for preview card)
+    // 11. ANALYZE BUTTON CLICK HANDLER
     // =========================================================================
     analyzeBtn.addEventListener('click', async () => {
         if (!aiConfig.token) {
@@ -718,21 +1042,19 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
             const result = await performAnalysis();
             analysisResults = result;
             
-            // Save to history and get the key
             const key = await autoSaveToHistory(activeMode, 
                 activeMode === 'text' ? 'Text Input' : 
-                (activeMode === 'document' ? uploadedFile?.name : uploadedAudioFile?.name), 
+                (activeMode === 'document' ? uploadedFile?.name : 
+                (activeMode === 'audio' ? uploadedAudioFile?.name : uploadedImageFile?.name)), 
                 result, 
                 activeMode === 'audio' ? audioTranscript : null);
             
-            // Show preview card instead of full results
             loadingIndicator.style.display = 'none';
             showPreviewCard(result, key);
             
-            // Optionally store the current analysis in a global variable
             window.currentAnalysisResult = result;
             
-            saveProgress();
+            saveProgress(); // Save results
         } catch (err) {
             console.error(err);
             let errorMsg = err.message;
@@ -749,7 +1071,6 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         }
     });
 
-    // Keep the downloadReport handler for legacy (though not used in new flow)
     if (downloadReport) {
         downloadReport.addEventListener('click', async () => {
             if (!analysisResults) return;
@@ -783,7 +1104,6 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
         });
     }
 
-    // Modified closeResultsBtn to hide preview card and clear results
     if (closeResultsBtn) {
         closeResultsBtn.addEventListener('click', () => {
             const previewCard = document.getElementById('previewCard');
@@ -791,12 +1111,12 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
             const resultsContainer = document.getElementById('analysisResultsContainer');
             if (resultsContainer) resultsContainer.style.display = 'none';
             analysisResults = null;
-            saveProgress();
+            saveProgress(); // Save after clearing results
         });
     }
 
     // =========================================================================
-    // 10. HISTORY
+    // 12. HISTORY
     // =========================================================================
     function loadHistory() {
         if (!currentUser) return;
@@ -817,15 +1137,13 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
                     <div class="history-info">
                         <span class="history-name">${item.fileName || 'Untitled'}</span>
                         <div class="history-meta">
-                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : 'bx-edit')}"></i> ${item.documentType || 'General'}</span>
+                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${item.documentType || 'General'}</span>
                             <span>${item.date}</span>
                         </div>
                     </div>
                     <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
                 `;
                 div.querySelector('.view-btn').addEventListener('click', () => {
-                    const selected = data[key];
-                    // Open in docresult.html instead of showing inline
                     window.open(`docresult.html?id=${key}`, '_blank');
                 });
                 historyList.appendChild(div);
@@ -853,7 +1171,47 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
     }
 
     // =========================================================================
-    // 11. AUTH & INIT
+    // 13. DOCUMENT TYPE SELECTION - SAVE ON SELECT
+    // =========================================================================
+    chipBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            chipBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            documentType = btn.dataset.type;
+            updateAnalyzeButtonState();
+            saveProgress(); // Save document type preference immediately
+            console.log('Document type saved:', documentType);
+        });
+    });
+
+    // =========================================================================
+    // 14. ANALYSIS REQUEST - SAVE ON INPUT
+    // =========================================================================
+    if (analysisTextarea) {
+        analysisTextarea.addEventListener('input', () => {
+            updateAnalyzeButtonState();
+            saveProgress(); // Save analysis request as user types
+        });
+    }
+
+    // =========================================================================
+    // 15. QUICK TAGS - SAVE AFTER ADDING
+    // =========================================================================
+    tags.forEach(tag => {
+        tag.addEventListener('click', () => {
+            const requestText = tag.dataset.request;
+            const currentText = analysisTextarea.value;
+            const newText = currentText ? currentText + "\n" + requestText : requestText;
+            analysisTextarea.value = newText;
+            updateAnalyzeButtonState();
+            saveProgress(); // Save after adding tag
+            // Trigger input event to ensure UI updates
+            analysisTextarea.dispatchEvent(new Event('input'));
+        });
+    });
+
+    // =========================================================================
+    // 16. AUTH & INIT
     // =========================================================================
     firebase.auth().onAuthStateChanged(async (user) => {
         currentUser = user;
@@ -861,8 +1219,11 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
             await fetchAPITokens();
             loadProgress();
             loadHistory();
+            console.log('User logged in, progress loaded');
         } else {
+            // Clear saved state on logout
             localStorage.removeItem(STORAGE_KEY);
+            console.log('User logged out, state cleared');
         }
         updateAnalyzeButtonState();
     });
@@ -880,32 +1241,11 @@ Use tables when necessary. Use bullet points, numbered lists, and headings only.
     const savedTheme = localStorage.getItem('rehab-theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
 
+    // Initialize scroll indicators
+    initScrollIndicators();
+    
     setActiveMode('text');
     updateWordCount();
     
-    if (analysisTextarea) {
-        analysisTextarea.addEventListener('input', () => {
-            updateAnalyzeButtonState();
-            saveProgress();
-        });
-    }
-    
-    chipBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            chipBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            documentType = btn.dataset.type;
-            updateAnalyzeButtonState();
-            saveProgress();
-        });
-    });
-    
-    tags.forEach(tag => {
-        tag.addEventListener('click', () => {
-            const requestText = tag.dataset.request;
-            analysisTextarea.value += (analysisTextarea.value ? "\n" : "") + requestText;
-            updateAnalyzeButtonState();
-            saveProgress();
-        });
-    });
+    console.log('Documentation assistant initialized with full auto-save and logging');
 });
