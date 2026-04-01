@@ -30,24 +30,24 @@
             <div class="nav-left">
                 <span class="logo-icon" aria-hidden="true"></span>
                 <div class="logo-text">
-                    <span class="logo-lop">rehabassist</span>
+                    <span class="logo-lop">rehablix</span>
                     <span class="logo-full">doc. assistant</span>
                 </div>
             </div>
             <div class="nav-right">
                 <!-- Home Button -->
                 <a href="index.html" class="icon-btn home-icon" aria-label="Home">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
-          </svg>
-        </a>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
+                    </svg>
+                </a>
                 
                 <!-- History Button (moved to navbar) -->
-                 <button class="icon-btn" id="toggleHistoryBtn" aria-label="history">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
-          </svg>
-        </button>
+                <button class="icon-btn" id="toggleHistoryBtn" aria-label="history">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
+                    </svg>
+                </button>
                 
                 <!-- Theme Toggle -->
                 <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
@@ -81,9 +81,7 @@
 
     <main class="main-content">
         <div class="container">
-            <!-- Removed the separate history toggle button from here -->
-            
-            <!-- Upload Type Tabs (Text, Document, Audio) -->
+            <!-- Upload Type Tabs (Text, Document, Audio, Image) -->
             <div class="upload-type-container">
                 <div class="switch-toggle">
                     <button class="switch-btn active" data-type="text">
@@ -91,6 +89,10 @@
                     </button>
                     <button class="switch-btn" data-type="document">
                         <i class="fas fa-file-medical"></i> Document
+                    </button>
+                    
+                    <button class="switch-btn" data-type="image">
+                        <i class="fas fa-camera"></i> Image
                     </button>
                     <button class="switch-btn" data-type="audio">
                         <i class="fas fa-microphone-alt"></i> Audio
@@ -131,7 +133,7 @@
                             </div>
                             <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt" hidden>
                         </div>
-                        <div class="file-info-card" id="fileInfo"></div>
+                        <div class="file-info-card" id="fileInfo" style="display: none;"></div>
                     </div>
 
                     <!-- Audio Upload Section -->
@@ -157,6 +159,32 @@
                             <div class="transcript-content" id="transcriptPreviewText"></div>
                         </div>
                     </div>
+
+                    <!-- Image Upload Section -->
+                    <div class="upload-view" id="imageUploadSection" style="display: none;">
+                        <div class="image-upload-zone" id="imageDropZone">
+                            <div class="drop-content">
+                                <div class="icon-pulse">
+                                    <i class="fas fa-camera"></i>
+                                </div>
+                                <h3>Capture or Upload Image</h3>
+                                <p>Take a photo or select from gallery</p>
+                                <div class="image-buttons" style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
+                                    <button class="browse-btn" id="cameraBtn">
+                                        <i class="fas fa-camera"></i> Take Photo
+                                    </button>
+                                    <button class="browse-btn" id="galleryBtn">
+                                        <i class="fas fa-folder-open"></i> Choose from Gallery
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="file" id="imageFileInput" accept="image/*" hidden>
+                        </div>
+                        <div class="file-info-card" id="imageFileInfo" style="display: none;"></div>
+                        <div class="image-preview" id="imagePreview" style="display: none; margin-top: 15px; text-align: center; position: relative;">
+                            <img id="previewImage" alt="Preview" style="max-width: 100%; max-height: 300px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="glass-card config-area">
@@ -174,8 +202,8 @@
                     <div class="config-section">
                         <h3><i class='bx bx-search-alt'></i> Analysis Focus</h3>
                         <div class="quick-tags">
-                            <span class="tag" data-request="Summarize findings">Summary</span>
-                            <span class="tag" data-request="Create treatment plan">Treatment Plan</span>
+                            <span class="tag" data-request="Summarize key findings">Summary</span>
+                            <span class="tag" data-request="Create a comprehensive treatment plan">Treatment Plan</span>
                             <span class="tag" data-request="Diagnosis & Differential">Diagnosis</span>
                             <span class="tag" data-request="Identify red flags">Red Flags</span>
                         </div>

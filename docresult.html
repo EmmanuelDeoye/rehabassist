@@ -25,9 +25,13 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
-                <span class="logo-icon" aria-hidden="true">⚕️</span>
+                 <a href="documentation.html" class="icon-btn" aria-label="Back to Analysis">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" fill="none"/>
+                    </svg>
+                </a>
                 <div class="logo-text">
-                    <span class="logo-lop">rehabassist</span>
+                    <span class="logo-lop">rehablix</span>
                     <span class="logo-full">document editor</span>
                 </div>
             </div>
@@ -37,11 +41,7 @@
                         <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
                     </svg>
                 </a>
-                <a href="documentation.html" class="icon-btn" aria-label="Back to Analysis">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" fill="none"/>
-                    </svg>
-                </a>
+               
                 <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
                     <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
@@ -122,16 +122,7 @@
                 <i class="fas fa-times"></i> <span>Close</span>
             </button>
         </div>
-        <!-- Public toggle container (if applicable) -->
-        <div id="publicToggleContainer" style="display: none;" class="public-toggle no-print">
-            <label class="switch-label">
-                <span>🔓 Make public</span>
-                <div class="switch">
-                    <input type="checkbox" id="publicToggle">
-                    <span class="slider round"></span>
-                </div>
-            </label>
-        </div>
+        
     </div>
 </div>
                 
