@@ -59,17 +59,39 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; /* Changed from wrap */
     gap: 1rem;
     padding: 1rem 1.5rem;
     background: var(--surface);
     border-bottom: 1px solid var(--border-light);
+    overflow-x: auto; /* Enables horizontal scrolling */
+    overflow-y: hidden; /* Hides vertical overflow */
+    scrollbar-width: thin; /* Optional: thinner scrollbar for Firefox */
+}
+
+/* Optional: Style the scrollbar for WebKit browsers (Chrome, Safari, Edge) */
+.action-bar::-webkit-scrollbar {
+    height: 1px;
+}
+
+.action-bar::-webkit-scrollbar-track {
+    background: var(--border-light);
+    border-radius: 3px;
+}
+
+.action-bar::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 3px;
+}
+
+.action-bar::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-dark);
 }
 
 .action-group {
     display: flex;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap; /* Changed from wrap to prevent wrapping within groups */
 }
 
 .action-btn {
@@ -84,6 +106,7 @@
     align-items: center;
     gap: 0.5rem;
     color: var(--text-primary);
+    white-space: nowrap; /* Prevents button text from wrapping */
 }
 
 .action-btn:hover {

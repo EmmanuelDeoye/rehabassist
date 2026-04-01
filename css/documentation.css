@@ -39,14 +39,39 @@ body {
 }
 
 /* Upload type tabs - FIXED OVERFLOW */
+/* documentation.css - Updated horizontal scroll for upload type tabs */
+
+/* Upload type tabs - HORIZONTALLY SCROLLABLE */
 .upload-type-container {
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     margin-bottom: 30px;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent) var(--border-light);
+    position: relative;
+}
+
+/* Custom scrollbar styling for WebKit browsers */
+.upload-type-container::-webkit-scrollbar {
+    height: 2px;
+}
+
+.upload-type-container::-webkit-scrollbar-track {
+    background: var(--border-light);
+    border-radius: 10px;
+}
+
+.upload-type-container::-webkit-scrollbar-thumb {
+    background: var(--accent);
+    border-radius: 10px;
+}
+
+.upload-type-container::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-dark);
 }
 
 .switch-toggle {
@@ -59,6 +84,18 @@ body {
     border: 1px solid var(--border-light);
     flex-wrap: nowrap;
     min-width: min-content;
+}
+
+/* Optional: Add fade effect on edges for better UX */
+.upload-type-container {
+    mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+/* Remove mask on hover to see full content */
+.upload-type-container:hover {
+    mask-image: none;
+    -webkit-mask-image: none;
 }
 
 .switch-btn {
@@ -75,6 +112,7 @@ body {
     transition: all 0.3s ease;
     white-space: nowrap;
     font-size: 0.9rem;
+    flex-shrink: 0; /* Prevents buttons from shrinking */
 }
 
 @media (max-width: 480px) {
@@ -93,6 +131,40 @@ body {
     color: white;
     box-shadow: 0 4px 12px rgba(0, 150, 136, 0.3);
 }
+
+/* Optional: Add scroll indicators */
+.upload-type-container::before,
+.upload-type-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 30px;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.upload-type-container::before {
+    left: 0;
+    background: linear-gradient(to right, var(--bg-page), transparent);
+}
+
+.upload-type-container::after {
+    right: 0;
+    background: linear-gradient(to left, var(--bg-page), transparent);
+}
+
+/* Show scroll indicators when content overflows */
+.upload-type-container.is-scrollable-start::before {
+    opacity: 1;
+}
+
+.upload-type-container.is-scrollable-end::after {
+    opacity: 1;
+}
+
 
 /* Workspace grid - FIXED RESPONSIVENESS */
 .workspace-grid {
@@ -917,4 +989,30 @@ html {
 .preview-footer .btn-secondary {
     padding: 0.6rem 1.2rem;
     font-size: 0.9rem;
+}
+
+
+.image-preview {
+    margin-top: 15px;
+    text-align: center;
+    position: relative;
+}
+.image-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-light);
+}
+.remove-image-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    font-size: 14px;
 }
