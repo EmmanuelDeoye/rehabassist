@@ -1,4 +1,4 @@
-// documentation.js - Enhanced with image upload, removable files, full persistence, and scroll indicators
+// documentation.js - Auto-Save Works Without Login
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 1. DOM ELEMENTS
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     let aiConfig = { token: null, endpoint: null, model: "openai/gpt-4.1" };
     let currentUser = null;
-    let activeMode = 'text'; // 'text', 'document', 'audio', 'image'
+    let activeMode = 'text';
     let documentType = null;
     let uploadedFile = null;
     let extractedDocumentText = "";
@@ -64,13 +64,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let analysisResults = null;
     let isTranscribing = false;
     let saveTimeout = null;
+    let isRestoring = false; // Prevent save during restore
     const STORAGE_KEY = 'rehab_doc_assistant_state';
     
-    // Token limit settings
     const MAX_TOKENS_PER_REQUEST = 4000;
     const MAX_CONTENT_LENGTH = 10000;
 
-    // Firebase init
     const database = firebase.database();
 
     // =========================================================================
@@ -110,6 +109,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return truncated.substring(0, cutPoint) + "\n\n[Content truncated due to length limits]";
     }
 
+    // Compress image dataURL if too large (> 1MB)
+    function compressImageDataURL(dataURL, maxSizeMB = 1) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const maxDimension = 1024;
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = (height / width) * maxDimension;
+                        width = maxDimension;
+                    } else {
+                        width = (width / height) * maxDimension;
+                        height = maxDimension;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                let quality = 0.8;
+                let result = canvas.toDataURL('image/jpeg', quality);
+                while (result.length > maxSizeMB * 1024 * 1024 && quality > 0.3) {
+                    quality -= 0.1;
+                    result = canvas.toDataURL('image/jpeg', quality);
+                }
+                resolve(result);
+            };
+            img.src = dataURL;
+        });
+    }
+
     function updateAnalyzeButtonState() {
         let hasContent = false;
         if (activeMode === 'text') {
@@ -128,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 3.5. SCROLL INDICATORS FOR HORIZONTAL TABS
+    // 3.5. SCROLL INDICATORS
     // =========================================================================
     function initScrollIndicators() {
         const uploadContainer = document.querySelector('.upload-type-container');
@@ -138,23 +171,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (isScrollable) {
                     const isAtStart = uploadContainer.scrollLeft <= 10;
                     const isAtEnd = uploadContainer.scrollLeft + uploadContainer.clientWidth >= uploadContainer.scrollWidth - 10;
-                    
-                    if (isAtStart) {
-                        uploadContainer.classList.remove('is-scrollable-start');
-                    } else {
-                        uploadContainer.classList.add('is-scrollable-start');
-                    }
-                    
-                    if (isAtEnd) {
-                        uploadContainer.classList.remove('is-scrollable-end');
-                    } else {
-                        uploadContainer.classList.add('is-scrollable-end');
-                    }
+                    uploadContainer.classList.toggle('is-scrollable-start', !isAtStart);
+                    uploadContainer.classList.toggle('is-scrollable-end', !isAtEnd);
                 } else {
                     uploadContainer.classList.remove('is-scrollable-start', 'is-scrollable-end');
                 }
             }
-            
             uploadContainer.addEventListener('scroll', updateScrollIndicators);
             window.addEventListener('resize', updateScrollIndicators);
             updateScrollIndicators();
@@ -162,10 +184,29 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 4. STATE PERSISTENCE (Save & Load) - ENHANCED WITH LOGGING
+    // 4. ENHANCED STATE PERSISTENCE (Works without login)
     // =========================================================================
-    function saveProgressImmediate() {
+    async function saveProgressImmediate() {
+        if (isRestoring) {
+            console.log('[SAVE] Skipping save during restore');
+            return;
+        }
+        
+        // Prepare image data (compress if needed)
+        let savedImageData = imageDataURL;
+        if (savedImageData && savedImageData.length > 1.5 * 1024 * 1024) {
+            try {
+                savedImageData = await compressImageDataURL(savedImageData, 1);
+                console.log('[SAVE] Image compressed for storage');
+            } catch (e) {
+                console.warn('[SAVE] Could not compress image, skipping', e);
+                savedImageData = null;
+                showToast('Image too large, will not persist after reload', 'warning');
+            }
+        }
+
         const state = {
+            version: 2,
             activeMode: activeMode,
             documentType: documentType,
             analysisRequest: analysisTextarea.value,
@@ -174,10 +215,12 @@ document.addEventListener('DOMContentLoaded', function() {
             fileName: uploadedFile ? uploadedFile.name : null,
             audioTranscript: audioTranscript,
             audioFileName: uploadedAudioFile ? uploadedAudioFile.name : null,
-            imageDataURL: imageDataURL,
+            imageDataURL: savedImageData,
             imageFileName: uploadedImageFile ? uploadedImageFile.name : null,
             analysisResults: analysisResults,
             reportDate: reportDate.textContent,
+            resultsVisible: analysisResultsContainer && analysisResultsContainer.style.display === 'block',
+            previewCardVisible: !!document.getElementById('previewCard')?.style.display === 'block',
             timestamp: Date.now()
         };
         
@@ -187,41 +230,71 @@ document.addEventListener('DOMContentLoaded', function() {
             plainTextLength: state.plainText?.length,
             hasDoc: !!state.fileName,
             hasAudio: !!state.audioFileName,
-            hasImage: !!state.imageFileName,
-            timestamp: state.timestamp
+            hasImage: !!state.imageDataURL,
+            hasResults: !!state.analysisResults,
+            timestamp: new Date(state.timestamp).toLocaleTimeString()
         });
         
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-            console.log('[SAVE] Success');
+            console.log('[SAVE] ✓ Successfully saved to localStorage');
         } catch (e) {
             console.error('[SAVE] Error:', e);
             if (e.name === 'QuotaExceededError') {
-                showToast('Storage limit reached. Large images may not persist after reload.', 'warning');
-                const stateWithoutImage = { ...state, imageDataURL: null };
+                showToast('Storage limit reached. Large images may not persist.', 'warning');
+                const { imageDataURL: _, ...stateWithoutImage } = state;
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(stateWithoutImage));
             }
         }
     }
 
-    // Debounced save to avoid excessive writes during rapid typing
     function saveProgress() {
-        if (saveTimeout) {
-            clearTimeout(saveTimeout);
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => saveProgressImmediate(), 300);
+    }
+
+    // Restore UI elements after mode/content restoration
+    function restoreUIPostLoad(state) {
+        // Restore document type chips
+        if (state.documentType) {
+            chipBtns.forEach(btn => {
+                if (btn.dataset.type === state.documentType) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
         }
-        saveTimeout = setTimeout(() => {
-            saveProgressImmediate();
-        }, 300);
+
+        // Restore analysis request
+        if (state.analysisRequest) analysisTextarea.value = state.analysisRequest;
+
+        // Restore analysis results if present
+        if (state.analysisResults) {
+            analysisResults = state.analysisResults;
+            displayResults(analysisResults);
+            if (state.reportDate) reportDate.textContent = state.reportDate;
+            if (state.resultsVisible) {
+                analysisResultsContainer.style.display = 'block';
+                loadingIndicator.style.display = 'none';
+                reportContentArea.style.display = 'block';
+            }
+            if (state.previewCardVisible) {
+                const previewCard = document.getElementById('previewCard');
+                if (previewCard) previewCard.style.display = 'block';
+                if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+            }
+        }
+
+        updateAnalyzeButtonState();
     }
 
     function restoreModeContent(state) {
-        // This function restores content specific to the current activeMode
-        // It is called after the mode is set to ensure the correct section is visible
         if (activeMode === 'text') {
             if (state.plainText) {
                 plainTextInput.value = state.plainText;
                 updateWordCount();
-                console.log('[LOAD] Restored text content');
+                console.log('[LOAD] ✓ Restored text content, length:', state.plainText.length);
             }
         } else if (activeMode === 'document') {
             if (state.fileName) {
@@ -229,96 +302,101 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayFileInfo(uploadedFile);
                 if (state.extractedDocumentText) {
                     extractedDocumentText = state.extractedDocumentText;
+                    console.log('[LOAD] ✓ Restored document text, length:', extractedDocumentText.length);
                 }
-                console.log('[LOAD] Restored document');
+                console.log('[LOAD] ✓ Restored document:', state.fileName);
             }
         } else if (activeMode === 'audio') {
             if (state.audioFileName) {
                 uploadedAudioFile = { name: state.audioFileName, mock: true };
                 displayAudioFileInfo(uploadedAudioFile);
+                console.log('[LOAD] ✓ Restored audio file:', state.audioFileName);
             }
             if (state.audioTranscript) {
                 audioTranscript = state.audioTranscript;
                 audioTranscriptPreview.style.display = 'block';
                 transcriptPreviewText.textContent = audioTranscript;
-                console.log('[LOAD] Restored audio transcript');
+                console.log('[LOAD] ✓ Restored audio transcript, length:', audioTranscript.length);
             }
         } else if (activeMode === 'image') {
             if (state.imageDataURL && state.imageFileName) {
                 uploadedImageFile = { name: state.imageFileName };
                 imageDataURL = state.imageDataURL;
                 displayImagePreview(imageDataURL, state.imageFileName);
-                console.log('[LOAD] Restored image');
+                console.log('[LOAD] ✓ Restored image:', state.imageFileName);
             }
         }
-        updateAnalyzeButtonState();
     }
 
-    function loadProgress() {
+    async function loadProgress() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (!saved) {
-            console.log('[LOAD] No saved state found');
-            return;
+            console.log('[LOAD] ℹ No saved state found in localStorage');
+            return false;
         }
+        
         try {
+            isRestoring = true;
             const state = JSON.parse(saved);
-            console.log('[LOAD] Loaded state:', {
-                mode: state.activeMode,
-                docType: state.documentType,
-                plainTextLength: state.plainText?.length,
-                hasDoc: !!state.fileName,
-                hasAudio: !!state.audioFileName,
-                hasImage: !!state.imageFileName,
-                timestamp: state.timestamp
-            });
+            console.log('[LOAD] ✓ Found saved state from', new Date(state.timestamp).toLocaleString());
+            console.log('[LOAD] State version:', state.version || 1);
             
-            // Restore active mode (this will change UI)
+            // Restore active mode first
             if (state.activeMode) {
                 const targetBtn = document.querySelector(`.switch-btn[data-type="${state.activeMode}"]`);
                 if (targetBtn) {
-                    targetBtn.click();
-                    // After mode switch, restore content for that mode
-                    setTimeout(() => {
-                        restoreModeContent(state);
-                    }, 50);
+                    targetBtn.click();  // This will set activeMode and switch views
+                    await new Promise(r => setTimeout(r, 100)); // allow DOM update
+                    restoreModeContent(state);
                 } else {
+                    activeMode = state.activeMode;
+                    setActiveMode(activeMode);
                     restoreModeContent(state);
                 }
             } else {
                 restoreModeContent(state);
             }
             
-            // Restore document type (independent of mode)
+            // Restore document type and analysis request
             if (state.documentType) {
                 documentType = state.documentType;
                 chipBtns.forEach(btn => {
-                    if (btn.dataset.type === state.documentType) {
-                        btn.classList.add('active');
-                    } else {
-                        btn.classList.remove('active');
-                    }
+                    if (btn.dataset.type === state.documentType) btn.classList.add('active');
+                    else btn.classList.remove('active');
                 });
-                console.log('[LOAD] Restored document type:', documentType);
+                console.log('[LOAD] ✓ Restored document type:', documentType);
             }
-            
-            // Restore analysis request textarea
             if (state.analysisRequest) {
                 analysisTextarea.value = state.analysisRequest;
-                console.log('[LOAD] Restored analysis request');
+                console.log('[LOAD] ✓ Restored analysis request, length:', state.analysisRequest.length);
             }
             
-            // Restore analysis results if present
+            // Restore analysis results
             if (state.analysisResults) {
                 analysisResults = state.analysisResults;
                 displayResults(analysisResults);
-                reportDate.textContent = state.reportDate || new Date().toLocaleString();
-                console.log('[LOAD] Restored analysis results');
+                if (state.reportDate) reportDate.textContent = state.reportDate;
+                if (state.resultsVisible) {
+                    analysisResultsContainer.style.display = 'block';
+                    loadingIndicator.style.display = 'none';
+                    reportContentArea.style.display = 'block';
+                }
+                if (state.previewCardVisible) {
+                    const previewCard = document.getElementById('previewCard');
+                    if (previewCard) previewCard.style.display = 'block';
+                    if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+                }
+                console.log('[LOAD] ✓ Restored analysis results');
             }
             
             updateAnalyzeButtonState();
-            console.log('[LOAD] Restoration complete');
+            console.log('[LOAD] ✅ Restoration complete!');
+            isRestoring = false;
+            return true;
         } catch (e) {
-            console.error('[LOAD] Error:', e);
+            console.error('[LOAD] Error loading state:', e);
+            isRestoring = false;
+            return false;
         }
     }
 
@@ -330,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 5. MODE SWITCHING
+    // 5. MODE SWITCHING (triggers save)
     // =========================================================================
     function setActiveMode(mode) {
         activeMode = mode;
@@ -339,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
         audioUploadSection.style.display = mode === 'audio' ? 'block' : 'none';
         imageUploadSection.style.display = mode === 'image' ? 'block' : 'none';
         updateAnalyzeButtonState();
-        saveProgress(); // Save mode change
+        saveProgress();
     }
 
     switchBtns.forEach(btn => {
@@ -351,31 +429,30 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================================
-    // 6. TEXT MODE - SAVE ON EVERY INPUT
+    // 6. TEXT MODE
     // =========================================================================
     plainTextInput.addEventListener('input', () => {
         updateWordCount();
-        saveProgress(); // Save on every keystroke
+        saveProgress();
         updateAnalyzeButtonState();
     });
-    
     clearTextBtn.addEventListener('click', () => {
         plainTextInput.value = '';
         updateWordCount();
-        saveProgress(); // Save after clearing
+        saveProgress();
         updateAnalyzeButtonState();
         showToast('Text cleared', 'info');
     });
 
     // =========================================================================
-    // 7. DOCUMENT MODE (with remove functionality)
+    // 7. DOCUMENT MODE
     // =========================================================================
     function displayFileInfo(file) {
         fileInfo.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-file-alt" style="color: var(--accent);"></i>
-                    <strong>${file.name}</strong>
+                    <strong>${escapeHtml(file.name)}</strong>
                     ${!file.mock ? `<span style="font-size:0.8rem;">(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
                 </div>
                 <button class="remove-file-btn" id="removeDocumentBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove document">
@@ -384,11 +461,8 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         fileInfo.style.display = 'block';
-        
         const removeBtn = document.getElementById('removeDocumentBtn');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', removeDocument);
-        }
+        if (removeBtn) removeBtn.addEventListener('click', removeDocument);
     }
 
     function removeDocument() {
@@ -397,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fileInfo.style.display = 'none';
         fileInfo.innerHTML = '';
         updateAnalyzeButtonState();
-        saveProgress(); // Save after removal
+        saveProgress();
         showToast('Document removed', 'info');
     }
 
@@ -411,12 +485,10 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadedFile = file;
         extractedDocumentText = "";
         displayFileInfo(file);
-        
         showToast('Extracting text from document...', 'info');
-        
         readFileAsText(file).then(text => {
             extractedDocumentText = truncateContent(text);
-            saveProgress(); // Save after extraction
+            saveProgress();
             updateAnalyzeButtonState();
             showToast('Document loaded successfully', 'success');
         }).catch(err => {
@@ -426,7 +498,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateAnalyzeButtonState();
     }
 
-    function readFileAsText(file) {
+    async function readFileAsText(file) {
         return new Promise(async (resolve, reject) => {
             if (file.type !== 'application/pdf') {
                 const reader = new FileReader();
@@ -449,9 +521,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     fullText += pageText + '\n\n';
                     if (fullText.length > MAX_CONTENT_LENGTH) break;
                 }
-                if (pdf.numPages > maxPages) {
-                    fullText += `\n\n[Note: Document has ${pdf.numPages} pages. Only first ${maxPages} pages were processed due to length limits.]`;
-                }
+                if (pdf.numPages > maxPages) fullText += `\n\n[Note: Document has ${pdf.numPages} pages. Only first ${maxPages} pages were processed.]`;
                 resolve(fullText);
             } catch (err) {
                 reject(err);
@@ -471,14 +541,14 @@ document.addEventListener('DOMContentLoaded', function() {
     fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFileUpload(fileInput.files[0]); });
 
     // =========================================================================
-    // 8. AUDIO MODE (with remove functionality)
+    // 8. AUDIO MODE
     // =========================================================================
     function displayAudioFileInfo(file) {
         audioFileInfo.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-file-audio" style="color: var(--accent);"></i>
-                    <strong>${file.name}</strong>
+                    <strong>${escapeHtml(file.name)}</strong>
                     ${!file.mock ? `<span>(${(file.size / 1024).toFixed(1)} KB)</span>` : ''}
                 </div>
                 <button class="remove-file-btn" id="removeAudioBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove audio">
@@ -487,11 +557,8 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         audioFileInfo.style.display = 'block';
-        
         const removeBtn = document.getElementById('removeAudioBtn');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', removeAudio);
-        }
+        if (removeBtn) removeBtn.addEventListener('click', removeAudio);
     }
 
     function removeAudio() {
@@ -502,23 +569,20 @@ document.addEventListener('DOMContentLoaded', function() {
         audioTranscriptPreview.style.display = 'none';
         transcriptPreviewText.textContent = '';
         updateAnalyzeButtonState();
-        saveProgress(); // Save after removal
+        saveProgress();
         showToast('Audio file removed', 'info');
     }
 
     function showTranscriptionLoading() {
-        const loadingDiv = document.createElement('div');
-        loadingDiv.id = 'transcriptionLoading';
-        loadingDiv.className = 'transcription-loading';
-        loadingDiv.innerHTML = `
-            <div class="spinner-small"></div>
-            <span>Transcribing audio... please wait</span>
-        `;
-        const existing = document.getElementById('transcriptionLoading');
-        if (existing) existing.remove();
-        audioTranscriptPreview.insertAdjacentElement('afterend', loadingDiv);
+        let loadingDiv = document.getElementById('transcriptionLoading');
+        if (!loadingDiv) {
+            loadingDiv = document.createElement('div');
+            loadingDiv.id = 'transcriptionLoading';
+            loadingDiv.className = 'transcription-loading';
+            loadingDiv.innerHTML = `<div class="spinner-small"></div><span>Transcribing audio... please wait</span>`;
+            audioTranscriptPreview.insertAdjacentElement('afterend', loadingDiv);
+        }
         audioTranscriptPreview.style.display = 'none';
-        audioFileInfo.style.display = 'block';
     }
 
     function hideTranscriptionLoading() {
@@ -545,28 +609,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const validTypes = ['audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/aac'];
         const validExtensions = ['mp3', 'wav', 'm4a', 'mp4', 'webm', 'ogg', 'aac'];
         const ext = file.name.split('.').pop().toLowerCase();
-        
         if (!validTypes.includes(file.type) && !validExtensions.includes(ext)) {
             showToast('Please upload an audio file (MP3, WAV, M4A, etc.)', 'error');
             return;
         }
-        
         uploadedAudioFile = file;
         audioTranscript = "";
         displayAudioFileInfo(file);
         audioTranscriptPreview.style.display = 'none';
         isTranscribing = true;
         updateAnalyzeButtonState();
-        
         showTranscriptionLoading();
-        
         try {
             const transcript = await transcribeAudio(file);
             audioTranscript = truncateContent(transcript);
             transcriptPreviewText.textContent = audioTranscript;
             audioTranscriptPreview.style.display = 'block';
             hideTranscriptionLoading();
-            saveProgress(); // Save after transcription
+            saveProgress();
             showToast('Transcription complete! Ready for analysis.', 'success');
             if (!analysisTextarea.value.trim()) {
                 analysisTextarea.value = "Analyze this session transcript and provide key insights, clinical observations, and recommendations.";
@@ -594,19 +654,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.dataTransfer.files.length) handleAudioUpload(e.dataTransfer.files[0]);
     });
     audioDropZone.addEventListener('click', () => audioFileInput.click());
-    browseAudioBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        audioFileInput.click();
-    });
-    audioFileInput.addEventListener('change', () => { 
-        if (audioFileInput.files && audioFileInput.files.length) {
-            handleAudioUpload(audioFileInput.files[0]);
-        }
-        audioFileInput.value = '';
-    });
+    browseAudioBtn.addEventListener('click', (e) => { e.stopPropagation(); audioFileInput.click(); });
+    audioFileInput.addEventListener('change', () => { if (audioFileInput.files.length) handleAudioUpload(audioFileInput.files[0]); audioFileInput.value = ''; });
 
     // =========================================================================
-    // 9. IMAGE MODE (with camera, gallery, and remove functionality)
+    // 9. IMAGE MODE
     // =========================================================================
     function displayImagePreview(dataURL, fileName) {
         previewImage.src = dataURL;
@@ -614,7 +666,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <i class="fas fa-image" style="color: var(--accent);"></i>
-                    <strong>${fileName}</strong>
+                    <strong>${escapeHtml(fileName)}</strong>
                 </div>
                 <button class="remove-file-btn" id="removeImageBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove image">
                     <i class="fas fa-times-circle"></i>
@@ -623,11 +675,8 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         imageFileInfo.style.display = 'block';
         imagePreview.style.display = 'block';
-        
         const removeBtn = document.getElementById('removeImageBtn');
-        if (removeBtn) {
-            removeBtn.addEventListener('click', removeImage);
-        }
+        if (removeBtn) removeBtn.addEventListener('click', removeImage);
     }
 
     function removeImage() {
@@ -637,7 +686,7 @@ document.addEventListener('DOMContentLoaded', function() {
         imagePreview.style.display = 'none';
         previewImage.src = '';
         updateAnalyzeButtonState();
-        saveProgress(); // Save after removal
+        saveProgress();
         showToast('Image removed', 'info');
     }
 
@@ -646,13 +695,20 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Please select an image file', 'error');
             return;
         }
-        
         uploadedImageFile = file;
         const reader = new FileReader();
-        reader.onload = (e) => {
-            imageDataURL = e.target.result;
+        reader.onload = async (e) => {
+            let dataURL = e.target.result;
+            if (dataURL.length > 1.5 * 1024 * 1024) {
+                try {
+                    dataURL = await compressImageDataURL(dataURL, 1);
+                } catch (err) {
+                    console.warn('Image compression failed', err);
+                }
+            }
+            imageDataURL = dataURL;
             displayImagePreview(imageDataURL, file.name);
-            saveProgress(); // Save after image load
+            saveProgress();
             updateAnalyzeButtonState();
             showToast('Image loaded successfully', 'success');
         };
@@ -665,21 +721,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const video = document.createElement('video');
             video.srcObject = stream;
             await video.play();
-            
-            // Create a temporary canvas to capture the photo
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // Stop all tracks
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
             stream.getTracks().forEach(track => track.stop());
-            
-            // Convert to blob and create file
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
             const file = new File([blob], `camera_${Date.now()}.jpg`, { type: 'image/jpeg' });
-            
             handleImageUpload(file);
         } catch (err) {
             console.error('Camera error:', err);
@@ -694,28 +742,15 @@ document.addEventListener('DOMContentLoaded', function() {
         imageDropZone.style.borderColor = 'var(--border-light)';
         if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
     });
-    
-    if (cameraBtn) {
-        cameraBtn.addEventListener('click', capturePhoto);
-    }
-    
-    if (galleryBtn) {
-        galleryBtn.addEventListener('click', () => imageFileInput.click());
-    }
-    
-    imageFileInput.addEventListener('change', () => { 
-        if (imageFileInput.files && imageFileInput.files.length) {
-            handleImageUpload(imageFileInput.files[0]);
-        }
-        imageFileInput.value = '';
-    });
+    if (cameraBtn) cameraBtn.addEventListener('click', capturePhoto);
+    if (galleryBtn) galleryBtn.addEventListener('click', () => imageFileInput.click());
+    imageFileInput.addEventListener('change', () => { if (imageFileInput.files.length) handleImageUpload(imageFileInput.files[0]); imageFileInput.value = ''; });
 
     // =========================================================================
-    // 10. ANALYSIS (AI CALL) - Supports text, document, audio, and image
+    // 10. ANALYSIS (AI CALL)
     // =========================================================================
     async function analyzeWithOpenAI(messages) {
         if (!aiConfig.token || !aiConfig.endpoint) throw new Error('API not ready');
-        
         let totalLength = JSON.stringify(messages).length;
         if (totalLength > 50000) {
             const userMsg = messages.find(m => m.role === 'user');
@@ -723,25 +758,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 userMsg.content = truncateContent(userMsg.content, 15000);
             }
         }
-        
         const url = `${aiConfig.endpoint.replace(/\/$/, '')}/chat/completions`;
-        
         const requestBody = {
             messages: messages,
             model: aiConfig.model,
             temperature: 0.7,
             max_tokens: MAX_TOKENS_PER_REQUEST
         };
-        
         const response = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${aiConfig.token}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiConfig.token}` },
             body: JSON.stringify(requestBody)
         });
-        
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.error?.message || 'API error');
@@ -752,36 +780,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function buildMessages(content, docType, userRequest) {
         let systemPrompt = `You are rehab.ai, a medical AI assistant. Analyze the following ${docType} content. Provide professional, structured output with headings, bullet points, and lists. Do NOT use tables. Use clear section titles (e.g., "Key Findings", "Recommendations") and format content for easy reading.`;
-        
         if (activeMode === 'audio') {
-            systemPrompt = `You are rehab.ai, a medical AI assistant specializing in session analysis. Analyze the following session transcript and provide:
-1. Key clinical observations and themes
-2. Notable quotes or exchanges
-3. Clinical recommendations
-4. Areas for follow-up
-Use bullet points, numbered lists, and headings only.`;
+            systemPrompt = `You are rehab.ai, a medical AI assistant specializing in session analysis. Analyze the following session transcript and provide: 1. Key clinical observations and themes 2. Notable quotes or exchanges 3. Clinical recommendations 4. Areas for follow-up. Use bullet points, numbered lists, and headings only.`;
         } else if (activeMode === 'image') {
-            systemPrompt = `You are rehab.ai, a medical AI assistant specializing in medical image analysis. Analyze the provided medical image (X-ray, wound, posture, etc.) and provide:
-1. Key observations and findings
-2. Clinical significance
-3. Recommendations for further action
-4. Any notable features or abnormalities
-Format your response with clear headings and bullet points.`;
+            systemPrompt = `You are rehab.ai, a medical AI assistant specializing in medical image analysis. Analyze the provided medical image (X-ray, wound, posture, etc.) and provide: 1. Key observations and findings 2. Clinical significance 3. Recommendations for further action 4. Any notable features or abnormalities. Format your response with clear headings and bullet points.`;
         }
-        
         let userContent = `**User Request:** ${userRequest || 'Please analyze this content thoroughly.'}\n\n`;
-        
         if (activeMode === 'image') {
-            // For images, we need a special structure
             return [
                 { role: "system", content: systemPrompt },
-                { 
-                    role: "user", 
-                    content: [
-                        { type: "text", text: userContent },
-                        { type: "image_url", image_url: { url: imageDataURL } }
-                    ]
-                }
+                { role: "user", content: [{ type: "text", text: userContent }, { type: "image_url", image_url: { url: imageDataURL } }] }
             ];
         } else {
             userContent += `**Content:**\n${content}`;
@@ -794,23 +802,13 @@ Format your response with clear headings and bullet points.`;
 
     async function performAnalysis() {
         let content = "";
-        if (activeMode === 'text') {
-            content = plainTextInput.value.trim();
-        } else if (activeMode === 'document') {
-            content = extractedDocumentText;
-        } else if (activeMode === 'audio') {
-            content = audioTranscript;
-        } else if (activeMode === 'image') {
-            if (!imageDataURL) throw new Error('No image to analyze');
-        }
-        
+        if (activeMode === 'text') content = plainTextInput.value.trim();
+        else if (activeMode === 'document') content = extractedDocumentText;
+        else if (activeMode === 'audio') content = audioTranscript;
+        else if (activeMode === 'image' && !imageDataURL) throw new Error('No image to analyze');
         if (activeMode !== 'image' && !content) throw new Error('No content to analyze');
-        
         let userRequest = analysisTextarea.value.trim();
-        if (activeMode === 'audio' && !userRequest) {
-            userRequest = "Analyze this session transcript and provide key clinical insights, observations, and recommendations.";
-        }
-        
+        if (activeMode === 'audio' && !userRequest) userRequest = "Analyze this session transcript and provide key clinical insights, observations, and recommendations.";
         const messages = buildMessages(content, documentType, userRequest);
         return await analyzeWithOpenAI(messages);
     }
@@ -818,11 +816,9 @@ Format your response with clear headings and bullet points.`;
     function startAnalysisUI() {
         analyzeBtn.disabled = true;
         analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-        const resultsContainer = document.getElementById('analysisResultsContainer');
-        resultsContainer.style.display = 'block';
+        analysisResultsContainer.style.display = 'block';
         loadingIndicator.style.display = 'flex';
         reportContentArea.style.display = 'none';
-        loadingIndicator.classList.add('enhanced-loading');
     }
 
     function resetAnalyzeButton() {
@@ -833,7 +829,6 @@ Format your response with clear headings and bullet points.`;
 
     function displayResults(results) {
         if (!resultsContent) return;
-        // Convert markdown to HTML using marked
         const htmlContent = marked.parse(results);
         resultsContent.innerHTML = htmlContent;
         reportDate.textContent = new Date().toLocaleString();
@@ -841,45 +836,29 @@ Format your response with clear headings and bullet points.`;
     }
 
     function showPreviewCard(fullText, historyKey) {
-        const resultsContainer = document.getElementById('analysisResultsContainer');
         let previewCard = document.getElementById('previewCard');
-        
         if (!previewCard) {
             const cardHtml = `
                 <div id="previewCard" class="preview-card glass-card" style="display: none;">
-                    <div class="preview-header">
-                        <h3><i class="fas fa-file-alt"></i> Analysis Complete</h3>
-                        <span class="preview-badge">Ready</span>
-                    </div>
+                    <div class="preview-header"><h3><i class="fas fa-file-alt"></i> Analysis Complete</h3><span class="preview-badge">Ready</span></div>
                     <div class="preview-content"></div>
                     <div class="preview-footer">
-                        <button class="btn-primary preview-view-btn" id="viewFullBtn">
-                            <i class="fas fa-external-link-alt"></i> View Full Analysis
-                        </button>
-                        <button class="btn-secondary preview-download-btn" id="previewDownloadBtn">
-                            <i class="fas fa-download"></i> Download
-                        </button>
+                        <button class="btn-primary preview-view-btn" id="viewFullBtn"><i class="fas fa-external-link-alt"></i> View Full Analysis</button>
+                        <button class="btn-secondary preview-download-btn" id="previewDownloadBtn"><i class="fas fa-download"></i> Download</button>
                     </div>
                 </div>
             `;
-            resultsContainer.insertAdjacentHTML('afterend', cardHtml);
+            analysisResultsContainer.insertAdjacentHTML('afterend', cardHtml);
             previewCard = document.getElementById('previewCard');
         }
-        
         const previewContent = previewCard.querySelector('.preview-content');
         const viewBtn = document.getElementById('viewFullBtn');
         const downloadBtn = document.getElementById('previewDownloadBtn');
-        
         const previewText = fullText.replace(/<[^>]*>/g, ' ').substring(0, 200) + '...';
-        previewContent.innerHTML = `<p>${previewText}</p>`;
-        
-        viewBtn.onclick = () => {
-            window.open(`docresult.html?id=${historyKey}`, '_blank');
-        };
-        
+        previewContent.innerHTML = `<p>${escapeHtml(previewText)}</p>`;
+        viewBtn.onclick = () => window.open(`docresult.html?id=${historyKey}`, '_blank');
         downloadBtn.onclick = async () => {
             if (!analysisResults) return;
-            const original = downloadBtn.innerHTML;
             downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             try {
                 const paragraphs = markdownToDocxParagraphs(analysisResults);
@@ -904,12 +883,11 @@ Format your response with clear headings and bullet points.`;
                 showToast('Export failed', 'error');
                 console.error(err);
             } finally {
-                downloadBtn.innerHTML = original;
+                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
             }
         };
-        
         previewCard.style.display = 'block';
-        if (resultsContainer) resultsContainer.style.display = 'none';
+        if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
     }
 
     function markdownToDocxParagraphs(markdown) {
@@ -917,80 +895,35 @@ Format your response with clear headings and bullet points.`;
         const paragraphs = [];
         let inList = false;
         let listItems = [];
-
         for (let line of lines) {
             line = line.trim();
             if (line === '') {
                 if (inList && listItems.length) {
-                    const listPara = new docx.Paragraph({
-                        children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })),
-                        spacing: { after: 200 }
-                    });
-                    paragraphs.push(listPara);
+                    paragraphs.push(new docx.Paragraph({ children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })), spacing: { after: 200 } }));
                     listItems = [];
                     inList = false;
                 }
                 continue;
             }
-
-            if (line.startsWith('# ')) {
-                const text = line.substring(2);
-                paragraphs.push(new docx.Paragraph({
-                    text: text,
-                    heading: docx.HeadingLevel.HEADING_1,
-                    spacing: { before: 400, after: 200 }
-                }));
-            } else if (line.startsWith('## ')) {
-                const text = line.substring(3);
-                paragraphs.push(new docx.Paragraph({
-                    text: text,
-                    heading: docx.HeadingLevel.HEADING_2,
-                    spacing: { before: 300, after: 150 }
-                }));
-            } else if (line.startsWith('### ')) {
-                const text = line.substring(4);
-                paragraphs.push(new docx.Paragraph({
-                    text: text,
-                    heading: docx.HeadingLevel.HEADING_3,
-                    spacing: { before: 200, after: 100 }
-                }));
-            }
+            if (line.startsWith('# ')) paragraphs.push(new docx.Paragraph({ text: line.substring(2), heading: docx.HeadingLevel.HEADING_1, spacing: { before: 400, after: 200 } }));
+            else if (line.startsWith('## ')) paragraphs.push(new docx.Paragraph({ text: line.substring(3), heading: docx.HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 } }));
+            else if (line.startsWith('### ')) paragraphs.push(new docx.Paragraph({ text: line.substring(4), heading: docx.HeadingLevel.HEADING_3, spacing: { before: 200, after: 100 } }));
             else if (line.match(/^[\*\-\+]\s/)) {
-                const content = line.substring(2);
                 if (!inList) inList = true;
-                listItems.push(content);
-            }
-            else if (line.match(/^\d+\.\s/)) {
-                const content = line.replace(/^\d+\.\s/, '');
+                listItems.push(line.substring(2));
+            } else if (line.match(/^\d+\.\s/)) {
                 if (!inList) inList = true;
-                listItems.push(content);
-            }
-            else {
+                listItems.push(line.replace(/^\d+\.\s/, ''));
+            } else {
                 if (inList && listItems.length) {
-                    const listPara = new docx.Paragraph({
-                        children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })),
-                        spacing: { after: 200 }
-                    });
-                    paragraphs.push(listPara);
+                    paragraphs.push(new docx.Paragraph({ children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })), spacing: { after: 200 } }));
                     listItems = [];
                     inList = false;
                 }
-                const clean = line.replace(/\*\*/g, '').replace(/\*/g, '');
-                paragraphs.push(new docx.Paragraph({
-                    text: clean,
-                    spacing: { after: 200 }
-                }));
+                paragraphs.push(new docx.Paragraph({ text: line.replace(/\*\*/g, '').replace(/\*/g, ''), spacing: { after: 200 } }));
             }
         }
-        
-        if (inList && listItems.length) {
-            const listPara = new docx.Paragraph({
-                children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })),
-                spacing: { after: 200 }
-            });
-            paragraphs.push(listPara);
-        }
-        
+        if (inList && listItems.length) paragraphs.push(new docx.Paragraph({ children: listItems.map(item => new docx.TextRun({ text: `• ${item}`, break: 1 })), spacing: { after: 200 } }));
         return paragraphs;
     }
 
@@ -998,14 +931,9 @@ Format your response with clear headings and bullet points.`;
         if (!currentUser) return null;
         const userId = currentUser.uid;
         const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
-            contentType,
-            fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
-            documentType,
-            request: analysisTextarea.value || (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
-            results,
-            transcription,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            date: new Date().toLocaleDateString()
+            contentType, fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
+            documentType, request: analysisTextarea.value || (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
+            results, transcription, timestamp: firebase.database.ServerValue.TIMESTAMP, date: new Date().toLocaleDateString()
         });
         loadHistory();
         showToast('Analysis saved to history', 'info');
@@ -1013,57 +941,42 @@ Format your response with clear headings and bullet points.`;
     }
 
     // =========================================================================
-    // 11. ANALYZE BUTTON CLICK HANDLER
+    // 11. ANALYZE BUTTON HANDLER
     // =========================================================================
     analyzeBtn.addEventListener('click', async () => {
         if (!aiConfig.token) {
             showToast('Initializing AI...', 'warning');
             await fetchAPITokens();
-            if (!aiConfig.token) { 
-                showToast('AI not available. Please refresh.', 'error'); 
-                resetAnalyzeButton();
-                return; 
-            }
+            if (!aiConfig.token) { showToast('AI not available. Please refresh.', 'error'); resetAnalyzeButton(); return; }
         }
         if (!currentUser) { 
             showToast('Please login to analyze', 'error'); 
-            resetAnalyzeButton();
+            resetAnalyzeButton(); 
             return; 
         }
         if (!documentType) { 
             showToast('Please select a document type', 'error'); 
-            resetAnalyzeButton();
+            resetAnalyzeButton(); 
             return; 
         }
 
         startAnalysisUI();
-        
         try {
             const result = await performAnalysis();
             analysisResults = result;
-            
             const key = await autoSaveToHistory(activeMode, 
-                activeMode === 'text' ? 'Text Input' : 
-                (activeMode === 'document' ? uploadedFile?.name : 
-                (activeMode === 'audio' ? uploadedAudioFile?.name : uploadedImageFile?.name)), 
-                result, 
-                activeMode === 'audio' ? audioTranscript : null);
-            
+                activeMode === 'text' ? 'Text Input' : (activeMode === 'document' ? uploadedFile?.name : (activeMode === 'audio' ? uploadedAudioFile?.name : uploadedImageFile?.name)), 
+                result, activeMode === 'audio' ? audioTranscript : null);
             loadingIndicator.style.display = 'none';
             showPreviewCard(result, key);
-            
             window.currentAnalysisResult = result;
-            
-            saveProgress(); // Save results
+            saveProgress();
         } catch (err) {
             console.error(err);
             let errorMsg = err.message;
-            if (errorMsg.includes('max_tokens') || errorMsg.includes('token limit')) {
-                errorMsg = 'The content is too long. Please try a shorter document or audio file.';
-            }
+            if (errorMsg.includes('max_tokens') || errorMsg.includes('token limit')) errorMsg = 'The content is too long. Please try a shorter document or audio file.';
             showToast('Analysis failed: ' + errorMsg, 'error');
-            const resultsContainer = document.getElementById('analysisResultsContainer');
-            if (resultsContainer) resultsContainer.style.display = 'none';
+            analysisResultsContainer.style.display = 'none';
             const previewCard = document.getElementById('previewCard');
             if (previewCard) previewCard.style.display = 'none';
         } finally {
@@ -1074,7 +987,6 @@ Format your response with clear headings and bullet points.`;
     if (downloadReport) {
         downloadReport.addEventListener('click', async () => {
             if (!analysisResults) return;
-            const original = downloadReport.innerHTML;
             downloadReport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             try {
                 const paragraphs = markdownToDocxParagraphs(analysisResults);
@@ -1099,7 +1011,7 @@ Format your response with clear headings and bullet points.`;
                 showToast('Export failed', 'error');
                 console.error(err);
             } finally {
-                downloadReport.innerHTML = original;
+                downloadReport.innerHTML = '<i class="fas fa-file-pdf"></i> Export doc.';
             }
         });
     }
@@ -1108,15 +1020,14 @@ Format your response with clear headings and bullet points.`;
         closeResultsBtn.addEventListener('click', () => {
             const previewCard = document.getElementById('previewCard');
             if (previewCard) previewCard.style.display = 'none';
-            const resultsContainer = document.getElementById('analysisResultsContainer');
-            if (resultsContainer) resultsContainer.style.display = 'none';
+            analysisResultsContainer.style.display = 'none';
             analysisResults = null;
-            saveProgress(); // Save after clearing results
+            saveProgress();
         });
     }
 
     // =========================================================================
-    // 12. HISTORY
+    // 12. HISTORY DRAWER (Only works when logged in)
     // =========================================================================
     function loadHistory() {
         if (!currentUser) return;
@@ -1125,53 +1036,40 @@ Format your response with clear headings and bullet points.`;
             if (!historyList) return;
             historyList.innerHTML = '';
             const data = snapshot.val();
-            if (!data) {
-                historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>';
-                return;
-            }
+            if (!data) { historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>'; return; }
             const entries = Object.entries(data).sort((a,b) => b[1].timestamp - a[1].timestamp);
             entries.forEach(([key, item]) => {
                 const div = document.createElement('div');
                 div.className = 'history-item';
                 div.innerHTML = `
                     <div class="history-info">
-                        <span class="history-name">${item.fileName || 'Untitled'}</span>
+                        <span class="history-name">${escapeHtml(item.fileName || 'Untitled')}</span>
                         <div class="history-meta">
-                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${item.documentType || 'General'}</span>
-                            <span>${item.date}</span>
+                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${escapeHtml(item.documentType || 'General')}</span>
+                            <span>${escapeHtml(item.date)}</span>
                         </div>
                     </div>
                     <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
                 `;
-                div.querySelector('.view-btn').addEventListener('click', () => {
-                    window.open(`docresult.html?id=${key}`, '_blank');
-                });
+                div.querySelector('.view-btn').addEventListener('click', () => window.open(`docresult.html?id=${key}`, '_blank'));
                 historyList.appendChild(div);
             });
         });
     }
 
-    function toggleHistoryDrawer() {
-        historyDrawer.classList.toggle('active');
-    }
-    
-    if (toggleHistoryBtn) {
-        toggleHistoryBtn.addEventListener('click', () => {
-            if (!currentUser) { 
-                showToast('Please login to view history', 'error'); 
-                return; 
-            }
-            loadHistory();
-            toggleHistoryDrawer();
-        });
-    }
-    
-    if (closeDrawerBtn) {
-        closeDrawerBtn.addEventListener('click', toggleHistoryDrawer);
-    }
+    function toggleHistoryDrawer() { historyDrawer.classList.toggle('active'); }
+    if (toggleHistoryBtn) toggleHistoryBtn.addEventListener('click', () => { 
+        if (!currentUser) { 
+            showToast('Please login to view history', 'error'); 
+            return; 
+        } 
+        loadHistory(); 
+        toggleHistoryDrawer(); 
+    });
+    if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', toggleHistoryDrawer);
 
     // =========================================================================
-    // 13. DOCUMENT TYPE SELECTION - SAVE ON SELECT
+    // 13. DOCUMENT TYPE SELECTION (save)
     // =========================================================================
     chipBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -1179,55 +1077,34 @@ Format your response with clear headings and bullet points.`;
             btn.classList.add('active');
             documentType = btn.dataset.type;
             updateAnalyzeButtonState();
-            saveProgress(); // Save document type preference immediately
-            console.log('Document type saved:', documentType);
+            saveProgress();
         });
     });
 
     // =========================================================================
-    // 14. ANALYSIS REQUEST - SAVE ON INPUT
+    // 14. ANALYSIS REQUEST (save)
     // =========================================================================
     if (analysisTextarea) {
         analysisTextarea.addEventListener('input', () => {
             updateAnalyzeButtonState();
-            saveProgress(); // Save analysis request as user types
+            saveProgress();
         });
     }
 
-    // =========================================================================
-    // 15. QUICK TAGS - SAVE AFTER ADDING
-    // =========================================================================
     tags.forEach(tag => {
         tag.addEventListener('click', () => {
             const requestText = tag.dataset.request;
             const currentText = analysisTextarea.value;
-            const newText = currentText ? currentText + "\n" + requestText : requestText;
-            analysisTextarea.value = newText;
+            analysisTextarea.value = currentText ? currentText + "\n" + requestText : requestText;
             updateAnalyzeButtonState();
-            saveProgress(); // Save after adding tag
-            // Trigger input event to ensure UI updates
+            saveProgress();
             analysisTextarea.dispatchEvent(new Event('input'));
         });
     });
 
     // =========================================================================
-    // 16. AUTH & INIT
+    // 15. INITIALIZATION - Load saved state IMMEDIATELY (no login required)
     // =========================================================================
-    firebase.auth().onAuthStateChanged(async (user) => {
-        currentUser = user;
-        if (user) {
-            await fetchAPITokens();
-            loadProgress();
-            loadHistory();
-            console.log('User logged in, progress loaded');
-        } else {
-            // Clear saved state on logout
-            localStorage.removeItem(STORAGE_KEY);
-            console.log('User logged out, state cleared');
-        }
-        updateAnalyzeButtonState();
-    });
-
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
         themeToggle.addEventListener('click', () => {
@@ -1241,11 +1118,44 @@ Format your response with clear headings and bullet points.`;
     const savedTheme = localStorage.getItem('rehab-theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
 
-    // Initialize scroll indicators
     initScrollIndicators();
-    
     setActiveMode('text');
     updateWordCount();
     
-    console.log('Documentation assistant initialized with full auto-save and logging');
+    // Load saved progress IMMEDIATELY (does NOT require login)
+    loadProgress().then(success => {
+        if (success) {
+            console.log('[INIT] Auto-save restored successfully');
+            showToast('Previous session restored', 'success', 2000);
+        } else {
+            console.log('[INIT] No saved session found');
+        }
+    });
+    
+    // Also load AI tokens in background (required for analysis)
+    fetchAPITokens().then(() => {
+        console.log('[INIT] AI tokens loaded');
+    });
+    
+    // Auth state change (for history and analysis only)
+    firebase.auth().onAuthStateChanged(async (user) => {
+        currentUser = user;
+        if (user) {
+            console.log('[AUTH] User logged in:', user.email);
+            loadHistory();
+        } else {
+            console.log('[AUTH] User logged out');
+        }
+        updateAnalyzeButtonState();
+    });
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
 });
