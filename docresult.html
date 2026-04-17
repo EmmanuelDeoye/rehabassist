@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-    <title>rehab.ai · Analysis Document Editor</title>
+    <title>rehablix · Document Editor</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -17,6 +17,7 @@
     <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- Styles -->
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/docresult.css">
@@ -25,11 +26,7 @@
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
-                 <a href="documentation.html" class="icon-btn" aria-label="Back to Analysis">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" fill="none"/>
-                    </svg>
-                </a>
+                
                 <div class="logo-text">
                     <span class="logo-lop">rehablix</span>
                     <span class="logo-full">document editor</span>
@@ -50,18 +47,7 @@
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
                     </svg>
                 </button>
-                <div class="profile-dropdown" id="profileDropdown" style="display: none;">
-                    <button class="btn-profile" id="profileBtn">
-                        <span class="profile-icon" id="profileIcon">👤</span>
-                        <span class="profile-name" id="profileName"></span>
-                    </button>
-                    <div class="dropdown-menu" id="dropdownMenu">
-                        <button class="dropdown-item" id="profileMenuItem"><span>👤</span> My Profile</button>
-                        <button class="dropdown-item" id="settingsMenuItem"><span>⚙️</span> Settings</button>
-                        <div class="dropdown-divider"></div>
-                        <button class="dropdown-item" id="logoutMenuItem"><span>🚪</span> Logout</button>
-                    </div>
-                </div>
+                <!-- Auth elements will be injected by modal.js -->
             </div>
         </div>
     </nav>
@@ -93,53 +79,49 @@
                 </div>
             </div>
 
-            <!-- Action Buttons Bar - replicates formatresult -->
+            <!-- Action Buttons Bar -->
             <div class="action-bar">
-                <div class="action-bar">
-    <div class="action-bar-wrapper">
-        <div class="action-group">
-            <button class="action-btn" id="shareBtn" title="Share Document">
-                <i class="fas fa-share-alt"></i> <span>Share</span>
-            </button>
-            <button class="action-btn" id="copyBtn" title="Copy to Clipboard">
-                <i class="fas fa-copy"></i> <span>Copy</span>
-            </button>
-            <button class="action-btn" id="downloadBtn" title="Download as Word">
-                <i class="fas fa-download"></i> <span>Download</span>
-            </button>
-            <button class="action-btn" id="pdfBtn" title="Save as PDF">
-                <i class="fas fa-file-pdf"></i> <span>PDF</span>
-            </button>
-            <button class="action-btn" id="printBtn" title="Print Document">
-                <i class="fas fa-print"></i> <span>Print</span>
-            </button>
-        </div>
-        <div class="action-group">
-            <button class="action-btn" id="saveEditBtn" title="Save Changes">
-                <i class="fas fa-save"></i> <span>Save</span>
-            </button>
-            <button class="action-btn" id="closeDocBtn" title="Close Editor">
-                <i class="fas fa-times"></i> <span>Close</span>
-            </button>
-        </div>
-        
-    </div>
-</div>
+                <div class="action-bar-wrapper">
+                    <div class="action-group">
+                        <button class="action-btn" id="shareBtn" title="Share Document">
+                            <i class="fas fa-share-alt"></i> <span>Share</span>
+                        </button>
+                        <button class="action-btn" id="copyBtn" title="Copy to Clipboard">
+                            <i class="fas fa-copy"></i> <span>Copy</span>
+                        </button>
+                        <button class="action-btn" id="downloadBtn" title="Download as Word">
+                            <i class="fas fa-download"></i> <span>Download</span>
+                        </button>
+                        <button class="action-btn" id="pdfBtn" title="Save as PDF">
+                            <i class="fas fa-file-pdf"></i> <span>PDF</span>
+                        </button>
+                        <button class="action-btn" id="printBtn" title="Print Document">
+                            <i class="fas fa-print"></i> <span>Print</span>
+                        </button>
+                    </div>
+                    <div class="action-group">
+                        <button class="action-btn" id="saveEditBtn" title="Save Changes">
+                            <i class="fas fa-save"></i> <span>Save</span>
+                        </button>
+                        <button class="action-btn" id="closeDocBtn" title="Close Editor">
+                            <i class="fas fa-times"></i> <span>Close</span>
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Owner-only toggle -->
-<div id="publicToggleContainer" style="display: none;" class="public-toggle no-print">
-  <label class="switch-label">
-    <span>🔓 Make public</span>
-    <div class="switch">
-      <input type="checkbox" id="publicToggle">
-      <span class="slider round"></span>
-    </div>
-  </label>
-</div>
-
+                <div id="publicToggleContainer" style="display: none;" class="public-toggle no-print">
+                    <label class="switch-label">
+                        <span>🔓 Make public</span>
+                        <div class="switch">
+                            <input type="checkbox" id="publicToggle">
+                            <span class="slider round"></span>
+                        </div>
+                    </label>
+                </div>
             </div>
 
-            <!-- Formatting Toolbar - Tiny Word Editor Style -->
+            <!-- Formatting Toolbar -->
             <div class="formatting-toolbar">
                 <div class="format-group">
                     <button class="format-btn" data-command="bold" title="Bold (Ctrl+B)">
@@ -221,7 +203,7 @@
                 </div>
             </div>
 
-            <!-- Editable content area - Tiny Word Editor -->
+            <!-- Editable content area -->
             <div class="editor-wrapper">
                 <div id="editorContent" class="editor-content" contenteditable="true"></div>
             </div>
@@ -270,30 +252,12 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toast-container"></div>
-
+    <!-- Scripts -->
     <script src="js/config.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/docresult.js"></script>
-    <script>
-        // Theme toggle
-        (function() {
-            const themeToggle = document.getElementById('themeToggle');
-            const html = document.documentElement;
-            function setTheme(theme) {
-                html.setAttribute('data-theme', theme);
-                localStorage.setItem('rehab-theme', theme);
-            }
-            const saved = localStorage.getItem('rehab-theme') || 'light';
-            setTheme(saved);
-            if (themeToggle) {
-                themeToggle.addEventListener('click', () => {
-                    const current = html.getAttribute('data-theme');
-                    setTheme(current === 'light' ? 'dark' : 'light');
-                });
-            }
-        })();
-    </script>
+    <script src="js/modal.js"></script>        <!-- Creates auth modal, toast, etc. -->
+    <script src="js/auth.js"></script>         <!-- Auth logic -->
+    <script src="js/theme.js"></script>        <!-- Theme logic -->
+    <script src="js/tools.js"></script>        <!-- Shared tools logic -->
+    <script src="js/docresult.js"></script>    <!-- Document editor logic -->
 </body>
 </html>

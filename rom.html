@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-  <title>rehablix · Gait Monitor</title>
+  <title>rehablix · ROM Analyzer</title>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -18,7 +18,7 @@
   <!-- Styles -->
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/auth.css">
-  <link rel="stylesheet" href="css/gait.css">
+  <link rel="stylesheet" href="css/rom.css">
 </head>
 <body>
   <nav class="navbar">
@@ -27,7 +27,7 @@
         <span class="logo-icon" aria-hidden="true"></span>
         <div class="logo-text">
           <span class="logo-lop">rehablix</span>
-          <span class="logo-full">gait monitor</span>
+          <span class="logo-full">ROM analyzer</span>
         </div>
       </div>
       <div class="nav-right">
@@ -37,8 +37,8 @@
           </svg>
         </a>
         
-        <!-- History Button (visible only when logged in) -->
-        <button class="icon-btn history-nav-btn" id="historyNavBtn" aria-label="History" style="display:none;">
+        <!-- History Button -->
+        <button class="icon-btn" id="toggleHistoryBtn" aria-label="history" style="display:none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
           </svg>
@@ -58,13 +58,13 @@
     </div>
   </nav>
 
-  <main class="gait-main">
+  <main class="rom-main">
     <div class="container">
       <!-- Progress Steps -->
-      <div class="gait-progress">
+      <div class="rom-progress">
         <div class="step active" data-step="1">
           <span class="step-number">1</span>
-          <span class="step-label">Record</span>
+          <span class="step-label">Scan</span>
         </div>
         <div class="step-connector"></div>
         <div class="step" data-step="2">
@@ -78,80 +78,76 @@
         </div>
       </div>
 
-      <!-- Stage 1: Record Video -->
-<div id="stageRecord" class="stage-container active">
-  <div class="glass-card record-card full-width">
-    <div class="record-header">
-      <h3><i class="fas fa-video"></i> Gait Video Capture</h3>
-      <p>Position the patient walking naturally across the frame (sagittal or frontal view)</p>
-    </div>
-    
-    <!-- Two‑column layout wrapper -->
-    <div class="record-layout">
-      <!-- Left column: Camera area -->
-      <div class="camera-column">
-        <div class="camera-view tall">
-          <video id="cameraPreview" autoplay playsinline muted></video>
-          <div class="scan-overlay" style="display: none;">
-            <div class="scan-line"></div>
+      <!-- Stage 1: Camera & Capture -->
+      <div id="stageScan" class="stage-container active">
+        <div class="glass-card camera-card full-width">
+          <div class="camera-header">
+            <h3><i class="fas fa-video"></i> Live Motion Scanner</h3>
+            <p id="movementInstruction">Select a joint to begin</p>
           </div>
-          <div id="cameraPlaceholder" class="camera-placeholder">
-            <i class="fas fa-camera"></i>
-            <p>Camera not started</p>
+          
+          <div class="joint-selection">
+            <label for="jointSelect">Select Joint / Movement</label>
+            <select id="jointSelect" class="joint-select">
+              <option value="">-- Choose movement --</option>
+              <option value="shoulder_flexion">Shoulder Flexion</option>
+              <option value="shoulder_abduction">Shoulder Abduction</option>
+              <option value="elbow_flexion">Elbow Flexion</option>
+              <option value="hip_flexion">Hip Flexion</option>
+              <option value="knee_flexion">Knee Flexion</option>
+              <option value="ankle_dorsiflexion">Ankle Dorsiflexion</option>
+              <option value="cervical_rotation">Cervical Rotation</option>
+              <option value="lumbar_flexion">Lumbar Flexion</option>
+            </select>
+          </div>
+          
+          <div class="camera-controls">
+            <button id="startCameraBtn" class="btn-primary" disabled>
+              <i class="fas fa-play"></i> Start Scanning
+            </button>
+          </div>
+          
+          <div class="camera-view large">
+            <video id="cameraPreview" autoplay playsinline muted></video>
+            <canvas id="cameraCanvas" style="display: none;"></canvas>
+            <!-- Scanning line overlay -->
+            <div class="scan-overlay">
+              <div class="scan-line"></div>
+            </div>
+            <div id="cameraPlaceholder" class="camera-placeholder">
+              <i class="fas fa-camera"></i>
+              <p>Camera not started</p>
+            </div>
+          </div>
+
+          <!-- Movement prompt display -->
+          <div id="movementPromptBox" class="movement-prompt-box" style="display: none;">
+            <div class="prompt-header">
+              <i class="fas fa-person-walking"></i>
+              <span id="currentPrompt">Starting position</span>
+            </div>
+            <div class="prompt-progress">
+              <span id="promptStep">0/0</span> movements captured
+            </div>
+          </div>
+
+          <div id="capturePreview" class="capture-preview" style="display: none;">
+            <h4>Captured Frames <span id="frameCount">0</span>/<span id="requiredFrames">0</span></h4>
+            <div id="thumbnailContainer" class="thumbnail-container"></div>
+            <button id="proceedToAnalysisBtn" class="btn-primary" disabled>
+              <i class="fas fa-arrow-right"></i> Proceed to Analysis
+            </button>
           </div>
         </div>
       </div>
-
-      <!-- Right column: Controls and parameters -->
-      <div class="controls-column">
-        <!-- Recording controls -->
-        <div class="record-controls">
-          <button id="startCameraBtn" class="btn-primary" disabled>
-            <i class="fas fa-play"></i> Start Camera
-          </button>
-          <button id="recordBtn" class="btn-record" disabled>
-            <i class="fas fa-circle"></i> Record
-          </button>
-        </div>
-
-        <!-- Recording timer display -->
-        <div id="recordingTimer" class="recording-timer" style="display: none;">
-          <span class="recording-indicator"><i class="fas fa-circle"></i> Recording</span>
-          <span id="timerDisplay">00:00</span>
-        </div>
-
-        <!-- Video preview after recording -->
-        <div id="videoPreview" class="video-preview" style="display: none;">
-          <h4>Recorded Video</h4>
-          <video id="recordedVideo" controls></video>
-          <div class="preview-actions">
-            <button id="reRecordBtn" class="btn-secondary"><i class="fas fa-redo-alt"></i> Record Again</button>
-            <button id="proceedToAnalysisBtn" class="btn-primary" disabled><i class="fas fa-arrow-right"></i> Analyze Gait</button>
-          </div>
-        </div>
-
-        <!-- Optional gait parameters -->
-        <div class="gait-params">
-          <label>View / Condition (optional)</label>
-          <select id="gaitViewSelect" class="joint-select">
-            <option value="sagittal">Sagittal View (side)</option>
-            <option value="frontal">Frontal View (front)</option>
-            <option value="posterior">Posterior View (back)</option>
-          </select>
-          <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
       <!-- Stage 2: Analysis (Loading) -->
       <div id="stageAnalyze" class="stage-container">
         <div class="glass-card analysis-card">
           <div class="loading-container">
-            <div class="gait-spinner"></div>
-            <h3>Analyzing Gait Pattern</h3>
-            <p id="analysisStatus">Processing video with AI...</p>
+            <div class="rom-spinner"></div>
+            <h3>Analyzing Range of Motion</h3>
+            <p id="analysisStatus">Processing captured frames with AI...</p>
             <div class="analysis-progress">
               <div class="progress-bar" id="analysisProgressBar"></div>
             </div>
@@ -168,11 +164,15 @@
               <span id="resultDate"></span>
             </div>
             <div class="results-actions">
-              <button id="downloadGaitReport" class="tool-btn"><i class="fas fa-file-pdf"></i> Export Report</button>
-              <button id="newGaitBtn" class="tool-btn secondary"><i class="fas fa-redo-alt"></i> New Analysis</button>
+              <button id="downloadRomReport" class="tool-btn">
+                <i class="fas fa-file-pdf"></i> Export Report
+              </button>
+              <button id="newScanBtn" class="tool-btn secondary">
+                <i class="fas fa-redo-alt"></i> New Scan
+              </button>
             </div>
           </div>
-          <div id="gaitResultsContent" class="results-body typography-clean"></div>
+          <div id="romResultsContent" class="results-body typography-clean"></div>
         </div>
       </div>
     </div>
@@ -181,7 +181,7 @@
   <!-- History Drawer -->
   <aside class="history-drawer" id="historyDrawer">
     <div class="drawer-header">
-      <h3><i class='bx bx-time-five'></i> Gait Analysis History</h3>
+      <h3><i class='bx bx-time-five'></i> ROM Analysis History</h3>
       <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
     </div>
     <div class="history-content" id="historyList">
@@ -196,7 +196,8 @@
   <script src="js/config.js"></script>
   <script src="js/modal.js"></script>     <!-- Creates auth modal, toast, etc. -->
   <script src="js/auth.js"></script>      <!-- Auth logic -->
-  <script src="js/tools.js"></script>
-  <script src="js/gait.js"></script>      <!-- Gait analysis logic -->
+  <script src="js/theme.js"></script>     <!-- Theme logic -->
+  <script src="js/tools.js"></script>     <!-- Shared tools logic -->
+  <script src="js/rom.js"></script>       <!-- ROM analyzer logic -->
 </body>
 </html>
