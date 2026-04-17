@@ -1,5 +1,5 @@
-// js/format.js - Complete Assessment Format Generator with Side Drawer
-// Updated with PRINTABLE medical assessment form generation
+// js/format.js - Complete Assessment Format Generator with Preview Modal
+// Updated with modal popup similar to standardized page
 
 // Global variables
 let githubToken = '';
@@ -15,11 +15,6 @@ document.addEventListener('DOMContentLoaded', async function() {
   const generateBtn = document.getElementById('generateBtn');
   const clearBtn = document.getElementById('clearBtn');
   const toast = document.getElementById('toast');
-  
-  // DOM elements - Preview Card
-  const resultPreviewCard = document.getElementById('resultPreviewCard');
-  const resultPreview = document.getElementById('resultPreview');
-  const viewFullBtn = document.getElementById('viewFullBtn');
   
   // DOM elements - History Drawer
   const historyNavBtn = document.getElementById('historyNavBtn');
@@ -203,7 +198,80 @@ document.addEventListener('DOMContentLoaded', async function() {
     return html;
   }
 
-  // ===== UPDATED BUILD PROMPT - Your exact version =====
+  // ===== Helper to escape HTML =====
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // ===== PREVIEW MODAL (similar to standardized page) =====
+  function showPreviewModal(html, formData, assessmentId) {
+    // Remove any existing preview modal
+    const existingModal = document.querySelector('.preview-modal');
+    if (existingModal) existingModal.remove();
+
+    const previewModal = document.createElement('div');
+    previewModal.className = 'preview-modal';
+    previewModal.innerHTML = `
+      <div class="preview-overlay"></div>
+      <div class="preview-card">
+        <div class="preview-card-header">
+          <div class="preview-icon">📄</div>
+          <h3>Assessment Generated</h3>
+          <button class="preview-close">&times;</button>
+        </div>
+        <div class="preview-card-body">
+          <div class="preview-info">
+            <span class="preview-badge">✅ Ready to view</span>
+            <span class="preview-date">${new Date().toLocaleString()}</span>
+          </div>
+          <p class="preview-description">
+            Your <strong>${escapeHtml(formData.assessmentType)}</strong> for 
+            <strong>${escapeHtml(formData.name)}</strong> has been generated successfully.
+          </p>
+          <div class="preview-actions">
+            <button class="preview-btn primary" id="viewFullAssessmentBtn">
+              📖 View Full Assessment
+            </button>
+            <button class="preview-btn secondary" id="closePreviewBtn">
+              Close
+            </button>
+          </div>
+          <div class="preview-note">
+            <small>💡 The assessment will open in a new tab for printing or saving as PDF.</small>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(previewModal);
+
+    // Close handlers
+    const closeBtn = previewModal.querySelector('.preview-close');
+    const closeActionBtn = previewModal.querySelector('#closePreviewBtn');
+    const overlay = previewModal.querySelector('.preview-overlay');
+
+    const closeModal = () => previewModal.remove();
+
+    closeBtn.addEventListener('click', closeModal);
+    if (closeActionBtn) closeActionBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', closeModal);
+
+    // View full assessment button
+    const viewBtn = previewModal.querySelector('#viewFullAssessmentBtn');
+    viewBtn.addEventListener('click', () => {
+      if (assessmentId) {
+        window.open(`formatresult.html?id=${assessmentId}`, '_blank');
+        closeModal();
+      } else {
+        showToast('Error: Assessment ID not found', true);
+      }
+    });
+  }
+
+  // ===== UPDATED BUILD PROMPT =====
   function buildPrompt(data) {
     const sections = data.includeSections
       ? "SOAP notes may be included if clinically relevant."
@@ -342,12 +410,10 @@ ${getPrintableDepartmentContent(data.department, data.category)}
 ${sections}
 
 Return ONLY the HTML.`;
-}
+  }
 
   function getPrintableDepartmentContent(department, category) {
-
     switch(department) {
-
       case 'Occupational Therapy':
         return `
 - Include areas related to functional performance and independence.
@@ -357,7 +423,6 @@ Return ONLY the HTML.`;
 - Allow space for cognitive and perceptual observations.
 - Use tables or structured layouts where helpful, but keep flexibility.
 `;
-
       case 'Physiotherapy':
         return `
 - Include musculoskeletal and functional assessment components.
@@ -366,7 +431,6 @@ Return ONLY the HTML.`;
 - Include observational areas such as posture, gait, and mobility.
 - Provide space for special tests and clinical interpretation.
 `;
-
       case 'Speech Therapy':
         return `
 - Include communication and speech-related components.
@@ -375,7 +439,6 @@ Return ONLY the HTML.`;
 - Include areas for voice, fluency, and articulation where relevant.
 - Provide space for swallowing/feeding observations if applicable.
 `;
-
       case 'Clinical Psychology':
         return `
 - Include mental and behavioral assessment components.
@@ -384,7 +447,6 @@ Return ONLY the HTML.`;
 - Risk-related observations may be included where relevant.
 - Allow room for narrative clinical impressions.
 `;
-
       case 'Paediatric':
         return `
 - Include developmental and functional assessment areas.
@@ -393,7 +455,6 @@ Return ONLY the HTML.`;
 - Provide space for play, social interaction, and learning-related observations.
 - Ensure the structure is adaptable to different age groups.
 `;
-
       default:
         return `
 - Include general clinical assessment areas relevant to the case.
@@ -552,19 +613,16 @@ Return ONLY the HTML.`;
     historyList.innerHTML = filteredItems.map(item => {
       const date = new Date(item.timestamp);
       const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-      const previewText = item.preview || formatTextForPreview(item.generatedText);
       
       return `
         <div class="history-item" data-id="${item.id}">
           <div class="history-item-header">
-            <span class="history-item-title">${item.patientName || 'Unknown Patient'}</span>
+            <span class="history-item-title">${escapeHtml(item.patientName || 'Unknown Patient')}</span>
             <span class="history-item-date">${formattedDate}</span>
           </div>
           <div class="history-item-details">
-            <span class="history-item-badge">${item.assessmentType || 'Assessment'}</span>
-            
+            <span class="history-item-badge">${escapeHtml(item.assessmentType || 'Assessment')}</span>
           </div>
-          
           <div class="history-item-actions">
             <button class="history-item-btn retrieve" onclick="window.retrieveItem('${item.id}')">
               <span>📂</span> Retrieve
@@ -578,12 +636,6 @@ Return ONLY the HTML.`;
     }).join('');
   }
 
-  function formatTextForPreview(text) {
-    if (!text) return '';
-    // Strip HTML tags for preview
-    return text.replace(/<[^>]*>/g, ' ').substring(0, 150) + '...';
-  }
-
   // Make functions globally available for history buttons
   window.retrieveItem = (itemId) => {
     const item = historyItems.find(i => i.id === itemId);
@@ -594,26 +646,6 @@ Return ONLY the HTML.`;
     itemToDelete = itemId;
     deleteConfirmModal.classList.add('show');
   };
-
-  // ===== Preview Card Functions =====
-  
-  function showPreviewCard(html, formData) {
-    // Create a preview by stripping HTML tags
-    const textPreview = html.replace(/<[^>]*>/g, ' ').substring(0, 200);
-    
-    resultPreview.innerHTML = `
-      <div style="margin-bottom: 0.5rem;">
-        <strong>${formData.assessmentType} for ${formData.name}</strong>
-      </div>
-      <div>${textPreview}...</div>
-    `;
-    
-    resultPreviewCard.style.display = 'block';
-    
-    // Store the full HTML for later use
-    window.currentGeneratedText = html;
-    window.currentFormData = formData;
-  }
 
   // ===== Form Submission =====
   
@@ -696,15 +728,16 @@ Return ONLY the HTML.`;
         throw new Error('Empty response from API');
       }
 
-      // Show preview card
-      showPreviewCard(html, formData);
-      
       // Save to history and get the new ID
       const newId = await saveToHistory(formData, html);
-      
+
       // Store the ID for later use
       if (newId) {
         window.currentAssessmentId = newId;
+        // Show modal with the assessment ID
+        showPreviewModal(html, formData, newId);
+      } else {
+        showToast('Failed to save assessment to history', true);
       }
       
       showToast('Assessment format generated successfully!');
@@ -717,29 +750,6 @@ Return ONLY the HTML.`;
       spinner.style.display = 'none';
     }
   });
-
-  // ===== View Full Assessment - Redirect to formatresult.html with ID =====
-  
-  if (viewFullBtn) {
-    viewFullBtn.addEventListener('click', async () => {
-      if (window.currentGeneratedText && window.currentFormData) {
-        // If we have an ID, use it, otherwise save first
-        if (window.currentAssessmentId) {
-          window.open(`formatresult.html?id=${window.currentAssessmentId}`, '_blank');
-        } else {
-          // Save to history first
-          const newId = await saveToHistory(window.currentFormData, window.currentGeneratedText);
-          if (newId) {
-            window.open(`formatresult.html?id=${newId}`, '_blank');
-          } else {
-            showToast('Error saving assessment', true);
-          }
-        }
-      } else {
-        showToast('No assessment to view', true);
-      }
-    });
-  }
 
   // ===== Download Functions =====
   
@@ -865,7 +875,6 @@ Return ONLY the HTML.`;
       // Reset page count display
       const pageVal = document.getElementById('pageVal');
       if (pageVal) pageVal.textContent = '2';
-      resultPreviewCard.style.display = 'none';
       
       // Clear localStorage as well
       clearFormStorage();
@@ -998,5 +1007,5 @@ Return ONLY the HTML.`;
     });
   }
 
-  console.log('Format.js fully initialized with printable medical assessment form generation');
+  console.log('Format.js fully initialized with preview modal');
 });

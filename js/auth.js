@@ -40,6 +40,13 @@ function initializeAuth() {
   const registerError = document.getElementById('registerError');
   const heroTitle = document.getElementById('heroTitle');
   const forgotPassword = document.getElementById('forgotPassword');
+  const googleSignInBtn = document.getElementById('googleSignInBtn');
+  
+  // Get the history navigation button element (supports both IDs used across pages)
+  const historyNavBtn = document.getElementById('historyNavBtn');
+  const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
+  // Use whichever button exists in the current page
+  const historyButton = historyNavBtn || toggleHistoryBtn;
 
   // Check if critical elements exist
   if (!modal || !loginBtn || !closeBtn) {
@@ -75,6 +82,17 @@ function initializeAuth() {
     }, 4000);
   }
 
+  // Close modal function
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+    if (loginForm) loginForm.reset();
+    if (registerForm) registerForm.reset();
+    if (loginError) loginError.textContent = '';
+    if (registerError) registerError.textContent = '';
+  }
+
   // Get user initials for profile icon
   function getUserInitials(name) {
     if (!name) return '👤';
@@ -97,7 +115,13 @@ function initializeAuth() {
         heroTitle.innerHTML = `Welcome <span class="hero-accent">${displayName}</span>`;
         
         if (profileName) profileName.textContent = displayName;
-        if (profileIcon) profileIcon.textContent = getUserInitials(displayName);
+        if (profileIcon) {
+          if (userData && userData.photoURL) {
+            profileIcon.innerHTML = `<img src="${userData.photoURL}" alt="${displayName}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+          } else {
+            profileIcon.textContent = getUserInitials(displayName);
+          }
+        }
       }).catch((error) => {
         console.error('Error fetching user data:', error);
         const emailName = user.email.split('@')[0];
@@ -106,7 +130,7 @@ function initializeAuth() {
         if (profileIcon) profileIcon.textContent = getUserInitials(emailName);
       });
     } else {
-      heroTitle.innerHTML = `rehab.ai <span class="hero-accent">AI tools</span>`;
+      heroTitle.innerHTML = `rehablix <span class="hero-accent">Assistant</span>`;
     }
   }
 
@@ -125,9 +149,80 @@ function initializeAuth() {
     }
   }
 
+  // Show or hide the history button based on login state
+  function updateHistoryButtonVisibility(user) {
+    if (!historyButton) {
+      console.warn('History button not found in DOM - this is fine if the page has no history button');
+      return;
+    }
+    
+    if (user) {
+      // User is logged in: make the history button visible
+      historyButton.style.display = 'inline-flex';
+      console.log('History button shown (user logged in)');
+    } else {
+      // User is logged out: hide the history button
+      historyButton.style.display = 'none';
+      console.log('History button hidden (user logged out)');
+    }
+  }
+
+  // ============= GOOGLE SIGN-IN =============
+  if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', async () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result.user;
+        
+        const userRef = database.ref('users/' + user.uid);
+        const snapshot = await userRef.once('value');
+        
+        if (!snapshot.exists()) {
+          const userData = {
+            name: user.displayName || user.email.split('@')[0],
+            email: user.email,
+            specialization: '',
+            createdAt: new Date().toISOString(),
+            userId: user.uid,
+            photoURL: user.photoURL || '',
+            provider: 'google',
+            termsAgreed: true,
+            termsAgreedAt: new Date().toISOString()
+          };
+          await userRef.set(userData);
+          showToast('🎉 Account created with Google!');
+          showWelcomeAnimation();
+        } else {
+          const existingData = snapshot.val();
+          const displayName = existingData.name || user.displayName || user.email.split('@')[0];
+          showToast(`👋 Welcome back, ${displayName}!`);
+        }
+        
+        closeModal();
+      } catch (error) {
+        console.error('Google sign-in error:', error);
+        
+        if (error.code === 'auth/popup-closed-by-user') {
+          showToast('Sign-in cancelled.', 2000);
+        } else if (error.code === 'auth/popup-blocked') {
+          showToast('Popup was blocked. Please allow popups for this site.', 3000, true);
+        } else if (error.code === 'auth/account-exists-with-different-credential') {
+          showToast('An account already exists with the same email address using a different sign-in method.', 4000, true);
+        } else {
+          showToast('Google sign-in failed. Please try again.', 3000, true);
+        }
+      }
+    });
+  }
+
   // Listen for auth state changes
   auth.onAuthStateChanged((user) => {
     updateAuthUI(user);
+    // Show/hide the history navigation button based on authentication status
+    updateHistoryButtonVisibility(user);
+    
     if (user) {
       console.log('User logged in:', user.email);
     } else {
@@ -135,7 +230,7 @@ function initializeAuth() {
     }
   });
 
-  // Only add event listeners if elements exist
+  // Event Listeners
   if (loginBtn) {
     loginBtn.addEventListener('click', () => {
       modal.classList.add('show');
@@ -152,7 +247,6 @@ function initializeAuth() {
     });
   }
 
-  // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
     if (dropdownMenu && profileBtn && !profileBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
       dropdownMenu.classList.remove('show');
@@ -190,7 +284,6 @@ function initializeAuth() {
     closeBtn.addEventListener('click', closeModal);
   }
   
-  // Click outside to close
   if (modal) {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
@@ -199,7 +292,6 @@ function initializeAuth() {
     });
   }
 
-  // Tab switching
   if (loginTab && registerTab && loginForm && registerForm) {
     loginTab.addEventListener('click', () => {
       loginTab.classList.add('active');
@@ -220,34 +312,29 @@ function initializeAuth() {
     });
   }
 
-  // Close modal function
-  function closeModal() {
-    if (!modal) return;
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-    if (loginForm) loginForm.reset();
-    if (registerForm) registerForm.reset();
-    if (loginError) loginError.textContent = '';
-    if (registerError) registerError.textContent = '';
-  }
-
-  // Escape key to close modal
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal && modal.classList.contains('show')) {
       closeModal();
     }
   });
 
-  // Login form submission
+  // LOGIN FORM HANDLER WITH TERMS VALIDATION
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const email = document.getElementById('loginEmail')?.value;
       const password = document.getElementById('loginPassword')?.value;
+      const loginTerms = document.getElementById('loginTerms')?.checked;
       const submitBtn = document.getElementById('loginSubmitBtn');
       
       if (!email || !password) return;
+      
+      // Check if terms are agreed
+      if (!loginTerms) {
+        if (loginError) loginError.textContent = 'Please agree to the terms and conditions.';
+        return;
+      }
       
       try {
         if (submitBtn) {
@@ -272,7 +359,7 @@ function initializeAuth() {
     });
   }
 
-  // Register form submission
+  // REGISTER FORM HANDLER WITH TERMS VALIDATION
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -282,10 +369,16 @@ function initializeAuth() {
       const password = document.getElementById('regPassword')?.value;
       const repeatPassword = document.getElementById('regRepeatPassword')?.value;
       const specialization = document.getElementById('voiceRange')?.value;
-      const terms = document.getElementById('terms')?.checked;
+      const registerTerms = document.getElementById('registerTerms')?.checked;
       const submitBtn = document.getElementById('registerSubmitBtn');
       
-      if (!name || !email || !password || !repeatPassword || !specialization || !terms) return;
+      if (!name || !email || !password || !repeatPassword || !specialization) return;
+      
+      // Check if terms are agreed
+      if (!registerTerms) {
+        if (registerError) registerError.textContent = 'You must agree to the terms and conditions.';
+        return;
+      }
       
       if (password !== repeatPassword) {
         if (registerError) registerError.textContent = 'Passwords do not match!';
@@ -315,7 +408,9 @@ function initializeAuth() {
           specialization: specialization,
           createdAt: new Date().toISOString(),
           termsAgreed: true,
-          userId: user.uid
+          termsAgreedAt: new Date().toISOString(),
+          userId: user.uid,
+          provider: 'email'
         });
         
         closeModal();
@@ -333,7 +428,6 @@ function initializeAuth() {
     });
   }
 
-  // Forgot password
   if (forgotPassword) {
     forgotPassword.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -355,7 +449,6 @@ function initializeAuth() {
     });
   }
 
-  // Close welcome overlay on click
   if (welcomeOverlay) {
     welcomeOverlay.addEventListener('click', () => {
       welcomeOverlay.classList.add('hidden');

@@ -2,14 +2,13 @@
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBI-UxnBQbZG-VAfpyBiuXcfxzcYZDGQxg",
-    authDomain: "tolexars-ac868.firebaseapp.com",
-    databaseURL: "https://tolexars-ac868-default-rtdb.firebaseio.com",
-    projectId: "tolexars-ac868",
-    storageBucket: "tolexars-ac868.appspot.com",
-    messagingSenderId: "148559800786",
-    appId: "1:148559800786:web:ea1851adfce99fc673400b",
-    measurementId: "G-H3MVDW181S"
+    apiKey: "AIzaSyCSeWPRUtxdmYUSqfE9qx44Xf-DRt4UvjI",
+    authDomain: "rehablix-ai.firebaseapp.com",
+    projectId: "rehablix-ai",
+    storageBucket: "rehablix-ai.firebasestorage.app",
+    messagingSenderId: "111840419014",
+    appId: "1:111840419014:web:0fd17fa428a2b2bff14bc7",
+    measurementId: "G-VF4FZ76Q46"
 };
 
 // Initialize Firebase only if not already initialized
@@ -89,4 +88,4 @@ async function fetchTokens() {
 // Make fetchTokens available globally
 window.fetchTokens = fetchTokens;
 
-console.log('Firebase config loaded with database:', firebaseConfig.databaseURL);
+console.log('Firebase config loaded with database URL from config');

@@ -1,4 +1,4 @@
-// documentation.js - Auto-Save Works Without Login
+// documentation.js - Auto-Save Works Without Login with Preview Modal
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 1. DOM ELEMENTS
@@ -46,7 +46,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const downloadReport = document.getElementById('downloadReport');
     const closeResultsBtn = document.getElementById('closeResultsBtn');
     const reportDate = document.getElementById('reportDate');
-    const toastContainer = document.getElementById('toast-container');
 
     // =========================================================================
     // 2. STATE & CONFIG
@@ -73,9 +72,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const database = firebase.database();
 
     // =========================================================================
-    // 3. UTILITIES
+    // 3. UTILITIES - FIXED with fallback
     // =========================================================================
     function showToast(message, type = 'success', duration = 3000) {
+        // Try to find toast container, create if not exists
+        let toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 2000;';
+            document.body.appendChild(toastContainer);
+        }
+        
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
@@ -146,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateAnalyzeButtonState() {
         let hasContent = false;
         if (activeMode === 'text') {
-            hasContent = plainTextInput.value.trim().length > 0;
+            hasContent = plainTextInput && plainTextInput.value.trim().length > 0;
         } else if (activeMode === 'document') {
             hasContent = (uploadedFile !== null) || (extractedDocumentText.length > 0);
         } else if (activeMode === 'audio') {
@@ -155,32 +163,32 @@ document.addEventListener('DOMContentLoaded', function() {
             hasContent = imageDataURL !== null;
         }
         const hasType = documentType !== null;
-        const hasRequest = activeMode === 'audio' ? true : analysisTextarea.value.trim().length > 0;
+        const hasRequest = activeMode === 'audio' ? true : (analysisTextarea && analysisTextarea.value.trim().length > 0);
         const shouldEnable = hasContent && hasType && hasRequest && !isTranscribing;
-        analyzeBtn.disabled = !shouldEnable;
+        if (analyzeBtn) analyzeBtn.disabled = !shouldEnable;
     }
 
     // =========================================================================
-    // 3.5. SCROLL INDICATORS
+    // 3.5. SCROLL INDICATORS - FIXED with null check
     // =========================================================================
     function initScrollIndicators() {
         const uploadContainer = document.querySelector('.upload-type-container');
-        if (uploadContainer) {
-            function updateScrollIndicators() {
-                const isScrollable = uploadContainer.scrollWidth > uploadContainer.clientWidth;
-                if (isScrollable) {
-                    const isAtStart = uploadContainer.scrollLeft <= 10;
-                    const isAtEnd = uploadContainer.scrollLeft + uploadContainer.clientWidth >= uploadContainer.scrollWidth - 10;
-                    uploadContainer.classList.toggle('is-scrollable-start', !isAtStart);
-                    uploadContainer.classList.toggle('is-scrollable-end', !isAtEnd);
-                } else {
-                    uploadContainer.classList.remove('is-scrollable-start', 'is-scrollable-end');
-                }
+        if (!uploadContainer) return;
+        
+        function updateScrollIndicators() {
+            const isScrollable = uploadContainer.scrollWidth > uploadContainer.clientWidth;
+            if (isScrollable) {
+                const isAtStart = uploadContainer.scrollLeft <= 10;
+                const isAtEnd = uploadContainer.scrollLeft + uploadContainer.clientWidth >= uploadContainer.scrollWidth - 10;
+                uploadContainer.classList.toggle('is-scrollable-start', !isAtStart);
+                uploadContainer.classList.toggle('is-scrollable-end', !isAtEnd);
+            } else {
+                uploadContainer.classList.remove('is-scrollable-start', 'is-scrollable-end');
             }
-            uploadContainer.addEventListener('scroll', updateScrollIndicators);
-            window.addEventListener('resize', updateScrollIndicators);
-            updateScrollIndicators();
         }
+        uploadContainer.addEventListener('scroll', updateScrollIndicators);
+        window.addEventListener('resize', updateScrollIndicators);
+        updateScrollIndicators();
     }
 
     // =========================================================================
@@ -209,8 +217,8 @@ document.addEventListener('DOMContentLoaded', function() {
             version: 2,
             activeMode: activeMode,
             documentType: documentType,
-            analysisRequest: analysisTextarea.value,
-            plainText: plainTextInput.value,
+            analysisRequest: analysisTextarea ? analysisTextarea.value : '',
+            plainText: plainTextInput ? plainTextInput.value : '',
             extractedDocumentText: extractedDocumentText,
             fileName: uploadedFile ? uploadedFile.name : null,
             audioTranscript: audioTranscript,
@@ -218,9 +226,8 @@ document.addEventListener('DOMContentLoaded', function() {
             imageDataURL: savedImageData,
             imageFileName: uploadedImageFile ? uploadedImageFile.name : null,
             analysisResults: analysisResults,
-            reportDate: reportDate.textContent,
+            reportDate: reportDate ? reportDate.textContent : '',
             resultsVisible: analysisResultsContainer && analysisResultsContainer.style.display === 'block',
-            previewCardVisible: !!document.getElementById('previewCard')?.style.display === 'block',
             timestamp: Date.now()
         };
         
@@ -256,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Restore UI elements after mode/content restoration
     function restoreUIPostLoad(state) {
         // Restore document type chips
-        if (state.documentType) {
+        if (state.documentType && chipBtns) {
             chipBtns.forEach(btn => {
                 if (btn.dataset.type === state.documentType) {
                     btn.classList.add('active');
@@ -267,22 +274,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Restore analysis request
-        if (state.analysisRequest) analysisTextarea.value = state.analysisRequest;
+        if (state.analysisRequest && analysisTextarea) analysisTextarea.value = state.analysisRequest;
 
         // Restore analysis results if present
         if (state.analysisResults) {
             analysisResults = state.analysisResults;
             displayResults(analysisResults);
-            if (state.reportDate) reportDate.textContent = state.reportDate;
-            if (state.resultsVisible) {
+            if (state.reportDate && reportDate) reportDate.textContent = state.reportDate;
+            if (state.resultsVisible && analysisResultsContainer) {
                 analysisResultsContainer.style.display = 'block';
-                loadingIndicator.style.display = 'none';
-                reportContentArea.style.display = 'block';
-            }
-            if (state.previewCardVisible) {
-                const previewCard = document.getElementById('previewCard');
-                if (previewCard) previewCard.style.display = 'block';
-                if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+                if (reportContentArea) reportContentArea.style.display = 'block';
             }
         }
 
@@ -291,7 +293,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function restoreModeContent(state) {
         if (activeMode === 'text') {
-            if (state.plainText) {
+            if (state.plainText && plainTextInput) {
                 plainTextInput.value = state.plainText;
                 updateWordCount();
                 console.log('[LOAD] ✓ Restored text content, length:', state.plainText.length);
@@ -314,8 +316,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             if (state.audioTranscript) {
                 audioTranscript = state.audioTranscript;
-                audioTranscriptPreview.style.display = 'block';
-                transcriptPreviewText.textContent = audioTranscript;
+                if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'block';
+                if (transcriptPreviewText) transcriptPreviewText.textContent = audioTranscript;
                 console.log('[LOAD] ✓ Restored audio transcript, length:', audioTranscript.length);
             }
         } else if (activeMode === 'image') {
@@ -360,13 +362,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Restore document type and analysis request
             if (state.documentType) {
                 documentType = state.documentType;
-                chipBtns.forEach(btn => {
-                    if (btn.dataset.type === state.documentType) btn.classList.add('active');
-                    else btn.classList.remove('active');
-                });
+                if (chipBtns) {
+                    chipBtns.forEach(btn => {
+                        if (btn.dataset.type === state.documentType) btn.classList.add('active');
+                        else btn.classList.remove('active');
+                    });
+                }
                 console.log('[LOAD] ✓ Restored document type:', documentType);
             }
-            if (state.analysisRequest) {
+            if (state.analysisRequest && analysisTextarea) {
                 analysisTextarea.value = state.analysisRequest;
                 console.log('[LOAD] ✓ Restored analysis request, length:', state.analysisRequest.length);
             }
@@ -375,16 +379,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (state.analysisResults) {
                 analysisResults = state.analysisResults;
                 displayResults(analysisResults);
-                if (state.reportDate) reportDate.textContent = state.reportDate;
-                if (state.resultsVisible) {
+                if (state.reportDate && reportDate) reportDate.textContent = state.reportDate;
+                if (state.resultsVisible && analysisResultsContainer) {
                     analysisResultsContainer.style.display = 'block';
-                    loadingIndicator.style.display = 'none';
-                    reportContentArea.style.display = 'block';
-                }
-                if (state.previewCardVisible) {
-                    const previewCard = document.getElementById('previewCard');
-                    if (previewCard) previewCard.style.display = 'block';
-                    if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+                    if (loadingIndicator) loadingIndicator.style.display = 'none';
+                    if (reportContentArea) reportContentArea.style.display = 'block';
                 }
                 console.log('[LOAD] ✓ Restored analysis results');
             }
@@ -401,6 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateWordCount() {
+        if (!plainTextInput || !textWordCount) return;
         const text = plainTextInput.value.trim();
         const words = text ? text.split(/\s+/).length : 0;
         textWordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
@@ -412,42 +412,49 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     function setActiveMode(mode) {
         activeMode = mode;
-        textUploadSection.style.display = mode === 'text' ? 'block' : 'none';
-        documentUploadSection.style.display = mode === 'document' ? 'block' : 'none';
-        audioUploadSection.style.display = mode === 'audio' ? 'block' : 'none';
-        imageUploadSection.style.display = mode === 'image' ? 'block' : 'none';
+        if (textUploadSection) textUploadSection.style.display = mode === 'text' ? 'block' : 'none';
+        if (documentUploadSection) documentUploadSection.style.display = mode === 'document' ? 'block' : 'none';
+        if (audioUploadSection) audioUploadSection.style.display = mode === 'audio' ? 'block' : 'none';
+        if (imageUploadSection) imageUploadSection.style.display = mode === 'image' ? 'block' : 'none';
         updateAnalyzeButtonState();
         saveProgress();
     }
 
-    switchBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            switchBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            setActiveMode(btn.dataset.type);
+    if (switchBtns) {
+        switchBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                setActiveMode(btn.dataset.type);
+            });
         });
-    });
+    }
 
     // =========================================================================
     // 6. TEXT MODE
     // =========================================================================
-    plainTextInput.addEventListener('input', () => {
-        updateWordCount();
-        saveProgress();
-        updateAnalyzeButtonState();
-    });
-    clearTextBtn.addEventListener('click', () => {
-        plainTextInput.value = '';
-        updateWordCount();
-        saveProgress();
-        updateAnalyzeButtonState();
-        showToast('Text cleared', 'info');
-    });
+    if (plainTextInput) {
+        plainTextInput.addEventListener('input', () => {
+            updateWordCount();
+            saveProgress();
+            updateAnalyzeButtonState();
+        });
+    }
+    if (clearTextBtn) {
+        clearTextBtn.addEventListener('click', () => {
+            if (plainTextInput) plainTextInput.value = '';
+            updateWordCount();
+            saveProgress();
+            updateAnalyzeButtonState();
+            showToast('Text cleared', 'info');
+        });
+    }
 
     // =========================================================================
     // 7. DOCUMENT MODE
     // =========================================================================
     function displayFileInfo(file) {
+        if (!fileInfo) return;
         fileInfo.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -468,8 +475,10 @@ document.addEventListener('DOMContentLoaded', function() {
     function removeDocument() {
         uploadedFile = null;
         extractedDocumentText = "";
-        fileInfo.style.display = 'none';
-        fileInfo.innerHTML = '';
+        if (fileInfo) {
+            fileInfo.style.display = 'none';
+            fileInfo.innerHTML = '';
+        }
         updateAnalyzeButtonState();
         saveProgress();
         showToast('Document removed', 'info');
@@ -529,21 +538,28 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; });
-    dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border-light)'; });
-    dropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        dropZone.style.borderColor = 'var(--border-light)';
-        if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files[0]);
-    });
-    dropZone.addEventListener('click', () => fileInput.click());
-    browseDocumentBtn.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFileUpload(fileInput.files[0]); });
+    if (dropZone) {
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent)'; });
+        dropZone.addEventListener('dragleave', () => { if (dropZone) dropZone.style.borderColor = 'var(--border-light)'; });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            if (dropZone) dropZone.style.borderColor = 'var(--border-light)';
+            if (e.dataTransfer.files.length) handleFileUpload(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => { if (fileInput) fileInput.click(); });
+    }
+    if (browseDocumentBtn) {
+        browseDocumentBtn.addEventListener('click', () => { if (fileInput) fileInput.click(); });
+    }
+    if (fileInput) {
+        fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFileUpload(fileInput.files[0]); });
+    }
 
     // =========================================================================
     // 8. AUDIO MODE
     // =========================================================================
     function displayAudioFileInfo(file) {
+        if (!audioFileInfo) return;
         audioFileInfo.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div style="display: flex; align-items: center; gap: 10px;">
@@ -564,10 +580,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function removeAudio() {
         uploadedAudioFile = null;
         audioTranscript = "";
-        audioFileInfo.style.display = 'none';
-        audioFileInfo.innerHTML = '';
-        audioTranscriptPreview.style.display = 'none';
-        transcriptPreviewText.textContent = '';
+        if (audioFileInfo) {
+            audioFileInfo.style.display = 'none';
+            audioFileInfo.innerHTML = '';
+        }
+        if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'none';
+        if (transcriptPreviewText) transcriptPreviewText.textContent = '';
         updateAnalyzeButtonState();
         saveProgress();
         showToast('Audio file removed', 'info');
@@ -575,14 +593,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function showTranscriptionLoading() {
         let loadingDiv = document.getElementById('transcriptionLoading');
-        if (!loadingDiv) {
+        if (!loadingDiv && audioTranscriptPreview) {
             loadingDiv = document.createElement('div');
             loadingDiv.id = 'transcriptionLoading';
             loadingDiv.className = 'transcription-loading';
             loadingDiv.innerHTML = `<div class="spinner-small"></div><span>Transcribing audio... please wait</span>`;
             audioTranscriptPreview.insertAdjacentElement('afterend', loadingDiv);
         }
-        audioTranscriptPreview.style.display = 'none';
+        if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'none';
     }
 
     function hideTranscriptionLoading() {
@@ -616,19 +634,19 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadedAudioFile = file;
         audioTranscript = "";
         displayAudioFileInfo(file);
-        audioTranscriptPreview.style.display = 'none';
+        if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'none';
         isTranscribing = true;
         updateAnalyzeButtonState();
         showTranscriptionLoading();
         try {
             const transcript = await transcribeAudio(file);
             audioTranscript = truncateContent(transcript);
-            transcriptPreviewText.textContent = audioTranscript;
-            audioTranscriptPreview.style.display = 'block';
+            if (transcriptPreviewText) transcriptPreviewText.textContent = audioTranscript;
+            if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'block';
             hideTranscriptionLoading();
             saveProgress();
             showToast('Transcription complete! Ready for analysis.', 'success');
-            if (!analysisTextarea.value.trim()) {
+            if (analysisTextarea && !analysisTextarea.value.trim()) {
                 analysisTextarea.value = "Analyze this session transcript and provide key insights, clinical observations, and recommendations.";
                 updateAnalyzeButtonState();
                 saveProgress();
@@ -638,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
             hideTranscriptionLoading();
             showToast(`Transcription failed: ${err.message}`, 'error');
             audioTranscript = "";
-            audioTranscriptPreview.style.display = 'none';
+            if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'none';
         } finally {
             isTranscribing = false;
             updateAnalyzeButtonState();
@@ -646,35 +664,43 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    audioDropZone.addEventListener('dragover', e => { e.preventDefault(); audioDropZone.style.borderColor = 'var(--accent)'; });
-    audioDropZone.addEventListener('dragleave', () => { audioDropZone.style.borderColor = 'var(--border-light)'; });
-    audioDropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        audioDropZone.style.borderColor = 'var(--border-light)';
-        if (e.dataTransfer.files.length) handleAudioUpload(e.dataTransfer.files[0]);
-    });
-    audioDropZone.addEventListener('click', () => audioFileInput.click());
-    browseAudioBtn.addEventListener('click', (e) => { e.stopPropagation(); audioFileInput.click(); });
-    audioFileInput.addEventListener('change', () => { if (audioFileInput.files.length) handleAudioUpload(audioFileInput.files[0]); audioFileInput.value = ''; });
+    if (audioDropZone) {
+        audioDropZone.addEventListener('dragover', e => { e.preventDefault(); audioDropZone.style.borderColor = 'var(--accent)'; });
+        audioDropZone.addEventListener('dragleave', () => { if (audioDropZone) audioDropZone.style.borderColor = 'var(--border-light)'; });
+        audioDropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            if (audioDropZone) audioDropZone.style.borderColor = 'var(--border-light)';
+            if (e.dataTransfer.files.length) handleAudioUpload(e.dataTransfer.files[0]);
+        });
+        audioDropZone.addEventListener('click', () => { if (audioFileInput) audioFileInput.click(); });
+    }
+    if (browseAudioBtn) {
+        browseAudioBtn.addEventListener('click', (e) => { e.stopPropagation(); if (audioFileInput) audioFileInput.click(); });
+    }
+    if (audioFileInput) {
+        audioFileInput.addEventListener('change', () => { if (audioFileInput.files.length) handleAudioUpload(audioFileInput.files[0]); audioFileInput.value = ''; });
+    }
 
     // =========================================================================
     // 9. IMAGE MODE
     // =========================================================================
     function displayImagePreview(dataURL, fileName) {
-        previewImage.src = dataURL;
-        imageFileInfo.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-image" style="color: var(--accent);"></i>
-                    <strong>${escapeHtml(fileName)}</strong>
+        if (previewImage) previewImage.src = dataURL;
+        if (imageFileInfo) {
+            imageFileInfo.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <i class="fas fa-image" style="color: var(--accent);"></i>
+                        <strong>${escapeHtml(fileName)}</strong>
+                    </div>
+                    <button class="remove-file-btn" id="removeImageBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove image">
+                        <i class="fas fa-times-circle"></i>
+                    </button>
                 </div>
-                <button class="remove-file-btn" id="removeImageBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px;" title="Remove image">
-                    <i class="fas fa-times-circle"></i>
-                </button>
-            </div>
-        `;
-        imageFileInfo.style.display = 'block';
-        imagePreview.style.display = 'block';
+            `;
+            imageFileInfo.style.display = 'block';
+        }
+        if (imagePreview) imagePreview.style.display = 'block';
         const removeBtn = document.getElementById('removeImageBtn');
         if (removeBtn) removeBtn.addEventListener('click', removeImage);
     }
@@ -682,9 +708,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function removeImage() {
         uploadedImageFile = null;
         imageDataURL = null;
-        imageFileInfo.style.display = 'none';
-        imagePreview.style.display = 'none';
-        previewImage.src = '';
+        if (imageFileInfo) {
+            imageFileInfo.style.display = 'none';
+            imageFileInfo.innerHTML = '';
+        }
+        if (imagePreview) imagePreview.style.display = 'none';
+        if (previewImage) previewImage.src = '';
         updateAnalyzeButtonState();
         saveProgress();
         showToast('Image removed', 'info');
@@ -735,16 +764,20 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    imageDropZone.addEventListener('dragover', e => { e.preventDefault(); imageDropZone.style.borderColor = 'var(--accent)'; });
-    imageDropZone.addEventListener('dragleave', () => { imageDropZone.style.borderColor = 'var(--border-light)'; });
-    imageDropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        imageDropZone.style.borderColor = 'var(--border-light)';
-        if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
-    });
+    if (imageDropZone) {
+        imageDropZone.addEventListener('dragover', e => { e.preventDefault(); imageDropZone.style.borderColor = 'var(--accent)'; });
+        imageDropZone.addEventListener('dragleave', () => { if (imageDropZone) imageDropZone.style.borderColor = 'var(--border-light)'; });
+        imageDropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            if (imageDropZone) imageDropZone.style.borderColor = 'var(--border-light)';
+            if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
+        });
+    }
     if (cameraBtn) cameraBtn.addEventListener('click', capturePhoto);
-    if (galleryBtn) galleryBtn.addEventListener('click', () => imageFileInput.click());
-    imageFileInput.addEventListener('change', () => { if (imageFileInput.files.length) handleImageUpload(imageFileInput.files[0]); imageFileInput.value = ''; });
+    if (galleryBtn) galleryBtn.addEventListener('click', () => { if (imageFileInput) imageFileInput.click(); });
+    if (imageFileInput) {
+        imageFileInput.addEventListener('change', () => { if (imageFileInput.files.length) handleImageUpload(imageFileInput.files[0]); imageFileInput.value = ''; });
+    }
 
     // =========================================================================
     // 10. ANALYSIS (AI CALL)
@@ -802,71 +835,190 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function performAnalysis() {
         let content = "";
-        if (activeMode === 'text') content = plainTextInput.value.trim();
+        if (activeMode === 'text') content = plainTextInput ? plainTextInput.value.trim() : "";
         else if (activeMode === 'document') content = extractedDocumentText;
         else if (activeMode === 'audio') content = audioTranscript;
         else if (activeMode === 'image' && !imageDataURL) throw new Error('No image to analyze');
         if (activeMode !== 'image' && !content) throw new Error('No content to analyze');
-        let userRequest = analysisTextarea.value.trim();
+        let userRequest = analysisTextarea ? analysisTextarea.value.trim() : "";
         if (activeMode === 'audio' && !userRequest) userRequest = "Analyze this session transcript and provide key clinical insights, observations, and recommendations.";
         const messages = buildMessages(content, documentType, userRequest);
         return await analyzeWithOpenAI(messages);
     }
 
     function startAnalysisUI() {
-        analyzeBtn.disabled = true;
-        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-        analysisResultsContainer.style.display = 'block';
-        loadingIndicator.style.display = 'flex';
-        reportContentArea.style.display = 'none';
+        if (analyzeBtn) {
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+        }
+        if (analysisResultsContainer) analysisResultsContainer.style.display = 'block';
+        if (loadingIndicator) loadingIndicator.style.display = 'flex';
+        if (reportContentArea) reportContentArea.style.display = 'none';
     }
 
     function resetAnalyzeButton() {
-        analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '<span>Analyze</span><i class="fas fa-magic"></i>';
+        if (analyzeBtn) {
+            analyzeBtn.disabled = false;
+            analyzeBtn.innerHTML = '<span>Analyze</span><i class="fas fa-magic"></i>';
+        }
         updateAnalyzeButtonState();
     }
 
     function displayResults(results) {
-        if (!resultsContent) return;
+        if (!resultsContent) {
+            console.warn('resultsContent element not found');
+            return;
+        }
         const htmlContent = marked.parse(results);
         resultsContent.innerHTML = htmlContent;
-        reportDate.textContent = new Date().toLocaleString();
-        reportContentArea.style.display = 'block';
+        if (reportDate) reportDate.textContent = new Date().toLocaleString();
+        if (reportContentArea) reportContentArea.style.display = 'block';
     }
 
-    function showPreviewCard(fullText, historyKey) {
-        let previewCard = document.getElementById('previewCard');
-        if (!previewCard) {
-            const cardHtml = `
-                <div id="previewCard" class="preview-card glass-card" style="display: none;">
-                    <div class="preview-header"><h3><i class="fas fa-file-alt"></i> Analysis Complete</h3><span class="preview-badge">Ready</span></div>
-                    <div class="preview-content"></div>
-                    <div class="preview-footer">
-                        <button class="btn-primary preview-view-btn" id="viewFullBtn"><i class="fas fa-external-link-alt"></i> View Full Analysis</button>
-                        <button class="btn-secondary preview-download-btn" id="previewDownloadBtn"><i class="fas fa-download"></i> Download</button>
+    // ===== PREVIEW MODAL (same as standardized page) =====
+    function showPreviewModal(fullText, historyKey) {
+        // Remove any existing preview modal
+        const existingModal = document.querySelector('.preview-modal');
+        if (existingModal) existingModal.remove();
+
+        // Get file name for display
+        let fileName = '';
+        if (activeMode === 'text') fileName = 'Text Input';
+        else if (activeMode === 'document') fileName = uploadedFile?.name || 'Document';
+        else if (activeMode === 'audio') fileName = uploadedAudioFile?.name || 'Audio Session';
+        else if (activeMode === 'image') fileName = uploadedImageFile?.name || 'Image Analysis';
+
+        const modalHtml = `
+            <div class="preview-modal">
+                <div class="preview-overlay"></div>
+                <div class="preview-card">
+                    <div class="preview-card-header">
+                        <div class="preview-icon">📄</div>
+                        <h3>Analysis Complete</h3>
+                        <button class="preview-close">&times;</button>
+                    </div>
+                    <div class="preview-card-body">
+                        <div class="preview-info">
+                            <span class="preview-badge">✅ Ready to view</span>
+                            <span class="preview-date">${new Date().toLocaleString()}</span>
+                        </div>
+                        <p class="preview-description">
+                            Your analysis of <strong>${escapeHtml(fileName)}</strong> (${escapeHtml(documentType || 'General')}) has been generated successfully.
+                        </p>
+                        <div class="preview-actions">
+                            <button class="preview-btn primary" id="viewFullAnalysisBtn">
+                                📖 View Full Analysis
+                            </button>
+                            <button class="preview-btn secondary" id="closePreviewBtn">
+                                Close
+                            </button>
+                        </div>
+                        <div class="preview-note">
+                            <small>💡 The full report will open in a new tab for printing or saving as Word.</small>
+                        </div>
                     </div>
                 </div>
-            `;
-            analysisResultsContainer.insertAdjacentHTML('afterend', cardHtml);
-            previewCard = document.getElementById('previewCard');
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const modal = document.querySelector('.preview-modal');
+        
+        // Close handlers
+        const closeBtn = modal.querySelector('.preview-close');
+        const closeActionBtn = modal.querySelector('#closePreviewBtn');
+        const overlay = modal.querySelector('.preview-overlay');
+        
+        const closeModal = () => modal.remove();
+        
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (closeActionBtn) closeActionBtn.addEventListener('click', closeModal);
+        if (overlay) overlay.addEventListener('click', closeModal);
+        
+        // View full analysis button
+        const viewBtn = modal.querySelector('#viewFullAnalysisBtn');
+        if (viewBtn) {
+            viewBtn.addEventListener('click', () => {
+                if (historyKey) {
+                    window.open(`docresult.html?id=${historyKey}`, '_blank');
+                    closeModal();
+                } else {
+                    showToast('Error: Analysis ID not found', 'error');
+                }
+            });
         }
-        const previewContent = previewCard.querySelector('.preview-content');
-        const viewBtn = document.getElementById('viewFullBtn');
-        const downloadBtn = document.getElementById('previewDownloadBtn');
-        const previewText = fullText.replace(/<[^>]*>/g, ' ').substring(0, 200) + '...';
-        previewContent.innerHTML = `<p>${escapeHtml(previewText)}</p>`;
-        viewBtn.onclick = () => window.open(`docresult.html?id=${historyKey}`, '_blank');
-        downloadBtn.onclick = async () => {
+    }
+
+    async function autoSaveToHistory(contentType, fileName, results, transcription = null) {
+        if (!currentUser) return null;
+        const userId = currentUser.uid;
+        const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
+            contentType, fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
+            documentType, request: analysisTextarea ? analysisTextarea.value : (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
+            results, transcription, timestamp: firebase.database.ServerValue.TIMESTAMP, date: new Date().toLocaleDateString()
+        });
+        loadHistory();
+        showToast('Analysis saved to history', 'info');
+        return newRef.key;
+    }
+
+    // =========================================================================
+    // 11. ANALYZE BUTTON HANDLER
+    // =========================================================================
+    if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', async () => {
+            if (!aiConfig.token) {
+                showToast('Initializing AI...', 'warning');
+                await fetchAPITokens();
+                if (!aiConfig.token) { showToast('AI not available. Please refresh.', 'error'); resetAnalyzeButton(); return; }
+            }
+            if (!currentUser) { 
+                showToast('Please login to analyze', 'error'); 
+                resetAnalyzeButton(); 
+                return; 
+            }
+            if (!documentType) { 
+                showToast('Please select a document type', 'error'); 
+                resetAnalyzeButton(); 
+                return; 
+            }
+
+            startAnalysisUI();
+            try {
+                const result = await performAnalysis();
+                analysisResults = result;
+                const key = await autoSaveToHistory(activeMode, 
+                    activeMode === 'text' ? 'Text Input' : (activeMode === 'document' ? uploadedFile?.name : (activeMode === 'audio' ? uploadedAudioFile?.name : uploadedImageFile?.name)), 
+                    result, activeMode === 'audio' ? audioTranscript : null);
+                if (loadingIndicator) loadingIndicator.style.display = 'none';
+                showPreviewModal(result, key);
+                window.currentAnalysisResult = result;
+                saveProgress();
+            } catch (err) {
+                console.error(err);
+                let errorMsg = err.message;
+                if (errorMsg.includes('max_tokens') || errorMsg.includes('token limit')) errorMsg = 'The content is too long. Please try a shorter document or audio file.';
+                showToast('Analysis failed: ' + errorMsg, 'error');
+                if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+                const previewModal = document.querySelector('.preview-modal');
+                if (previewModal) previewModal.remove();
+            } finally {
+                resetAnalyzeButton();
+            }
+        });
+    }
+
+    if (downloadReport) {
+        downloadReport.addEventListener('click', async () => {
             if (!analysisResults) return;
-            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            downloadReport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
             try {
                 const paragraphs = markdownToDocxParagraphs(analysisResults);
                 const doc = new docx.Document({
                     sections: [{
                         children: [
                             new docx.Paragraph({ text: "rehab.ai Analysis Report", heading: docx.HeadingLevel.HEADING_1 }),
-                            new docx.Paragraph({ text: `Date: ${new Date().toLocaleString()}` }),
+                            new docx.Paragraph({ text: `Date: ${reportDate ? reportDate.textContent : new Date().toLocaleString()}` }),
                             new docx.Paragraph({ text: "" }),
                             ...paragraphs
                         ]
@@ -883,13 +1035,119 @@ document.addEventListener('DOMContentLoaded', function() {
                 showToast('Export failed', 'error');
                 console.error(err);
             } finally {
-                downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download';
+                downloadReport.innerHTML = '<i class="fas fa-file-pdf"></i> Export doc.';
             }
-        };
-        previewCard.style.display = 'block';
-        if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+        });
     }
 
+    if (closeResultsBtn) {
+        closeResultsBtn.addEventListener('click', () => {
+            const previewModal = document.querySelector('.preview-modal');
+            if (previewModal) previewModal.remove();
+            if (analysisResultsContainer) analysisResultsContainer.style.display = 'none';
+            analysisResults = null;
+            saveProgress();
+        });
+    }
+
+    // =========================================================================
+    // 12. HISTORY DRAWER (Only works when logged in)
+    // =========================================================================
+    function loadHistory() {
+        if (!currentUser) return;
+        const historyListElem = document.getElementById('historyList');
+        if (!historyListElem) return;
+        
+        database.ref(`users/${currentUser.uid}/analysisHistory`).orderByChild('timestamp').on('value', (snapshot) => {
+            if (!historyListElem) return;
+            historyListElem.innerHTML = '';
+            const data = snapshot.val();
+            if (!data) { 
+                historyListElem.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>'; 
+                return; 
+            }
+            const entries = Object.entries(data).sort((a,b) => b[1].timestamp - a[1].timestamp);
+            entries.forEach(([key, item]) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `
+                    <div class="history-info">
+                        <span class="history-name">${escapeHtml(item.fileName || 'Untitled')}</span>
+                        <div class="history-meta">
+                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${escapeHtml(item.documentType || 'General')}</span>
+                            <span>${escapeHtml(item.date)}</span>
+                        </div>
+                    </div>
+                    <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
+                `;
+                const viewBtn = div.querySelector('.view-btn');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', () => window.open(`docresult.html?id=${key}`, '_blank'));
+                }
+                historyListElem.appendChild(div);
+            });
+        });
+    }
+
+    function toggleHistoryDrawer() { 
+        if (historyDrawer) historyDrawer.classList.toggle('active'); 
+    }
+    
+    if (toggleHistoryBtn) {
+        toggleHistoryBtn.addEventListener('click', () => { 
+            if (!currentUser) { 
+                showToast('Please login to view history', 'error'); 
+                return; 
+            } 
+            loadHistory(); 
+            toggleHistoryDrawer(); 
+        });
+    }
+    if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', toggleHistoryDrawer);
+
+    // =========================================================================
+    // 13. DOCUMENT TYPE SELECTION (save)
+    // =========================================================================
+    if (chipBtns) {
+        chipBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                chipBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                documentType = btn.dataset.type;
+                updateAnalyzeButtonState();
+                saveProgress();
+            });
+        });
+    }
+
+    // =========================================================================
+    // 14. ANALYSIS REQUEST (save)
+    // =========================================================================
+    if (analysisTextarea) {
+        analysisTextarea.addEventListener('input', () => {
+            updateAnalyzeButtonState();
+            saveProgress();
+        });
+    }
+
+    if (tags) {
+        tags.forEach(tag => {
+            tag.addEventListener('click', () => {
+                const requestText = tag.dataset.request;
+                const currentText = analysisTextarea ? analysisTextarea.value : '';
+                if (analysisTextarea) {
+                    analysisTextarea.value = currentText ? currentText + "\n" + requestText : requestText;
+                    updateAnalyzeButtonState();
+                    saveProgress();
+                    analysisTextarea.dispatchEvent(new Event('input'));
+                }
+            });
+        });
+    }
+
+    // =========================================================================
+    // 15. MARKDOWN TO DOCX HELPER
+    // =========================================================================
     function markdownToDocxParagraphs(markdown) {
         const lines = markdown.split('\n');
         const paragraphs = [];
@@ -927,183 +1185,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return paragraphs;
     }
 
-    async function autoSaveToHistory(contentType, fileName, results, transcription = null) {
-        if (!currentUser) return null;
-        const userId = currentUser.uid;
-        const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
-            contentType, fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
-            documentType, request: analysisTextarea.value || (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
-            results, transcription, timestamp: firebase.database.ServerValue.TIMESTAMP, date: new Date().toLocaleDateString()
-        });
-        loadHistory();
-        showToast('Analysis saved to history', 'info');
-        return newRef.key;
-    }
-
     // =========================================================================
-    // 11. ANALYZE BUTTON HANDLER
-    // =========================================================================
-    analyzeBtn.addEventListener('click', async () => {
-        if (!aiConfig.token) {
-            showToast('Initializing AI...', 'warning');
-            await fetchAPITokens();
-            if (!aiConfig.token) { showToast('AI not available. Please refresh.', 'error'); resetAnalyzeButton(); return; }
-        }
-        if (!currentUser) { 
-            showToast('Please login to analyze', 'error'); 
-            resetAnalyzeButton(); 
-            return; 
-        }
-        if (!documentType) { 
-            showToast('Please select a document type', 'error'); 
-            resetAnalyzeButton(); 
-            return; 
-        }
-
-        startAnalysisUI();
-        try {
-            const result = await performAnalysis();
-            analysisResults = result;
-            const key = await autoSaveToHistory(activeMode, 
-                activeMode === 'text' ? 'Text Input' : (activeMode === 'document' ? uploadedFile?.name : (activeMode === 'audio' ? uploadedAudioFile?.name : uploadedImageFile?.name)), 
-                result, activeMode === 'audio' ? audioTranscript : null);
-            loadingIndicator.style.display = 'none';
-            showPreviewCard(result, key);
-            window.currentAnalysisResult = result;
-            saveProgress();
-        } catch (err) {
-            console.error(err);
-            let errorMsg = err.message;
-            if (errorMsg.includes('max_tokens') || errorMsg.includes('token limit')) errorMsg = 'The content is too long. Please try a shorter document or audio file.';
-            showToast('Analysis failed: ' + errorMsg, 'error');
-            analysisResultsContainer.style.display = 'none';
-            const previewCard = document.getElementById('previewCard');
-            if (previewCard) previewCard.style.display = 'none';
-        } finally {
-            resetAnalyzeButton();
-        }
-    });
-
-    if (downloadReport) {
-        downloadReport.addEventListener('click', async () => {
-            if (!analysisResults) return;
-            downloadReport.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-            try {
-                const paragraphs = markdownToDocxParagraphs(analysisResults);
-                const doc = new docx.Document({
-                    sections: [{
-                        children: [
-                            new docx.Paragraph({ text: "rehab.ai Analysis Report", heading: docx.HeadingLevel.HEADING_1 }),
-                            new docx.Paragraph({ text: `Date: ${reportDate.textContent}` }),
-                            new docx.Paragraph({ text: "" }),
-                            ...paragraphs
-                        ]
-                    }]
-                });
-                const blob = await docx.Packer.toBlob(doc);
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `rehab_analysis_${Date.now()}.docx`;
-                a.click();
-                URL.revokeObjectURL(url);
-            } catch (err) {
-                showToast('Export failed', 'error');
-                console.error(err);
-            } finally {
-                downloadReport.innerHTML = '<i class="fas fa-file-pdf"></i> Export doc.';
-            }
-        });
-    }
-
-    if (closeResultsBtn) {
-        closeResultsBtn.addEventListener('click', () => {
-            const previewCard = document.getElementById('previewCard');
-            if (previewCard) previewCard.style.display = 'none';
-            analysisResultsContainer.style.display = 'none';
-            analysisResults = null;
-            saveProgress();
-        });
-    }
-
-    // =========================================================================
-    // 12. HISTORY DRAWER (Only works when logged in)
-    // =========================================================================
-    function loadHistory() {
-        if (!currentUser) return;
-        const historyList = document.getElementById('historyList');
-        database.ref(`users/${currentUser.uid}/analysisHistory`).orderByChild('timestamp').on('value', (snapshot) => {
-            if (!historyList) return;
-            historyList.innerHTML = '';
-            const data = snapshot.val();
-            if (!data) { historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>'; return; }
-            const entries = Object.entries(data).sort((a,b) => b[1].timestamp - a[1].timestamp);
-            entries.forEach(([key, item]) => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.innerHTML = `
-                    <div class="history-info">
-                        <span class="history-name">${escapeHtml(item.fileName || 'Untitled')}</span>
-                        <div class="history-meta">
-                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${escapeHtml(item.documentType || 'General')}</span>
-                            <span>${escapeHtml(item.date)}</span>
-                        </div>
-                    </div>
-                    <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
-                `;
-                div.querySelector('.view-btn').addEventListener('click', () => window.open(`docresult.html?id=${key}`, '_blank'));
-                historyList.appendChild(div);
-            });
-        });
-    }
-
-    function toggleHistoryDrawer() { historyDrawer.classList.toggle('active'); }
-    if (toggleHistoryBtn) toggleHistoryBtn.addEventListener('click', () => { 
-        if (!currentUser) { 
-            showToast('Please login to view history', 'error'); 
-            return; 
-        } 
-        loadHistory(); 
-        toggleHistoryDrawer(); 
-    });
-    if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', toggleHistoryDrawer);
-
-    // =========================================================================
-    // 13. DOCUMENT TYPE SELECTION (save)
-    // =========================================================================
-    chipBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            chipBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            documentType = btn.dataset.type;
-            updateAnalyzeButtonState();
-            saveProgress();
-        });
-    });
-
-    // =========================================================================
-    // 14. ANALYSIS REQUEST (save)
-    // =========================================================================
-    if (analysisTextarea) {
-        analysisTextarea.addEventListener('input', () => {
-            updateAnalyzeButtonState();
-            saveProgress();
-        });
-    }
-
-    tags.forEach(tag => {
-        tag.addEventListener('click', () => {
-            const requestText = tag.dataset.request;
-            const currentText = analysisTextarea.value;
-            analysisTextarea.value = currentText ? currentText + "\n" + requestText : requestText;
-            updateAnalyzeButtonState();
-            saveProgress();
-            analysisTextarea.dispatchEvent(new Event('input'));
-        });
-    });
-
-    // =========================================================================
-    // 15. INITIALIZATION - Load saved state IMMEDIATELY (no login required)
+    // 16. INITIALIZATION - Load saved state IMMEDIATELY (no login required)
     // =========================================================================
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {

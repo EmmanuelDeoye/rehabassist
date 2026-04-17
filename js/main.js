@@ -1,6 +1,6 @@
 // js/main.js
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('rehab.ai main.js loaded');
+  console.log('rehablix main.js loaded');
 
   // ----- DOM elements -----
   const toolCards = document.querySelectorAll('.tool-card-link');
@@ -133,5 +133,5 @@ if (floatingBtn) {
   });
 }
 
-  console.log('rehab.ai ready');
+  console.log('rehablix ready');
 });
