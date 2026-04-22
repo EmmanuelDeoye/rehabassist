@@ -86,26 +86,84 @@
             <p id="movementInstruction">Select a joint to begin</p>
           </div>
           
-          <div class="joint-selection">
-            <label for="jointSelect">Select Joint / Movement</label>
-            <select id="jointSelect" class="joint-select">
-              <option value="">-- Choose movement --</option>
-              <option value="shoulder_flexion">Shoulder Flexion</option>
-              <option value="shoulder_abduction">Shoulder Abduction</option>
-              <option value="elbow_flexion">Elbow Flexion</option>
-              <option value="hip_flexion">Hip Flexion</option>
-              <option value="knee_flexion">Knee Flexion</option>
-              <option value="ankle_dorsiflexion">Ankle Dorsiflexion</option>
-              <option value="cervical_rotation">Cervical Rotation</option>
-              <option value="lumbar_flexion">Lumbar Flexion</option>
-            </select>
+          
+          <!-- Assessment Mode Radio Buttons -->
+<div class="assessment-mode">
+  <label class="radio-label">
+    <input type="radio" name="assessmentMode" value="isolate" checked>
+    <i class="fas fa-crosshairs"></i>
+    <div class="radio-label-content">
+      <span class="radio-label-title">Isolate Joint</span>
+      <span class="mode-description">Single movement analysis</span>
+    </div>
+  </label>
+  <label class="radio-label">
+    <input type="radio" name="assessmentMode" value="full">
+    <i class="fas fa-layer-group"></i>
+    <div class="radio-label-content">
+      <span class="radio-label-title">Full Joint Assessment</span>
+      <span class="mode-description">Complete range analysis</span>
+    </div>
+  </label>
+</div>
+
+          <select id="jointSelect" class="joint-select">
+  <option value="">-- Choose movement --</option>
+  <optgroup label="Shoulder">
+    <option value="shoulder_flexion">Shoulder Flexion</option>
+    <option value="shoulder_extension">Shoulder Extension</option>
+    <option value="shoulder_abduction">Shoulder Abduction</option>
+    <option value="shoulder_adduction">Shoulder Adduction</option>
+    <option value="shoulder_internal_rotation">Shoulder Internal Rotation</option>
+    <option value="shoulder_external_rotation">Shoulder External Rotation</option>
+  </optgroup>
+  <optgroup label="Elbow">
+    <option value="elbow_flexion">Elbow Flexion</option>
+    <option value="elbow_extension">Elbow Extension</option>
+  </optgroup>
+  <optgroup label="Wrist">
+    <option value="wrist_flexion">Wrist Flexion</option>
+    <option value="wrist_extension">Wrist Extension</option>
+    <option value="wrist_radial_deviation">Wrist Radial Deviation</option>
+    <option value="wrist_ulnar_deviation">Wrist Ulnar Deviation</option>
+  </optgroup>
+  <optgroup label="Hand / Fingers">
+    <option value="finger_flexion">Finger Flexion (MCP/PIP/DIP)</option>
+    <option value="finger_extension">Finger Extension</option>
+    <option value="thumb_abduction">Thumb Abduction</option>
+    <option value="thumb_opposition">Thumb Opposition</option>
+  </optgroup>
+  <optgroup label="Hip">
+    <option value="hip_flexion">Hip Flexion</option>
+    <option value="hip_extension">Hip Extension</option>
+    <option value="hip_abduction">Hip Abduction</option>
+    <option value="hip_adduction">Hip Adduction</option>
+    <option value="hip_internal_rotation">Hip Internal Rotation</option>
+    <option value="hip_external_rotation">Hip External Rotation</option>
+  </optgroup>
+  <optgroup label="Knee">
+    <option value="knee_flexion">Knee Flexion</option>
+    <option value="knee_extension">Knee Extension</option>
+  </optgroup>
+  <optgroup label="Ankle">
+    <option value="ankle_dorsiflexion">Ankle Dorsiflexion</option>
+    <option value="ankle_plantarflexion">Ankle Plantarflexion</option>
+  </optgroup>
+  <optgroup label="Cervical Spine">
+    <option value="cervical_flexion">Cervical Flexion</option>
+    <option value="cervical_extension">Cervical Extension</option>
+    <option value="cervical_rotation">Cervical Rotation</option>
+    <option value="cervical_lateral_flexion">Cervical Lateral Flexion</option>
+  </optgroup>
+  <optgroup label="Lumbar Spine">
+    <option value="lumbar_flexion">Lumbar Flexion</option>
+    <option value="lumbar_extension">Lumbar Extension</option>
+    <option value="lumbar_lateral_flexion">Lumbar Lateral Flexion</option>
+  </optgroup>
+</select>
           </div>
           
-          <div class="camera-controls">
-            <button id="startCameraBtn" class="btn-primary" disabled>
-              <i class="fas fa-play"></i> Start Scanning
-            </button>
-          </div>
+          
           
           <div class="camera-view large">
             <video id="cameraPreview" autoplay playsinline muted></video>
@@ -118,6 +176,13 @@
               <i class="fas fa-camera"></i>
               <p>Camera not started</p>
             </div>
+          </div>
+          
+          
+          <div class="camera-controls">
+            <button id="startCameraBtn" class="btn-primary" disabled>
+              <i class="fas fa-play"></i> Start Scanning
+            </button>
           </div>
 
           <!-- Movement prompt display -->
@@ -193,10 +258,10 @@
   </aside>
 
   <!-- Scripts -->
+  <div id="toast-container"></div>
   <script src="js/config.js"></script>
   <script src="js/modal.js"></script>     <!-- Creates auth modal, toast, etc. -->
   <script src="js/auth.js"></script>      <!-- Auth logic -->
-  <script src="js/theme.js"></script>     <!-- Theme logic -->
   <script src="js/tools.js"></script>     <!-- Shared tools logic -->
   <script src="js/rom.js"></script>       <!-- ROM analyzer logic -->
 </body>

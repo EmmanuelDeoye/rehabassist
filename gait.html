@@ -37,7 +37,7 @@
           </svg>
         </a>
         
-        <!-- History Button (visible only when logged in) -->
+        <!-- History Button -->
         <button class="icon-btn history-nav-btn" id="historyNavBtn" aria-label="History" style="display:none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
@@ -53,7 +53,6 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
         </button>
-        <!-- Auth elements will be injected by modal.js -->
       </div>
     </div>
   </nav>
@@ -79,71 +78,70 @@
       </div>
 
       <!-- Stage 1: Record Video -->
-<div id="stageRecord" class="stage-container active">
-  <div class="glass-card record-card full-width">
-    <div class="record-header">
-      <h3><i class="fas fa-video"></i> Gait Video Capture</h3>
-      <p>Position the patient walking naturally across the frame (sagittal or frontal view)</p>
-    </div>
-    
-    <!-- Two‑column layout wrapper -->
-    <div class="record-layout">
-      <!-- Left column: Camera area -->
-      <div class="camera-column">
-        <div class="camera-view tall">
-          <video id="cameraPreview" autoplay playsinline muted></video>
-          <div class="scan-overlay" style="display: none;">
-            <div class="scan-line"></div>
+      <div id="stageRecord" class="stage-container active">
+        <div class="glass-card record-card full-width">
+          <div class="record-header">
+            <h3><i class="fas fa-video"></i> Gait Video Capture</h3>
+            <p>Position the patient walking naturally across the frame (sagittal or frontal view)</p>
           </div>
-          <div id="cameraPlaceholder" class="camera-placeholder">
-            <i class="fas fa-camera"></i>
-            <p>Camera not started</p>
+          
+          <div class="record-layout">
+            <div class="camera-column">
+              <div class="camera-view tall">
+                <video id="cameraPreview" autoplay playsinline muted></video>
+                <div class="scan-overlay" style="display: none;">
+                  <div class="scan-line"></div>
+                </div>
+                <div id="cameraPlaceholder" class="camera-placeholder">
+                  <i class="fas fa-camera"></i>
+                  <p>Camera not started</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="controls-column">
+              <!-- Patient Name Input (NEW) -->
+              <div class="patient-name-section">
+                <label for="patientName"><i class="fas fa-user"></i> Patient Name</label>
+                <input type="text" id="patientName" class="patient-name-input" placeholder="Enter patient name (optional)">
+              </div>
+              
+              <div class="record-controls">
+                <button id="startCameraBtn" class="btn-primary" disabled>
+                  <i class="fas fa-play"></i> Start Camera
+                </button>
+                <button id="recordBtn" class="btn-record" disabled>
+                  <i class="fas fa-circle"></i> Record
+                </button>
+              </div>
+
+              <div id="recordingTimer" class="recording-timer" style="display: none;">
+                <span class="recording-indicator"><i class="fas fa-circle"></i> Recording</span>
+                <span id="timerDisplay">00:00</span>
+              </div>
+
+              <div id="videoPreview" class="video-preview" style="display: none;">
+                <h4>Recorded Video</h4>
+                <video id="recordedVideo" controls></video>
+                <div class="preview-actions">
+                  <button id="reRecordBtn" class="btn-secondary"><i class="fas fa-redo-alt"></i> Record Again</button>
+                  <button id="proceedToAnalysisBtn" class="btn-primary" disabled><i class="fas fa-arrow-right"></i> Analyze Gait</button>
+                </div>
+              </div>
+
+              <div class="gait-params">
+                <label>View / Condition (optional)</label>
+                <select id="gaitViewSelect" class="joint-select">
+                  <option value="sagittal">Sagittal View (side)</option>
+                  <option value="frontal">Frontal View (front)</option>
+                  <option value="posterior">Posterior View (back)</option>
+                </select>
+                <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      <!-- Right column: Controls and parameters -->
-      <div class="controls-column">
-        <!-- Recording controls -->
-        <div class="record-controls">
-          <button id="startCameraBtn" class="btn-primary" disabled>
-            <i class="fas fa-play"></i> Start Camera
-          </button>
-          <button id="recordBtn" class="btn-record" disabled>
-            <i class="fas fa-circle"></i> Record
-          </button>
-        </div>
-
-        <!-- Recording timer display -->
-        <div id="recordingTimer" class="recording-timer" style="display: none;">
-          <span class="recording-indicator"><i class="fas fa-circle"></i> Recording</span>
-          <span id="timerDisplay">00:00</span>
-        </div>
-
-        <!-- Video preview after recording -->
-        <div id="videoPreview" class="video-preview" style="display: none;">
-          <h4>Recorded Video</h4>
-          <video id="recordedVideo" controls></video>
-          <div class="preview-actions">
-            <button id="reRecordBtn" class="btn-secondary"><i class="fas fa-redo-alt"></i> Record Again</button>
-            <button id="proceedToAnalysisBtn" class="btn-primary" disabled><i class="fas fa-arrow-right"></i> Analyze Gait</button>
-          </div>
-        </div>
-
-        <!-- Optional gait parameters -->
-        <div class="gait-params">
-          <label>View / Condition (optional)</label>
-          <select id="gaitViewSelect" class="joint-select">
-            <option value="sagittal">Sagittal View (side)</option>
-            <option value="frontal">Frontal View (front)</option>
-            <option value="posterior">Posterior View (back)</option>
-          </select>
-          <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
       <!-- Stage 2: Analysis (Loading) -->
       <div id="stageAnalyze" class="stage-container">
@@ -159,30 +157,23 @@
         </div>
       </div>
 
-      <!-- Stage 3: Results -->
-      <div id="stageResults" class="stage-container">
-        <div class="glass-card results-card">
-          <div class="results-toolbar">
-            <div class="results-meta">
-              <span class="badge-ai">rehablix AI</span>
-              <span id="resultDate"></span>
-            </div>
-            <div class="results-actions">
-              <button id="downloadGaitReport" class="tool-btn"><i class="fas fa-file-pdf"></i> Export Report</button>
-              <button id="newGaitBtn" class="tool-btn secondary"><i class="fas fa-redo-alt"></i> New Analysis</button>
-            </div>
-          </div>
-          <div id="gaitResultsContent" class="results-body typography-clean"></div>
-        </div>
+      <!-- Stage 3: Results (kept for compatibility but won't be shown directly; modal will appear instead) -->
+      <div id="stageResults" class="stage-container" style="display: none;">
+        <!-- This stage is now hidden; results go to gaitresult.html via modal -->
       </div>
     </div>
   </main>
 
-  <!-- History Drawer -->
+  <!-- History Drawer with Search Bar -->
   <aside class="history-drawer" id="historyDrawer">
     <div class="drawer-header">
-      <h3><i class='bx bx-time-five'></i> Gait Analysis History</h3>
+      <h3><i class='bx bx-time-five'></i> Gait History</h3>
       <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
+    </div>
+    <!-- Search Bar -->
+    <div class="history-search">
+      <i class="fas fa-search"></i>
+      <input type="text" id="historySearchInput" placeholder="Search by patient name...">
     </div>
     <div class="history-content" id="historyList">
       <div class="empty-state">
@@ -192,11 +183,14 @@
     </div>
   </aside>
 
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
   <!-- Scripts -->
   <script src="js/config.js"></script>
-  <script src="js/modal.js"></script>     <!-- Creates auth modal, toast, etc. -->
-  <script src="js/auth.js"></script>      <!-- Auth logic -->
+  <script src="js/modal.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/tools.js"></script>
-  <script src="js/gait.js"></script>      <!-- Gait analysis logic -->
+  <script src="js/gait.js"></script>
 </body>
 </html>
