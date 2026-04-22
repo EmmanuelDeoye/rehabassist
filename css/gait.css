@@ -882,7 +882,7 @@
   }
   
   .history-drawer {
-    width: 100%;
+    width: 90%;
     left: -100%;
   }
 }
@@ -908,4 +908,234 @@
     max-height: none;
     overflow: visible;
   }
+}
+
+
+/* Patient Name Input */
+.patient-name-section {
+  margin-bottom: 1rem;
+}
+
+.patient-name-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.patient-name-input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border-radius: 3rem;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.patient-name-input:focus {
+  outline: none;
+  border-color: var(--gait-accent);
+  box-shadow: 0 0 0 3px var(--gait-accent-soft);
+}
+
+/* History Search Bar */
+.history-search {
+  padding: 0.75rem 1.2rem;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface);
+}
+
+.history-search i {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.history-search input {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 2rem;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.history-search input:focus {
+  border-color: var(--gait-accent);
+}
+
+.history-search input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+/* Preview Modal Styles (same as ROM) */
+.preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.preview-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.preview-card {
+  position: relative;
+  background: var(--surface);
+  border-radius: 24px;
+  max-width: 500px;
+  width: 90%;
+  margin: 20px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+.preview-card-header {
+  background: linear-gradient(135deg, var(--gait-accent), #00695c);
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: white;
+}
+
+.preview-icon {
+  font-size: 32px;
+}
+
+.preview-card-header h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.preview-close {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 28px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.preview-close:hover {
+  background: rgba(255,255,255,0.3);
+  transform: scale(1.1);
+}
+
+.preview-card-body {
+  padding: 24px;
+}
+
+.preview-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.preview-badge {
+  background: var(--gait-accent-soft);
+  color: var(--gait-accent);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.preview-date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.preview-description {
+  margin-bottom: 24px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.preview-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.preview-btn {
+  flex: 1;
+  padding: 12px 20px;
+  border-radius: 40px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  text-align: center;
+}
+
+.preview-btn.primary {
+  background: var(--gait-accent);
+  color: white;
+}
+
+.preview-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 150, 136, 0.3);
+}
+
+.preview-btn.secondary {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+}
+
+.preview-btn.secondary:hover {
+  background: var(--border-light);
+}
+
+.preview-note {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .preview-card {
+  background: #1e2a32;
+}
+[data-theme="dark"] .preview-btn.secondary {
+  background: #2e3b45;
+  color: #eef2f6;
+  border-color: #3e4b55;
 }
