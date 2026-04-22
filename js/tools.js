@@ -25,8 +25,7 @@
       { name: 'Documentation Assistant', url: 'doc.html', icon: '📃' },
       { name: 'ROM Analyzer', url: 'rom.html', icon: '🦵' },
       { name: 'Gait Monitor', url: 'gait.html', icon: '🎥' },
-      { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' },
-      { name: 'AI Assistant', url: 'ai.html', icon: '🤖' }
+      { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' }
     ];
 
     // Get the current page path to highlight active tool

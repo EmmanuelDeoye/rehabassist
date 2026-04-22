@@ -1,4 +1,4 @@
-// js/gait.js - Complete with history, 30s limit, and video persistence
+// js/gait.js - Complete with patient name, search, modal, brightness check, auto-scroll
 document.addEventListener('DOMContentLoaded', async () => {
   // =========================================================================
   // 1. DOM ELEMENTS
@@ -22,12 +22,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const proceedBtn = document.getElementById('proceedToAnalysisBtn');
   const gaitViewSelect = document.getElementById('gaitViewSelect');
   const gaitNotes = document.getElementById('gaitNotes');
+  const patientNameInput = document.getElementById('patientName');
   
   // Analysis elements
   const analysisStatus = document.getElementById('analysisStatus');
   const progressBar = document.getElementById('analysisProgressBar');
   
-  // Results elements
+  // Results elements (kept for compatibility but hidden)
   const gaitResultsContent = document.getElementById('gaitResultsContent');
   const resultDate = document.getElementById('resultDate');
   const downloadGaitReport = document.getElementById('downloadGaitReport');
@@ -38,8 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const historyNavBtn = document.getElementById('historyNavBtn');
   const closeDrawerBtn = document.getElementById('closeDrawerBtn');
   const historyList = document.getElementById('historyList');
+  const historySearchInput = document.getElementById('historySearchInput');
   
-  // Toast container (will be created if missing)
+  // Toast container
   let toastContainer = document.getElementById('toast-container');
   
   // =========================================================================
@@ -51,17 +53,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   let recordedVideoURL = null;
   let recordingStartTime = null;
   let timerInterval = null;
-  let maxRecordTimeout = null;       // NEW: 30-second limit timeout
+  let maxRecordTimeout = null;
   let aiConfig = { token: null, endpoint: null, model: 'openai/gpt-4.1' };
   let currentUser = null;
   let analysisResults = null;
   let isCameraActive = false;
   let isRecording = false;
   let videoBlob = null;
+  let allHistoryEntries = [];
   
   const database = firebase.database();
   
-  // IndexedDB setup for video persistence
+  // IndexedDB setup
   const DB_NAME = 'GaitMonitorDB';
   const STORE_NAME = 'videos';
   let db = null;
@@ -69,8 +72,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // =========================================================================
   // 3. UTILITY FUNCTIONS
   // =========================================================================
-  
-  // Ensure toast container exists
   function ensureToastContainer() {
     if (!toastContainer) {
       toastContainer = document.createElement('div');
@@ -162,7 +163,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const store = transaction.objectStore(STORE_NAME);
         const request = store.get('currentVideo');
         request.onsuccess = () => {
-          resolve(request.result); // Blob or undefined
+          resolve(request.result);
         };
         request.onerror = () => reject(request.error);
       });
@@ -191,10 +192,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 5. STAGE MANAGEMENT
   // =========================================================================
   function setStage(stageNum) {
-    [stageRecord, stageAnalyze, stageResults].forEach(s => s.classList.remove('active'));
-    if (stageNum === 1) stageRecord.classList.add('active');
-    else if (stageNum === 2) stageAnalyze.classList.add('active');
-    else if (stageNum === 3) stageResults.classList.add('active');
+    [stageRecord, stageAnalyze, stageResults].forEach(s => {
+      if (s) s.classList.remove('active');
+    });
+    
+    if (stageNum === 1 && stageRecord) stageRecord.classList.add('active');
+    else if (stageNum === 2 && stageAnalyze) stageAnalyze.classList.add('active');
+    else if (stageNum === 3 && stageResults) stageResults.classList.add('active');
     
     steps.forEach((step, idx) => {
       step.classList.remove('active', 'completed');
@@ -204,7 +208,100 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 6. CAMERA FUNCTIONS
+  // 6. VIDEO BRIGHTNESS VALIDATION
+  // =========================================================================
+  async function checkVideoBrightness(videoBlob, sampleFrames = 3) {
+    return new Promise((resolve, reject) => {
+      const videoUrl = URL.createObjectURL(videoBlob);
+      const video = document.createElement('video');
+      video.src = videoUrl;
+      video.crossOrigin = 'anonymous';
+      video.muted = true;
+      
+      video.onloadedmetadata = async () => {
+        const duration = video.duration;
+        const interval = duration / (sampleFrames + 1);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 320;
+        canvas.height = 180;
+        
+        let totalBrightness = 0;
+        let frameCount = 0;
+        
+        try {
+          for (let i = 1; i <= sampleFrames; i++) {
+            const time = interval * i;
+            await seekTo(video, time);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            let sum = 0;
+            let pixelCount = 0;
+            
+            for (let j = 0; j < data.length; j += 16) {
+              sum += 0.299 * data[j] + 0.587 * data[j + 1] + 0.114 * data[j + 2];
+              pixelCount++;
+            }
+            
+            const avg = sum / pixelCount;
+            totalBrightness += avg;
+            frameCount++;
+          }
+          
+          URL.revokeObjectURL(videoUrl);
+          const avgBrightness = totalBrightness / frameCount;
+          resolve(avgBrightness);
+        } catch (err) {
+          URL.revokeObjectURL(videoUrl);
+          reject(err);
+        }
+      };
+      
+      video.onerror = () => {
+        URL.revokeObjectURL(videoUrl);
+        reject(new Error('Failed to load video for brightness check'));
+      };
+    });
+  }
+  
+  function seekTo(video, time) {
+    return new Promise((resolve) => {
+      video.currentTime = time;
+      video.onseeked = resolve;
+    });
+  }
+  
+  async function validateVideoQuality(videoBlob) {
+    try {
+      const brightness = await checkVideoBrightness(videoBlob, 3);
+      const DARK_THRESHOLD = 40;
+      
+      if (brightness < DARK_THRESHOLD) {
+        return { 
+          valid: false, 
+          reason: 'Video appears too dark. Please ensure proper lighting and a clear view of the patient.' 
+        };
+      }
+      
+      if (brightness < 60) {
+        return { 
+          valid: true, 
+          warning: true, 
+          reason: 'Video is somewhat dark. Consider improving lighting for better accuracy.' 
+        };
+      }
+      
+      return { valid: true, warning: false };
+    } catch (err) {
+      console.warn('Brightness check failed:', err);
+      return { valid: true, warning: false };
+    }
+  }
+  
+  // =========================================================================
+  // 7. CAMERA FUNCTIONS
   // =========================================================================
   async function startCamera() {
     try {
@@ -228,7 +325,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       recordBtn.disabled = false;
       isCameraActive = true;
       
-      showToast('Camera ready - Position patient and record gait (max 30s)', 'success');
+      showToast('Camera ready - Record patient walking (max 30s)', 'success');
+      
+      // Auto-scroll to camera view
+      setTimeout(() => {
+        cameraPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
       
     } catch (err) {
       console.error('Camera error:', err);
@@ -258,7 +360,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 7. RECORDING FUNCTIONS (with 30s limit and persistence)
+  // 8. RECORDING FUNCTIONS
   // =========================================================================
   function startRecording() {
     if (!stream) return;
@@ -287,12 +389,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       proceedBtn.disabled = false;
       stopCamera();
       
-      // Save video to IndexedDB for persistence
       await saveVideoToStorage(videoBlob);
       
       showToast('Recording complete! Ready for analysis.', 'success');
       
-      // Clear max record timeout if it exists
       if (maxRecordTimeout) {
         clearTimeout(maxRecordTimeout);
         maxRecordTimeout = null;
@@ -310,7 +410,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     timerInterval = setInterval(updateTimer, 1000);
     
-    // Set 30-second auto-stop
     maxRecordTimeout = setTimeout(() => {
       if (isRecording) {
         showToast('Maximum recording time (30 seconds) reached', 'info');
@@ -346,7 +445,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const secs = (elapsed % 60).toString().padStart(2, '0');
     timerDisplay.textContent = `${mins}:${secs} (max 30s)`;
     
-    // Visual warning when less than 5 seconds remain
     if (remaining <= 5 && remaining > 0) {
       timerDisplay.style.color = '#dc2626';
     } else {
@@ -365,12 +463,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     videoPreview.style.display = 'none';
     proceedBtn.disabled = true;
     
-    // Clear stored video from IndexedDB
     await clearVideoFromStorage();
   }
   
   // =========================================================================
-  // 8. RESTORE SAVED VIDEO ON PAGE LOAD
+  // 9. RESTORE SAVED VIDEO ON PAGE LOAD
   // =========================================================================
   async function restoreSavedVideo() {
     try {
@@ -390,7 +487,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 9. AI ANALYSIS
+  // 10. AI ANALYSIS
   // =========================================================================
   async function extractVideoFrames(videoBlob, frameCount = 5) {
     return new Promise((resolve, reject) => {
@@ -433,13 +530,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   
-  function seekTo(video, time) {
-    return new Promise((resolve) => {
-      video.currentTime = time;
-      video.onseeked = resolve;
-    });
-  }
-  
   async function analyzeGait() {
     if (!aiConfig.token) {
       const success = await fetchTokens();
@@ -450,9 +540,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const view = gaitViewSelect.options[gaitViewSelect.selectedIndex].text;
     const notes = gaitNotes.value.trim() || 'No additional notes provided';
+    const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
     
     const systemPrompt = `You are rehablix Gait Monitor, a clinical AI specialized in gait analysis for rehabilitation professionals.
-Analyze the provided video frames showing a patient walking (${view} view).
+Analyze the provided video frames showing patient "${patientName}" walking (${view} view).
 
 Provide a comprehensive clinical gait analysis including:
 1. **Observed Gait Pattern** - Identify pattern type (antalgic, Trendelenburg, steppage, etc.)
@@ -467,11 +558,11 @@ Provide a comprehensive clinical gait analysis including:
 
 Format your response with clear headings (## for sections), bullet points for observations, and professional clinical language. Do NOT use tables.`;
     
-    const userContent = `Gait Analysis Request
+    const userContent = `Patient: ${patientName}
 View: ${view}
 Additional Notes: ${notes}
 
-The video frames show a patient walking. Please analyze the gait pattern and provide clinical insights.`;
+The video frames show the patient walking. Please analyze the gait pattern and provide clinical insights.`;
     
     const messages = [
       { role: "system", content: systemPrompt },
@@ -513,16 +604,18 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     
     try {
       const view = gaitViewSelect.options[gaitViewSelect.selectedIndex].text;
-      const notes = gaitNotes.value.trim() || 'No notes';
+      const notes = gaitNotes.value.trim() || '';
+      const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
       
-      const newRef = await database.ref(`users/${currentUser.uid}/analysisHistory`).push({
+      const newRef = await database.ref(`users/${currentUser.uid}/gaitHistory`).push({
         contentType: 'gait',
-        fileName: `Gait Analysis - ${view}`,
+        fileName: `Gait - ${patientName}`,
         documentType: 'Gait Analysis',
         request: `Analyze gait pattern from video (${view} view). Notes: ${notes}`,
         results: result,
         timestamp: firebase.database.ServerValue.TIMESTAMP,
         date: new Date().toLocaleDateString(),
+        patientName: patientName,
         view: view,
         notes: notes
       });
@@ -536,19 +629,135 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
   }
   
   // =========================================================================
-  // 10. HISTORY DRAWER FUNCTIONS
+  // 11. PREVIEW MODAL
   // =========================================================================
+  function showPreviewModal(result, historyKey) {
+    const existingModal = document.querySelector('.preview-modal');
+    if (existingModal) existingModal.remove();
+    
+    const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
+    const dateStr = new Date().toLocaleString();
+    const view = gaitViewSelect.options[gaitViewSelect.selectedIndex].text;
+    
+    const modalHtml = `
+      <div class="preview-modal">
+        <div class="preview-overlay"></div>
+        <div class="preview-card">
+          <div class="preview-card-header">
+            <div class="preview-icon">🚶</div>
+            <h3>Gait Analysis Complete</h3>
+            <button class="preview-close">&times;</button>
+          </div>
+          <div class="preview-card-body">
+            <div class="preview-info">
+              <span class="preview-badge">✅ Ready to view</span>
+              <span class="preview-date">${dateStr}</span>
+            </div>
+            <p class="preview-description">
+              Gait analysis for <strong>${escapeHtml(patientName)}</strong> (${escapeHtml(view)}) has been generated successfully.
+            </p>
+            <div class="preview-actions">
+              <button class="preview-btn primary" id="viewFullAnalysisBtn">
+                📖 View Full Report
+              </button>
+              <button class="preview-btn secondary" id="closePreviewBtn">
+                Close
+              </button>
+            </div>
+            <div class="preview-note">
+              <small>🔒 The full report will open in a new tab with export options.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modal = document.querySelector('.preview-modal');
+    
+    const closeModal = () => modal.remove();
+    
+    modal.querySelector('.preview-close').addEventListener('click', closeModal);
+    modal.querySelector('#closePreviewBtn').addEventListener('click', closeModal);
+    modal.querySelector('.preview-overlay').addEventListener('click', closeModal);
+    
+    modal.querySelector('#viewFullAnalysisBtn').addEventListener('click', () => {
+      if (historyKey) {
+        window.open(`gaitresult.html?id=${historyKey}`, '_blank');
+        closeModal();
+      } else {
+        showToast('Error: Analysis ID not found', 'error');
+      }
+    });
+  }
+  
+  // =========================================================================
+  // 12. HISTORY DRAWER WITH SEARCH
+  // =========================================================================
+  function renderHistory(entries) {
+    historyList.innerHTML = '';
+    
+    if (entries.length === 0) {
+      historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No matching history found</p></div>';
+      return;
+    }
+    
+    entries.forEach(([key, item]) => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="history-info">
+          <span class="history-name">${escapeHtml(item.patientName || item.fileName || 'Gait Analysis')}</span>
+          <div class="history-meta">
+            <span class="meta-tag"><i class="bx bx-walk"></i> Gait</span>
+            <span>${escapeHtml(item.date)}</span>
+            ${item.view ? `<span>${escapeHtml(item.view)}</span>` : ''}
+          </div>
+        </div>
+        <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
+      `;
+      
+      div.querySelector('.view-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(`gaitresult.html?id=${key}`, '_blank');
+      });
+      
+      div.addEventListener('click', () => {
+        window.open(`gaitresult.html?id=${key}`, '_blank');
+      });
+      
+      historyList.appendChild(div);
+    });
+  }
+  
+  function filterHistory(searchTerm) {
+    const term = searchTerm.toLowerCase().trim();
+    
+    if (!term) {
+      renderHistory(allHistoryEntries);
+      return;
+    }
+    
+    const filtered = allHistoryEntries.filter(([_, item]) => {
+      const name = (item.patientName || item.fileName || '').toLowerCase();
+      const view = (item.view || '').toLowerCase();
+      return name.includes(term) || view.includes(term);
+    });
+    
+    renderHistory(filtered);
+  }
+  
   function loadGaitHistory() {
     if (!currentUser) return;
     
-    database.ref(`users/${currentUser.uid}/analysisHistory`)
+    database.ref(`users/${currentUser.uid}/gaitHistory`)
       .orderByChild('timestamp')
       .on('value', (snapshot) => {
-        historyList.innerHTML = '';
         const data = snapshot.val();
         
         if (!data) {
-          historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No gait history found</p></div>';
+          allHistoryEntries = [];
+          renderHistory([]);
           return;
         }
         
@@ -556,47 +765,10 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
           .filter(([_, item]) => item.contentType === 'gait')
           .sort((a, b) => b[1].timestamp - a[1].timestamp);
         
-        if (entries.length === 0) {
-          historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No gait history found</p></div>';
-          return;
-        }
+        allHistoryEntries = entries;
         
-        entries.forEach(([key, item]) => {
-          const div = document.createElement('div');
-          div.className = 'history-item';
-          div.innerHTML = `
-            <div class="history-info">
-              <span class="history-name">${escapeHtml(item.fileName || 'Gait Analysis')}</span>
-              <div class="history-meta">
-                <span class="meta-tag"><i class="bx bx-walk"></i> Gait</span>
-                <span>${escapeHtml(item.date)}</span>
-                ${item.view ? `<span>${escapeHtml(item.view)}</span>` : ''}
-              </div>
-            </div>
-            <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
-          `;
-          
-          div.querySelector('.view-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            analysisResults = item.results;
-            gaitResultsContent.innerHTML = marked.parse(item.results);
-            resultDate.textContent = item.date;
-            setStage(3);
-            historyDrawer.classList.remove('active');
-            showToast('Analysis loaded from history', 'success');
-          });
-          
-          div.addEventListener('click', () => {
-            analysisResults = item.results;
-            gaitResultsContent.innerHTML = marked.parse(item.results);
-            resultDate.textContent = item.date;
-            setStage(3);
-            historyDrawer.classList.remove('active');
-            showToast('Analysis loaded from history', 'success');
-          });
-          
-          historyList.appendChild(div);
-        });
+        const searchTerm = historySearchInput ? historySearchInput.value : '';
+        filterHistory(searchTerm);
       });
   }
   
@@ -612,7 +784,7 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
   }
   
   // =========================================================================
-  // 11. EVENT LISTENERS
+  // 13. EVENT LISTENERS
   // =========================================================================
   startCameraBtn.addEventListener('click', startCamera);
   
@@ -642,6 +814,16 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
       return;
     }
     
+    // Validate video quality (brightness)
+    const quality = await validateVideoQuality(videoBlob);
+    if (!quality.valid) {
+      showToast(quality.reason, 'error', 5000);
+      return;
+    }
+    if (quality.warning) {
+      showToast(quality.reason, 'warning', 4000);
+    }
+    
     setStage(2);
     analysisStatus.textContent = 'Extracting frames from video...';
     progressBar.style.width = '25%';
@@ -655,16 +837,33 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
       progressBar.style.width = '100%';
       analysisResults = result;
       
-      await saveToHistory(result);
+      const historyKey = await saveToHistory(result);
       
-      gaitResultsContent.innerHTML = marked.parse(result);
-      resultDate.textContent = new Date().toLocaleString();
-      
-      // Clear saved video after successful analysis (optional)
+      // Clear saved video after successful analysis
       await clearVideoFromStorage();
       
-      setStage(3);
-      showToast('Gait analysis complete!', 'success');
+      // Show preview modal
+      showPreviewModal(result, historyKey);
+      
+      // Reset to record stage
+      setStage(1);
+      await resetRecording();
+      
+      startCameraBtn.style.display = 'block';
+      startCameraBtn.disabled = false;
+      recordBtn.disabled = true;
+      recordingTimer.style.display = 'none';
+      clearInterval(timerInterval);
+      isRecording = false;
+      recordBtn.classList.remove('recording');
+      recordBtn.innerHTML = '<i class="fas fa-circle"></i> Record';
+      
+      if (maxRecordTimeout) {
+        clearTimeout(maxRecordTimeout);
+        maxRecordTimeout = null;
+      }
+      
+      showToast('Gait analysis complete! View full report in new tab.', 'success');
       
     } catch (err) {
       console.error('Analysis error:', err);
@@ -679,7 +878,7 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     }
   });
   
-  newGaitBtn.addEventListener('click', async () => {
+  newGaitBtn?.addEventListener('click', async () => {
     await resetRecording();
     setStage(1);
     startCameraBtn.style.display = 'block';
@@ -696,7 +895,7 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     }
   });
   
-  downloadGaitReport.addEventListener('click', async () => {
+  downloadGaitReport?.addEventListener('click', async () => {
     if (!analysisResults) {
       showToast('No analysis results to export', 'warning');
       return;
@@ -734,6 +933,9 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
         }
       });
       
+      const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
+      const view = gaitViewSelect.options[gaitViewSelect.selectedIndex]?.text || 'N/A';
+      
       const doc = new Document({
         sections: [{
           children: [
@@ -742,12 +944,16 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
               heading: HeadingLevel.TITLE
             }),
             new Paragraph({
-              text: `Generated: ${new Date().toLocaleString()}`,
-              spacing: { after: 300 }
+              text: `Patient: ${patientName}`,
+              spacing: { after: 100 }
             }),
             new Paragraph({
-              text: `View: ${gaitViewSelect.options[gaitViewSelect.selectedIndex]?.text || 'N/A'}`,
-              spacing: { after: 200 }
+              text: `Generated: ${new Date().toLocaleString()}`,
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              text: `View: ${view}`,
+              spacing: { after: 300 }
             }),
             new Paragraph({ text: '' }),
             ...children
@@ -759,7 +965,7 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Gait_Analysis_${Date.now()}.docx`;
+      a.download = `Gait_Analysis_${patientName.replace(/\s+/g, '_')}_${Date.now()}.docx`;
       a.click();
       URL.revokeObjectURL(url);
       
@@ -773,17 +979,27 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
   });
   
   // History drawer events
-  historyNavBtn.addEventListener('click', toggleHistoryDrawer);
+  if (historyNavBtn) {
+    historyNavBtn.addEventListener('click', toggleHistoryDrawer);
+  }
   
-  closeDrawerBtn.addEventListener('click', () => {
-    historyDrawer.classList.remove('active');
-  });
+  if (closeDrawerBtn) {
+    closeDrawerBtn.addEventListener('click', () => {
+      historyDrawer.classList.remove('active');
+    });
+  }
+  
+  if (historySearchInput) {
+    historySearchInput.addEventListener('input', (e) => {
+      filterHistory(e.target.value);
+    });
+  }
   
   document.addEventListener('click', (e) => {
     if (historyDrawer && historyDrawer.classList.contains('active') &&
         !historyDrawer.contains(e.target) &&
         e.target !== historyNavBtn &&
-        !historyNavBtn.contains(e.target)) {
+        !historyNavBtn?.contains(e.target)) {
       historyDrawer.classList.remove('active');
     }
   });
@@ -794,8 +1010,16 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     }
   });
   
+  // Enable start camera when patient name is entered (optional)
+  if (patientNameInput) {
+    patientNameInput.addEventListener('input', () => {
+      // Camera can start regardless of name, but we can enable/disable if desired
+      startCameraBtn.disabled = false;
+    });
+  }
+  
   // =========================================================================
-  // 12. THEME & INITIALIZATION
+  // 14. THEME & INITIALIZATION
   // =========================================================================
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
@@ -812,31 +1036,27 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
   document.documentElement.setAttribute('data-theme', savedTheme);
   
   // =========================================================================
-  // 13. AUTH STATE LISTENER
+  // 15. AUTH STATE LISTENER
   // =========================================================================
   firebase.auth().onAuthStateChanged((user) => {
     currentUser = user;
     if (user) {
       console.log('User logged in:', user.email);
       loadGaitHistory();
+      if (historyNavBtn) historyNavBtn.style.display = 'block';
     } else {
       console.log('User logged out');
+      if (historyNavBtn) historyNavBtn.style.display = 'none';
     }
   });
   
   // =========================================================================
-  // 14. INITIAL SETUP
+  // 16. INITIAL SETUP
   // =========================================================================
   async function initialize() {
-    // Ensure toast container exists
     ensureToastContainer();
-    
-    // Open IndexedDB
     await openDatabase();
-    
-    // Restore any saved video
     await restoreSavedVideo();
-    
     fetchTokens();
     setStage(1);
     startCameraBtn.disabled = false;
@@ -845,6 +1065,8 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     if (scanOverlay) {
       scanOverlay.style.display = 'none';
     }
+    
+    if (historyNavBtn) historyNavBtn.style.display = 'none';
   }
   
   initialize();
@@ -865,5 +1087,5 @@ The video frames show a patient walking. Please analyze the gait pattern and pro
     }
   });
   
-  console.log('Gait Monitor initialized');
+  console.log('Gait Monitor initialized with patient name, search, modal, brightness check, and auto-scroll');
 });
