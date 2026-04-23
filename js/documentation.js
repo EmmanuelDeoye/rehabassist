@@ -1,4 +1,4 @@
-// documentation.js - Auto-Save Works Without Login with Preview Modal
+// documentation.js - Auto-Save Works Without Login with Preview Modal & Delete History
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 1. DOM ELEMENTS
@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const downloadReport = document.getElementById('downloadReport');
     const closeResultsBtn = document.getElementById('closeResultsBtn');
     const reportDate = document.getElementById('reportDate');
+    
+    // History search
+    const historySearchInput = document.getElementById('historySearchInput');
 
     // =========================================================================
     // 2. STATE & CONFIG
@@ -63,7 +66,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let analysisResults = null;
     let isTranscribing = false;
     let saveTimeout = null;
-    let isRestoring = false; // Prevent save during restore
+    let isRestoring = false;
+    let allHistoryEntries = []; // Store all entries for filtering
     const STORAGE_KEY = 'rehab_doc_assistant_state';
     
     const MAX_TOKENS_PER_REQUEST = 4000;
@@ -72,10 +76,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const database = firebase.database();
 
     // =========================================================================
-    // 3. UTILITIES - FIXED with fallback
+    // 3. UTILITIES
     // =========================================================================
     function showToast(message, type = 'success', duration = 3000) {
-        // Try to find toast container, create if not exists
         let toastContainer = document.getElementById('toast-container');
         if (!toastContainer) {
             toastContainer = document.createElement('div');
@@ -117,7 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return truncated.substring(0, cutPoint) + "\n\n[Content truncated due to length limits]";
     }
 
-    // Compress image dataURL if too large (> 1MB)
     function compressImageDataURL(dataURL, maxSizeMB = 1) {
         return new Promise((resolve) => {
             const img = new Image();
@@ -168,8 +170,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (analyzeBtn) analyzeBtn.disabled = !shouldEnable;
     }
 
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
     // =========================================================================
-    // 3.5. SCROLL INDICATORS - FIXED with null check
+    // 3.5. SCROLL INDICATORS
     // =========================================================================
     function initScrollIndicators() {
         const uploadContainer = document.querySelector('.upload-type-container');
@@ -200,7 +212,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Prepare image data (compress if needed)
         let savedImageData = imageDataURL;
         if (savedImageData && savedImageData.length > 1.5 * 1024 * 1024) {
             try {
@@ -231,17 +242,6 @@ document.addEventListener('DOMContentLoaded', function() {
             timestamp: Date.now()
         };
         
-        console.log('[SAVE] Saving state:', {
-            mode: state.activeMode,
-            docType: state.documentType,
-            plainTextLength: state.plainText?.length,
-            hasDoc: !!state.fileName,
-            hasAudio: !!state.audioFileName,
-            hasImage: !!state.imageDataURL,
-            hasResults: !!state.analysisResults,
-            timestamp: new Date(state.timestamp).toLocaleTimeString()
-        });
-        
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
             console.log('[SAVE] ✓ Successfully saved to localStorage');
@@ -260,43 +260,11 @@ document.addEventListener('DOMContentLoaded', function() {
         saveTimeout = setTimeout(() => saveProgressImmediate(), 300);
     }
 
-    // Restore UI elements after mode/content restoration
-    function restoreUIPostLoad(state) {
-        // Restore document type chips
-        if (state.documentType && chipBtns) {
-            chipBtns.forEach(btn => {
-                if (btn.dataset.type === state.documentType) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
-
-        // Restore analysis request
-        if (state.analysisRequest && analysisTextarea) analysisTextarea.value = state.analysisRequest;
-
-        // Restore analysis results if present
-        if (state.analysisResults) {
-            analysisResults = state.analysisResults;
-            displayResults(analysisResults);
-            if (state.reportDate && reportDate) reportDate.textContent = state.reportDate;
-            if (state.resultsVisible && analysisResultsContainer) {
-                analysisResultsContainer.style.display = 'block';
-                if (loadingIndicator) loadingIndicator.style.display = 'none';
-                if (reportContentArea) reportContentArea.style.display = 'block';
-            }
-        }
-
-        updateAnalyzeButtonState();
-    }
-
     function restoreModeContent(state) {
         if (activeMode === 'text') {
             if (state.plainText && plainTextInput) {
                 plainTextInput.value = state.plainText;
                 updateWordCount();
-                console.log('[LOAD] ✓ Restored text content, length:', state.plainText.length);
             }
         } else if (activeMode === 'document') {
             if (state.fileName) {
@@ -304,51 +272,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 displayFileInfo(uploadedFile);
                 if (state.extractedDocumentText) {
                     extractedDocumentText = state.extractedDocumentText;
-                    console.log('[LOAD] ✓ Restored document text, length:', extractedDocumentText.length);
                 }
-                console.log('[LOAD] ✓ Restored document:', state.fileName);
             }
         } else if (activeMode === 'audio') {
             if (state.audioFileName) {
                 uploadedAudioFile = { name: state.audioFileName, mock: true };
                 displayAudioFileInfo(uploadedAudioFile);
-                console.log('[LOAD] ✓ Restored audio file:', state.audioFileName);
             }
             if (state.audioTranscript) {
                 audioTranscript = state.audioTranscript;
                 if (audioTranscriptPreview) audioTranscriptPreview.style.display = 'block';
                 if (transcriptPreviewText) transcriptPreviewText.textContent = audioTranscript;
-                console.log('[LOAD] ✓ Restored audio transcript, length:', audioTranscript.length);
             }
         } else if (activeMode === 'image') {
             if (state.imageDataURL && state.imageFileName) {
                 uploadedImageFile = { name: state.imageFileName };
                 imageDataURL = state.imageDataURL;
                 displayImagePreview(imageDataURL, state.imageFileName);
-                console.log('[LOAD] ✓ Restored image:', state.imageFileName);
             }
         }
     }
 
     async function loadProgress() {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) {
-            console.log('[LOAD] ℹ No saved state found in localStorage');
-            return false;
-        }
+        if (!saved) return false;
         
         try {
             isRestoring = true;
             const state = JSON.parse(saved);
-            console.log('[LOAD] ✓ Found saved state from', new Date(state.timestamp).toLocaleString());
-            console.log('[LOAD] State version:', state.version || 1);
             
-            // Restore active mode first
             if (state.activeMode) {
                 const targetBtn = document.querySelector(`.switch-btn[data-type="${state.activeMode}"]`);
                 if (targetBtn) {
-                    targetBtn.click();  // This will set activeMode and switch views
-                    await new Promise(r => setTimeout(r, 100)); // allow DOM update
+                    targetBtn.click();
+                    await new Promise(r => setTimeout(r, 100));
                     restoreModeContent(state);
                 } else {
                     activeMode = state.activeMode;
@@ -359,7 +316,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 restoreModeContent(state);
             }
             
-            // Restore document type and analysis request
             if (state.documentType) {
                 documentType = state.documentType;
                 if (chipBtns) {
@@ -368,14 +324,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         else btn.classList.remove('active');
                     });
                 }
-                console.log('[LOAD] ✓ Restored document type:', documentType);
             }
             if (state.analysisRequest && analysisTextarea) {
                 analysisTextarea.value = state.analysisRequest;
-                console.log('[LOAD] ✓ Restored analysis request, length:', state.analysisRequest.length);
             }
             
-            // Restore analysis results
             if (state.analysisResults) {
                 analysisResults = state.analysisResults;
                 displayResults(analysisResults);
@@ -385,11 +338,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (loadingIndicator) loadingIndicator.style.display = 'none';
                     if (reportContentArea) reportContentArea.style.display = 'block';
                 }
-                console.log('[LOAD] ✓ Restored analysis results');
             }
             
             updateAnalyzeButtonState();
-            console.log('[LOAD] ✅ Restoration complete!');
             isRestoring = false;
             return true;
         } catch (e) {
@@ -408,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 5. MODE SWITCHING (triggers save)
+    // 5. MODE SWITCHING
     // =========================================================================
     function setActiveMode(mode) {
         activeMode = mode;
@@ -865,23 +816,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function displayResults(results) {
-        if (!resultsContent) {
-            console.warn('resultsContent element not found');
-            return;
-        }
+        if (!resultsContent) return;
         const htmlContent = marked.parse(results);
         resultsContent.innerHTML = htmlContent;
         if (reportDate) reportDate.textContent = new Date().toLocaleString();
         if (reportContentArea) reportContentArea.style.display = 'block';
     }
 
-    // ===== PREVIEW MODAL (same as standardized page) =====
+    // ===== PREVIEW MODAL =====
     function showPreviewModal(fullText, historyKey) {
-        // Remove any existing preview modal
         const existingModal = document.querySelector('.preview-modal');
         if (existingModal) existingModal.remove();
 
-        // Get file name for display
         let fileName = '';
         if (activeMode === 'text') fileName = 'Text Input';
         else if (activeMode === 'document') fileName = uploadedFile?.name || 'Document';
@@ -924,38 +870,34 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modal = document.querySelector('.preview-modal');
         
-        // Close handlers
-        const closeBtn = modal.querySelector('.preview-close');
-        const closeActionBtn = modal.querySelector('#closePreviewBtn');
-        const overlay = modal.querySelector('.preview-overlay');
-        
         const closeModal = () => modal.remove();
         
-        if (closeBtn) closeBtn.addEventListener('click', closeModal);
-        if (closeActionBtn) closeActionBtn.addEventListener('click', closeModal);
-        if (overlay) overlay.addEventListener('click', closeModal);
+        modal.querySelector('.preview-close').addEventListener('click', closeModal);
+        modal.querySelector('#closePreviewBtn').addEventListener('click', closeModal);
+        modal.querySelector('.preview-overlay').addEventListener('click', closeModal);
         
-        // View full analysis button
-        const viewBtn = modal.querySelector('#viewFullAnalysisBtn');
-        if (viewBtn) {
-            viewBtn.addEventListener('click', () => {
-                if (historyKey) {
-                    window.open(`docresult.html?id=${historyKey}`, '_blank');
-                    closeModal();
-                } else {
-                    showToast('Error: Analysis ID not found', 'error');
-                }
-            });
-        }
+        modal.querySelector('#viewFullAnalysisBtn').addEventListener('click', () => {
+            if (historyKey) {
+                window.open(`docresult.html?id=${historyKey}`, '_blank');
+                closeModal();
+            } else {
+                showToast('Error: Analysis ID not found', 'error');
+            }
+        });
     }
 
     async function autoSaveToHistory(contentType, fileName, results, transcription = null) {
         if (!currentUser) return null;
         const userId = currentUser.uid;
         const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
-            contentType, fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
-            documentType, request: analysisTextarea ? analysisTextarea.value : (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
-            results, transcription, timestamp: firebase.database.ServerValue.TIMESTAMP, date: new Date().toLocaleDateString()
+            contentType, 
+            fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
+            documentType, 
+            request: analysisTextarea ? analysisTextarea.value : (contentType === 'audio' ? 'Session Analysis' : (contentType === 'image' ? 'Image Analysis' : 'Text Analysis')),
+            results, 
+            transcription, 
+            timestamp: firebase.database.ServerValue.TIMESTAMP, 
+            date: new Date().toLocaleDateString()
         });
         loadHistory();
         showToast('Analysis saved to history', 'info');
@@ -970,7 +912,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!aiConfig.token) {
                 showToast('Initializing AI...', 'warning');
                 await fetchAPITokens();
-                if (!aiConfig.token) { showToast('AI not available. Please refresh.', 'error'); resetAnalyzeButton(); return; }
+                if (!aiConfig.token) { 
+                    showToast('AI not available. Please refresh.', 'error'); 
+                    resetAnalyzeButton(); 
+                    return; 
+                }
             }
             if (!currentUser) { 
                 showToast('Please login to analyze', 'error'); 
@@ -1051,41 +997,126 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 12. HISTORY DRAWER (Only works when logged in)
+    // 12. HISTORY DRAWER WITH DELETE & SEARCH FUNCTIONALITY
     // =========================================================================
+    async function deleteHistoryItem(key, event) {
+        event.stopPropagation();
+        
+        if (!currentUser) {
+            showToast('Please login to delete history', 'error');
+            return;
+        }
+        
+        if (!confirm('Are you sure you want to delete this analysis from history?')) {
+            return;
+        }
+        
+        try {
+            // Delete from user's history
+            await database.ref(`users/${currentUser.uid}/analysisHistory/${key}`).remove();
+            
+            // Also delete from public if it exists
+            await database.ref(`publicAnalysis/${key}`).remove();
+            
+            showToast('Analysis deleted from history', 'success');
+            
+            // Reload history
+            loadHistory();
+        } catch (error) {
+            console.error('Delete error:', error);
+            showToast('Failed to delete analysis', 'error');
+        }
+    }
+    
+    function filterHistory(term) {
+        const searchTerm = term.toLowerCase().trim();
+        if (!searchTerm) {
+            renderHistory(allHistoryEntries);
+            return;
+        }
+        const filtered = allHistoryEntries.filter(([_, item]) => 
+            (item.fileName || '').toLowerCase().includes(searchTerm) ||
+            (item.documentType || '').toLowerCase().includes(searchTerm) ||
+            (item.contentType || '').toLowerCase().includes(searchTerm)
+        );
+        renderHistory(filtered);
+    }
+    
+    function renderHistory(entries) {
+        const historyListElem = document.getElementById('historyList');
+        if (!historyListElem) return;
+        
+        historyListElem.innerHTML = '';
+        if (!entries.length) {
+            historyListElem.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>';
+            return;
+        }
+        
+        entries.forEach(([key, item]) => {
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            div.innerHTML = `
+                <div class="history-info" style="flex: 1;">
+                    <span class="history-name">${escapeHtml(item.fileName || 'Untitled')}</span>
+                    <div class="history-meta">
+                        <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${escapeHtml(item.documentType || 'General')}</span>
+                        <span>${escapeHtml(item.date)}</span>
+                    </div>
+                </div>
+                <div class="history-actions" style="display: flex; gap: 8px; align-items: center;">
+                    <button class="view-btn" data-key="${key}" title="View Analysis">
+                        <i class="bx bx-chevron-right"></i>
+                    </button>
+                    <button class="delete-btn" data-key="${key}" title="Delete Analysis" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px; border-radius: 50%; transition: all 0.2s;">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            // View button handler
+            div.querySelector('.view-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.open(`docresult.html?id=${key}`, '_blank');
+            });
+            
+            // Delete button handler
+            div.querySelector('.delete-btn').addEventListener('click', (e) => {
+                deleteHistoryItem(key, e);
+            });
+            
+            // Click on the item itself (except buttons)
+            div.addEventListener('click', (e) => {
+                if (!e.target.closest('button')) {
+                    window.open(`docresult.html?id=${key}`, '_blank');
+                }
+            });
+            
+            historyListElem.appendChild(div);
+        });
+    }
+
     function loadHistory() {
         if (!currentUser) return;
         const historyListElem = document.getElementById('historyList');
         if (!historyListElem) return;
         
         database.ref(`users/${currentUser.uid}/analysisHistory`).orderByChild('timestamp').on('value', (snapshot) => {
-            if (!historyListElem) return;
-            historyListElem.innerHTML = '';
             const data = snapshot.val();
             if (!data) { 
-                historyListElem.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>'; 
+                allHistoryEntries = [];
+                renderHistory([]);
                 return; 
             }
-            const entries = Object.entries(data).sort((a,b) => b[1].timestamp - a[1].timestamp);
-            entries.forEach(([key, item]) => {
-                const div = document.createElement('div');
-                div.className = 'history-item';
-                div.innerHTML = `
-                    <div class="history-info">
-                        <span class="history-name">${escapeHtml(item.fileName || 'Untitled')}</span>
-                        <div class="history-meta">
-                            <span class="meta-tag"><i class="bx ${item.contentType === 'audio' ? 'bx-microphone' : (item.contentType === 'document' ? 'bx-file' : (item.contentType === 'image' ? 'bx-image' : 'bx-edit'))}"></i> ${escapeHtml(item.documentType || 'General')}</span>
-                            <span>${escapeHtml(item.date)}</span>
-                        </div>
-                    </div>
-                    <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
-                `;
-                const viewBtn = div.querySelector('.view-btn');
-                if (viewBtn) {
-                    viewBtn.addEventListener('click', () => window.open(`docresult.html?id=${key}`, '_blank'));
-                }
-                historyListElem.appendChild(div);
-            });
+            const entries = Object.entries(data).sort((a, b) => b[1].timestamp - a[1].timestamp);
+            allHistoryEntries = entries;
+            
+            // Apply search filter if input exists
+            const searchInput = document.getElementById('historySearchInput');
+            if (searchInput && searchInput.value) {
+                filterHistory(searchInput.value);
+            } else {
+                renderHistory(entries);
+            }
         });
     }
 
@@ -1104,9 +1135,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', toggleHistoryDrawer);
+    
+    // History search input
+    if (historySearchInput) {
+        historySearchInput.addEventListener('input', (e) => {
+            filterHistory(e.target.value);
+        });
+    }
 
     // =========================================================================
-    // 13. DOCUMENT TYPE SELECTION (save)
+    // 13. DOCUMENT TYPE SELECTION
     // =========================================================================
     if (chipBtns) {
         chipBtns.forEach(btn => {
@@ -1121,7 +1159,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 14. ANALYSIS REQUEST (save)
+    // 14. ANALYSIS REQUEST
     // =========================================================================
     if (analysisTextarea) {
         analysisTextarea.addEventListener('input', () => {
@@ -1186,7 +1224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // 16. INITIALIZATION - Load saved state IMMEDIATELY (no login required)
+    // 16. INITIALIZATION
     // =========================================================================
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
@@ -1205,7 +1243,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setActiveMode('text');
     updateWordCount();
     
-    // Load saved progress IMMEDIATELY (does NOT require login)
+    // Load saved progress
     loadProgress().then(success => {
         if (success) {
             console.log('[INIT] Auto-save restored successfully');
@@ -1215,12 +1253,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Also load AI tokens in background (required for analysis)
+    // Load AI tokens
     fetchAPITokens().then(() => {
         console.log('[INIT] AI tokens loaded');
     });
     
-    // Auth state change (for history and analysis only)
+    // Auth state change
     firebase.auth().onAuthStateChanged(async (user) => {
         currentUser = user;
         if (user) {
@@ -1231,14 +1269,4 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         updateAnalyzeButtonState();
     });
-
-    function escapeHtml(str) {
-        if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
 });
