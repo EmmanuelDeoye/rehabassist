@@ -1,75 +1,244 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-  <title>rehablix · Presentation Maker</title>
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-  <!-- Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <!-- Styles -->
-  <link rel="stylesheet" href="css/main.css">
-  <link rel="stylesheet" href="css/auth.css">
-  <link rel="stylesheet" href="css/presentation.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+    <title>rehablix · Ward Round Presentation</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <!-- Marked for rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- docx for Word export -->
+    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <!-- html2pdf for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/presentation.css">
 </head>
 <body>
-  <nav class="navbar">
-    <div class="nav-container">
-      <div class="nav-left">
-        <div class="logo-text">
-          <span class="logo-lop">rehablix</span>
-          <span class="logo-full">presentation maker</span>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-left">
+                <span class="logo-icon" aria-hidden="true"></span>
+                <div class="logo-text">
+                    <span class="logo-lop">rehablix</span>
+                    <span class="logo-full">presentation</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="index.html" class="icon-btn home-icon" aria-label="Home">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
+                    </svg>
+                </a>
+                <button class="icon-btn history-nav-btn" id="historyNavBtn" aria-label="History" style="display:none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
+                    </svg>
+                </button>
+                <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+                    <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
-      </div>
-      <div class="nav-right">
-        <a href="index.html" class="icon-btn home-icon" aria-label="Home">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
-          </svg>
-        </a>
-        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
-          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-        </button>
-        <!-- Auth elements will be injected by modal.js -->
-      </div>
-    </div>
-  </nav>
+    </nav>
 
-  <main class="construction-main">
-    <div class="construction-container">
-      <div class="orbit-wrapper">
-        <div class="orbit-ring" id="orbitRing">
-          <!-- Icons will be injected by JS -->
+    <main class="presentation-main">
+        <div class="container">
+            <!-- Input Type Tabs -->
+            <div class="input-type-tabs">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" data-tab="text"><i class="fas fa-keyboard"></i> Text</button>
+                    <button class="tab-btn" data-tab="document"><i class="fas fa-file-medical"></i> Document</button>
+                    <button class="tab-btn" data-tab="image"><i class="fas fa-camera"></i> Image</button>
+                </div>
+            </div>
+
+            <div class="workspace-grid">
+                <!-- Left Column: Input Area -->
+                <div class="glass-card input-area">
+                    <!-- Text Input Tab -->
+                    <div class="tab-panel active" id="textPanel">
+                        <div class="input-header">
+                            <i class="fas fa-paste"></i>
+                            <h3>Tell me about your patient</h3>
+                        </div>
+                        <textarea id="textInput" rows="15" placeholder="Paste patient notes, assessment findings, or any relevant text..."></textarea>
+                        <div class="input-footer">
+                            <span id="textWordCount">0 words</span>
+                            <button class="clear-btn" id="clearTextBtn"><i class="fas fa-eraser"></i> Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Document Upload Tab -->
+                    <div class="tab-panel" id="documentPanel">
+                        <div class="drop-zone" id="docDropZone">
+                            <div class="drop-content">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <h4>Upload Document</h4>
+                                <p>Drag & drop PDF, DOCX, or TXT</p>
+                                <button class="browse-btn" id="browseDocBtn">Browse Files</button>
+                            </div>
+                            <input type="file" id="docFileInput" accept=".pdf,.doc,.docx,.txt" hidden>
+                        </div>
+                        <div class="file-info" id="docFileInfo" style="display: none;"></div>
+                    </div>
+
+                    <!-- Image Upload Tab -->
+                    <div class="tab-panel" id="imagePanel">
+                        <div class="drop-zone" id="imageDropZone">
+                            <div class="drop-content">
+                                <i class="fas fa-camera"></i>
+                                <h4>Upload Image</h4>
+                                <p>Drag & drop or click to select</p>
+                                <button class="browse-btn" id="browseImageBtn">Choose Image</button>
+                            </div>
+                            <input type="file" id="imageFileInput" accept="image/*" hidden>
+                        </div>
+                        <div class="image-preview" id="imagePreviewArea" style="display: none;">
+                            <img id="previewImage" alt="Preview">
+                            <button class="remove-image-btn" id="removeImageBtn"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Patient Info & Settings -->
+                <div class="glass-card config-area">
+                    <h3><i class="fas fa-user-circle"></i> Patient Information</h3>
+                    <div class="patient-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Full Name</label>
+                                <input type="text" id="patientName" placeholder="John Doe">
+                            </div>
+                            <div class="form-group">
+                                <label>Age</label>
+                                <input type="number" id="patientAge" placeholder="65">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Gender</label>
+                                <select id="patientGender">
+                                    <option value="">Select</option>
+                                    <option value="Male">Male</option>
+                                    <option value="Female">Female</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>MRN / ID</label>
+                                <input type="text" id="patientMRN" placeholder="Optional">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Diagnosis / Primary Condition</label>
+                            <input type="text" id="patientDiagnosis" placeholder="e.g., Stroke, Hip Fracture">
+                        </div>
+                        <div class="form-group">
+                            <label>Your Profession</label>
+                            <select id="professionSelect">
+                                <option value="">-- Select your role --</option>
+                                <option value="Occupational Therapist">Occupational Therapist</option>
+                                <option value="Physiotherapist">Physiotherapist</option>
+                                <option value="Speech Therapist">Speech Therapist</option>
+                                <option value="Psychologist">Psychologist</option>
+                                <option value="Nurse">Nurse</option>
+                                <option value="Doctor">Doctor</option>
+                                <option value="Social Worker">Social Worker</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <h3><i class="fas fa-list-alt"></i> Presentation Outline</h3>
+                    <div class="outline-selector">
+                        <label class="outline-option">
+                            <input type="radio" name="outline" value="soap" checked>
+                            <span class="outline-name">SOAP Format</span>
+                            <span class="outline-desc">Subjective, Objective, Assessment, Plan</span>
+                        </label>
+                        <label class="outline-option">
+                            <input type="radio" name="outline" value="full">
+                            <span class="outline-name">Full Assessment</span>
+                            <span class="outline-desc">History, Examination, Findings, Recommendations</span>
+                        </label>
+                        <label class="outline-option">
+                            <input type="radio" name="outline" value="quick">
+                            <span class="outline-name">Quick Update</span>
+                            <span class="outline-desc">Key changes, Current status, Next steps</span>
+                        </label>
+                        <label class="outline-option">
+                            <input type="radio" name="outline" value="custom">
+                            <span class="outline-name">Custom Outline</span>
+                            <span class="outline-desc">Describe your structure below</span>
+                        </label>
+                    </div>
+                    <textarea id="customOutline" rows="5" placeholder="e.g., 1. Background, 2. Progress, 3. Concerns, 4. Plan" style="display: none;"></textarea>
+
+                    <div class="form-group">
+                        <label>Additional Instructions (optional)</label>
+                        <textarea id="additionalInstructions" rows="2" placeholder="Focus on mobility, cognition, etc."></textarea>
+                    </div>
+
+                    <button id="generateBtn" class="generate-btn" disabled>
+                        <i class="fas fa-magic"></i> Generate Presentation
+                    </button>
+                </div>
+            </div>
+
+           <!-- Remove this entire block:
+<div id="resultsContainer" class="results-container" style="display: none;">
+    ...
+</div>
+-->
+
+<!-- Add a hidden field for current history ID -->
+<input type="hidden" id="currentHistoryId">
+
+<!-- Toast container remains -->
+<div id="toast-container"></div>
         </div>
-        <div class="central-icon">🏗️</div>
-      </div>
-      <div class="construction-text">
-        <h1>Presentation Maker</h1>
-        <div class="coming-soon">
-          <span class="badge">🚧 Under Construction 🚧</span>
-          <p>We're crafting an amazing tool to turn your ideas into stunning presentations.</p>
-          <p>Stay tuned – it's coming soon!</p>
+    </main>
+
+    <!-- History Drawer with Search -->
+    <aside class="history-drawer" id="historyDrawer">
+        <div class="drawer-header">
+            <h3><i class='bx bx-time-five'></i> Presentation History</h3>
+            <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
         </div>
-      </div>
-    </div>
-  </main>
+        <div class="history-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="historySearchInput" placeholder="Search by patient name...">
+        </div>
+        <div class="history-content" id="historyList">
+            <div class="empty-state">
+                <i class='bx bx-folder-open'></i>
+                <p>No history found</p>
+            </div>
+        </div>
+    </aside>
 
-  <footer class="site-footer">
-    <p>© rehablix — AI tools for rehabilitation</p>
-  </footer>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
-  <!-- Scripts -->
-  <script src="js/config.js"></script>
-  <script src="js/modal.js"></script>        <!-- Creates auth modal, toast, etc. -->
-  <script src="js/auth.js"></script>         <!-- Auth logic -->
-  <script src="js/presentation.js"></script> <!-- Presentation maker logic -->
+    <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/tools.js"></script>
+    <script src="js/presentation.js"></script>
 </body>
 </html>
