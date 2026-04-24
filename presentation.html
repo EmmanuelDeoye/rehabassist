@@ -1,3 +1,4 @@
+<!-- presentation.html -->
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -57,64 +58,38 @@
 
     <main class="presentation-main">
         <div class="container">
-            <!-- Input Type Tabs -->
-            <div class="input-type-tabs">
-                <div class="tab-buttons">
-                    <button class="tab-btn active" data-tab="text"><i class="fas fa-keyboard"></i> Text</button>
-                    <button class="tab-btn" data-tab="document"><i class="fas fa-file-medical"></i> Document</button>
-                    <button class="tab-btn" data-tab="image"><i class="fas fa-camera"></i> Image</button>
-                </div>
-            </div>
-
             <div class="workspace-grid">
-                <!-- Left Column: Input Area -->
+                <!-- LEFT: Always-visible text area + multi-file attachments -->
                 <div class="glass-card input-area">
-                    <!-- Text Input Tab -->
-                    <div class="tab-panel active" id="textPanel">
-                        <div class="input-header">
-                            <i class="fas fa-paste"></i>
-                            <h3>Tell me about your patient</h3>
-                        </div>
-                        <textarea id="textInput" rows="15" placeholder="Paste patient notes, assessment findings, or any relevant text..."></textarea>
-                        <div class="input-footer">
-                            <span id="textWordCount">0 words</span>
-                            <button class="clear-btn" id="clearTextBtn"><i class="fas fa-eraser"></i> Clear</button>
+                    <!-- Clinical notes -->
+                    <div class="input-header">
+                        <i class="fas fa-paste"></i>
+                        <h3>Clinical Notes &amp; Files</h3>
+                    </div>
+                    <textarea id="textInput" rows="12" placeholder="Paste patient notes, assessment findings, or any relevant text..."></textarea>
+                    <div class="input-footer">
+                        <span id="textWordCount">0 words</span>
+                        <button class="clear-btn" id="clearTextBtn"><i class="fas fa-eraser"></i> Clear</button>
+                    </div>
+
+                    <!-- Multi‑file drop zone – NO VISIBLE BUTTONS -->
+                    <div class="drop-zone" id="multiDropZone">
+                        <div class="drop-content">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h4>Attach Files</h4>
+                            <p>Tap or drag &amp; drop to add documents and images</p>
                         </div>
                     </div>
 
-                    <!-- Document Upload Tab -->
-                    <div class="tab-panel" id="documentPanel">
-                        <div class="drop-zone" id="docDropZone">
-                            <div class="drop-content">
-                                <i class="fas fa-cloud-upload-alt"></i>
-                                <h4>Upload Document</h4>
-                                <p>Drag & drop PDF, DOCX, or TXT</p>
-                                <button class="browse-btn" id="browseDocBtn">Browse Files</button>
-                            </div>
-                            <input type="file" id="docFileInput" accept=".pdf,.doc,.docx,.txt" hidden>
-                        </div>
-                        <div class="file-info" id="docFileInfo" style="display: none;"></div>
-                    </div>
+                    <!-- Hidden file inputs -->
+                    <input type="file" id="multiFileInput" accept=".pdf,.doc,.docx,.txt,image/*" multiple hidden>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
 
-                    <!-- Image Upload Tab -->
-                    <div class="tab-panel" id="imagePanel">
-                        <div class="drop-zone" id="imageDropZone">
-                            <div class="drop-content">
-                                <i class="fas fa-camera"></i>
-                                <h4>Upload Image</h4>
-                                <p>Drag & drop or click to select</p>
-                                <button class="browse-btn" id="browseImageBtn">Choose Image</button>
-                            </div>
-                            <input type="file" id="imageFileInput" accept="image/*" hidden>
-                        </div>
-                        <div class="image-preview" id="imagePreviewArea" style="display: none;">
-                            <img id="previewImage" alt="Preview">
-                            <button class="remove-image-btn" id="removeImageBtn"><i class="fas fa-times"></i></button>
-                        </div>
-                    </div>
+                    <!-- Attachment list -->
+                    <div class="attachments-list" id="attachmentsList" style="display: none;"></div>
                 </div>
 
-                <!-- Right Column: Patient Info & Settings -->
+                <!-- RIGHT: Patient info & settings -->
                 <div class="glass-card config-area">
                     <h3><i class="fas fa-user-circle"></i> Patient Information</h3>
                     <div class="patient-form">
@@ -185,7 +160,11 @@
                             <span class="outline-desc">Describe your structure below</span>
                         </label>
                     </div>
-                    <textarea id="customOutline" rows="5" placeholder="e.g., 1. Background, 2. Progress, 3. Concerns, 4. Plan" style="display: none;"></textarea>
+                    <textarea id="customOutline" rows="4" placeholder="e.g., 1. Background, 2. Progress, 3. Concerns, 4. Plan" style="display: none;"></textarea>
+                    <div class="outline-hint" id="customOutlineHint" style="display: none;">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>Number each section on a new line for best results</span>
+                    </div>
 
                     <div class="form-group">
                         <label>Additional Instructions (optional)</label>
@@ -198,17 +177,65 @@
                 </div>
             </div>
 
-           <!-- Remove this entire block:
-<div id="resultsContainer" class="results-container" style="display: none;">
-    ...
-</div>
--->
+            <!-- Upload Options Modal -->
+            <div class="upload-modal" id="uploadModal">
+                <div class="upload-modal-overlay"></div>
+                <div class="upload-modal-card">
+                    <div class="upload-modal-header">
+                        <h3>Add Attachment</h3>
+                        <button class="upload-modal-close" id="closeUploadModal">&times;</button>
+                    </div>
+                    <div class="upload-modal-body">
+                        <div class="upload-options-grid">
+                            <button class="upload-option" data-action="camera">
+                                <div class="upload-option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                                        <circle cx="12" cy="13" r="4"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <span class="upload-option-label">Camera</span>
+                                    <span class="upload-option-desc">Take a photo now</span>
+                                </div>
+                            </button>
+                            
+                            <button class="upload-option" data-action="photo">
+                                <div class="upload-option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                                        <polyline points="21 15 16 10 5 21"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <span class="upload-option-label">Photo</span>
+                                    <span class="upload-option-desc">Choose from gallery</span>
+                                </div>
+                            </button>
+                            
+                            <button class="upload-option" data-action="document">
+                                <div class="upload-option-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                        <polyline points="14 2 14 8 20 8"/>
+                                        <line x1="16" y1="13" x2="8" y2="13"/>
+                                        <line x1="16" y1="17" x2="8" y2="17"/>
+                                        <polyline points="10 9 9 9 8 9"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <span class="upload-option-label">Document</span>
+                                    <span class="upload-option-desc">PDF, DOCX, TXT files</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-<!-- Add a hidden field for current history ID -->
-<input type="hidden" id="currentHistoryId">
-
-<!-- Toast container remains -->
-<div id="toast-container"></div>
+            <!-- Hidden field for current history ID -->
+            <input type="hidden" id="currentHistoryId">
         </div>
     </main>
 
