@@ -1,5 +1,4 @@
-// js/auth-modal.js
-// Dynamic Auth Modal Creator
+// js/modal.js - Dynamic Auth Modal Creator
 
 function createAuthModal() {
   // Check if modal already exists
@@ -177,7 +176,7 @@ function createAuthModal() {
   // Insert modal into body
   document.body.insertAdjacentHTML('beforeend', modalHTML);
 
-  console.log('Auth modal created dynamically');
+  console.log('✅ Auth modal created dynamically');
 }
 
 // Auto-create modal when script loads
