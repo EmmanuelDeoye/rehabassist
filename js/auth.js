@@ -103,6 +103,63 @@ function initializeAuth() {
     return name.substring(0, 2).toUpperCase();
   }
 
+  // Translate Firebase error codes to friendly messages
+  function getFriendlyErrorMessage(error) {
+    const errorCode = error.code || '';
+    
+    const errorMessages = {
+      // Login errors
+      'auth/invalid-email': 'Please enter a valid email address.',
+      'auth/user-disabled': 'This account has been disabled. Please contact support.',
+      'auth/user-not-found': 'No account found with this email. Would you like to create one?',
+      'auth/wrong-password': 'Incorrect password. Please try again or reset your password.',
+      'auth/invalid-credential': 'Incorrect email or password. Please try again.',
+      'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
+      
+      // Registration errors
+      'auth/email-already-in-use': 'An account with this email already exists. Try logging in instead.',
+      'auth/weak-password': 'Please choose a stronger password — at least 6 characters.',
+      'auth/operation-not-allowed': 'Registration is currently unavailable. Please try again later.',
+      
+      // Google sign-in errors
+      'auth/popup-closed-by-user': 'Sign-in was cancelled.',
+      'auth/popup-blocked': 'Pop-up was blocked by your browser. Please allow pop-ups for this site.',
+      'auth/cancelled-popup-request': 'Sign-in was cancelled.',
+      'auth/account-exists-with-different-credential': 'An account already exists with this email using a different sign-in method. Try logging in with email and password instead.',
+      
+      // Password reset errors
+      'auth/missing-email': 'Please enter your email address first.',
+      
+      // Generic / network errors
+      'auth/network-request-failed': 'Network error. Please check your internet connection and try again.',
+      'auth/internal-error': 'Something went wrong on our end. Please try again in a moment.',
+      'auth/timeout': 'The request timed out. Please check your connection and try again.',
+    };
+    
+    // Return friendly message if we have one, otherwise a clean generic message
+    if (errorMessages[errorCode]) {
+      return errorMessages[errorCode];
+    }
+    
+    // Fallback: if Firebase gave us a message, clean it up
+    if (error.message) {
+      // Remove "Firebase: " prefix and " (auth/...)" suffix
+      let cleanMessage = error.message
+        .replace(/^Firebase:\s*/i, '')
+        .replace(/\s*\(auth\/[^)]+\)\s*$/i, '')
+        .trim();
+      
+      // If it still looks technical, use a generic message
+      if (cleanMessage.length > 100 || cleanMessage.includes('{')) {
+        return 'Something went wrong. Please try again.';
+      }
+      
+      return cleanMessage;
+    }
+    
+    return 'Something went wrong. Please try again.';
+  }
+
   // Update hero title based on auth state
   function updateHeroTitle(user) {
     if (!heroTitle) return;
@@ -130,7 +187,7 @@ function initializeAuth() {
         if (profileIcon) profileIcon.textContent = getUserInitials(emailName);
       });
     } else {
-      heroTitle.innerHTML = `rehablix <span class="hero-accent">Assistant</span>`;
+      heroTitle.innerHTML = `Welcome to <span class="hero-accent">rehablix</span>`;
     }
   }
 
@@ -203,16 +260,7 @@ function initializeAuth() {
         closeModal();
       } catch (error) {
         console.error('Google sign-in error:', error);
-        
-        if (error.code === 'auth/popup-closed-by-user') {
-          showToast('Sign-in cancelled.', 2000);
-        } else if (error.code === 'auth/popup-blocked') {
-          showToast('Popup was blocked. Please allow popups for this site.', 3000, true);
-        } else if (error.code === 'auth/account-exists-with-different-credential') {
-          showToast('An account already exists with the same email address using a different sign-in method.', 4000, true);
-        } else {
-          showToast('Google sign-in failed. Please try again.', 3000, true);
-        }
+        showToast(getFriendlyErrorMessage(error), 4000, true);
       }
     });
   }
@@ -349,7 +397,7 @@ function initializeAuth() {
         
       } catch (error) {
         console.error('Login error:', error);
-        if (loginError) loginError.textContent = 'Login failed. ' + error.message;
+        if (loginError) loginError.textContent = getFriendlyErrorMessage(error);
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -381,7 +429,7 @@ function initializeAuth() {
       }
       
       if (password !== repeatPassword) {
-        if (registerError) registerError.textContent = 'Passwords do not match!';
+        if (registerError) registerError.textContent = 'Passwords do not match. Please try again.';
         return;
       }
       
@@ -418,7 +466,7 @@ function initializeAuth() {
         
       } catch (error) {
         console.error('Registration error:', error);
-        if (registerError) registerError.textContent = 'Registration failed. ' + error.message;
+        if (registerError) registerError.textContent = getFriendlyErrorMessage(error);
       } finally {
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -434,17 +482,17 @@ function initializeAuth() {
       const email = document.getElementById('loginEmail')?.value;
       
       if (!email) {
-        if (loginError) loginError.textContent = 'Please enter your email address.';
+        if (loginError) loginError.textContent = 'Please enter your email address first so we can send you a reset link.';
         return;
       }
       
       try {
         await auth.sendPasswordResetEmail(email);
-        showToast('📧 Password reset email sent!');
+        showToast('📧 Password reset link sent! Check your inbox.');
         closeModal();
       } catch (error) {
         console.error('Password reset error:', error);
-        if (loginError) loginError.textContent = 'Error sending reset email.';
+        if (loginError) loginError.textContent = getFriendlyErrorMessage(error);
       }
     });
   }

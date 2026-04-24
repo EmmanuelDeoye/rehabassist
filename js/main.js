@@ -101,37 +101,47 @@ document.addEventListener('DOMContentLoaded', function() {
       // You can add analytics tracking here if needed
     });
   });
-  
-  
-  // Add scroll behavior to hide/show floating button
-let lastScrollTop = 0;
-const floatingBtn = document.getElementById('floatingAiBtn');
 
-if (floatingBtn) {
-  window.addEventListener('scroll', () => {
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    
-    if (scrollTop > lastScrollTop && scrollTop > 100) {
-      // Scrolling down - hide button
-      floatingBtn.style.transform = 'translateY(100px)';
-      floatingBtn.style.opacity = '0';
-    } else {
-      // Scrolling up - show button
-      floatingBtn.style.transform = 'translateY(0)';
-      floatingBtn.style.opacity = '1';
-    }
-    
-    lastScrollTop = scrollTop;
+  // ----- FAQ Accordion: Keep only one item open at a time -----
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.addEventListener('toggle', function() {
+      if (this.open) {
+        document.querySelectorAll('.faq-item').forEach(other => {
+          if (other !== this) other.open = false;
+        });
+      }
+    });
   });
-}
+  
+  // ----- Floating AI button scroll behavior -----
+  let lastScrollTop = 0;
+  const floatingBtn = document.getElementById('floatingAiBtn');
 
-// Optional: Add click tracking
-if (floatingBtn) {
-  floatingBtn.addEventListener('click', () => {
-    console.log('AI Assistant button clicked');
-    // You can add analytics tracking here
-  });
-}
+  if (floatingBtn) {
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      
+      if (scrollTop > lastScrollTop && scrollTop > 100) {
+        // Scrolling down - hide button
+        floatingBtn.style.transform = 'translateY(100px)';
+        floatingBtn.style.opacity = '0';
+      } else {
+        // Scrolling up - show button
+        floatingBtn.style.transform = 'translateY(0)';
+        floatingBtn.style.opacity = '1';
+      }
+      
+      lastScrollTop = scrollTop;
+    });
+  }
+
+  // Optional: Add click tracking
+  if (floatingBtn) {
+    floatingBtn.addEventListener('click', () => {
+      console.log('AI Assistant button clicked');
+      // You can add analytics tracking here
+    });
+  }
 
   console.log('rehablix ready');
 });

@@ -1,44 +1,35 @@
-// js/presentation.js - Ward Round Presentation with Auto-Save & Preview Modal
+// js/presentation.js – Multi‑file, Camera, DOCX support, Image‑to‑Text (OCR), Friendly Errors
 
-// Configure marked for proper rendering
+// Marked configuration
 if (typeof marked !== 'undefined') {
     marked.setOptions({
-        breaks: true,        // Convert \n to <br>
-        gfm: true,          // GitHub Flavored Markdown
-        headerIds: false,   // No header IDs
-        mangle: false       // Don't escape HTML
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
     });
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+
     // =========================================================================
     // DOM Elements
     // =========================================================================
-    // Tabs
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabPanels = {
-        text: document.getElementById('textPanel'),
-        document: document.getElementById('documentPanel'),
-        image: document.getElementById('imagePanel')
-    };
-    
-    // Input elements
     const textInput = document.getElementById('textInput');
     const textWordCount = document.getElementById('textWordCount');
     const clearTextBtn = document.getElementById('clearTextBtn');
-    
-    const docDropZone = document.getElementById('docDropZone');
-    const docFileInput = document.getElementById('docFileInput');
-    const browseDocBtn = document.getElementById('browseDocBtn');
-    const docFileInfo = document.getElementById('docFileInfo');
-    
-    const imageDropZone = document.getElementById('imageDropZone');
-    const imageFileInput = document.getElementById('imageFileInput');
-    const browseImageBtn = document.getElementById('browseImageBtn');
-    const imagePreviewArea = document.getElementById('imagePreviewArea');
-    const previewImage = document.getElementById('previewImage');
-    const removeImageBtn = document.getElementById('removeImageBtn');
-    
+
+    const multiDropZone = document.getElementById('multiDropZone');
+    const multiFileInput = document.getElementById('multiFileInput');
+    const cameraInput = document.getElementById('cameraInput');
+    const attachmentsList = document.getElementById('attachmentsList');
+
+    // Upload Modal
+    const uploadModal = document.getElementById('uploadModal');
+    const closeUploadModalBtn = document.getElementById('closeUploadModal');
+    const uploadModalOverlay = document.querySelector('.upload-modal-overlay');
+    const uploadOptions = document.querySelectorAll('.upload-option');
+
     // Patient form
     const patientName = document.getElementById('patientName');
     const patientAge = document.getElementById('patientAge');
@@ -46,109 +37,319 @@ document.addEventListener('DOMContentLoaded', async () => {
     const patientMRN = document.getElementById('patientMRN');
     const patientDiagnosis = document.getElementById('patientDiagnosis');
     const professionSelect = document.getElementById('professionSelect');
-    
+
     // Outline
     const outlineRadios = document.querySelectorAll('input[name="outline"]');
     const customOutline = document.getElementById('customOutline');
     const customOutlineHint = document.getElementById('customOutlineHint');
-    
+
     // Additional
     const additionalInstructions = document.getElementById('additionalInstructions');
     const generateBtn = document.getElementById('generateBtn');
-    
+
     // Hidden history ID
     const currentHistoryIdInput = document.getElementById('currentHistoryId');
-    
-    // History
+
+    // History drawer
     const historyDrawer = document.getElementById('historyDrawer');
     const historyNavBtn = document.getElementById('historyNavBtn');
     const closeDrawerBtn = document.getElementById('closeDrawerBtn');
     const historyList = document.getElementById('historyList');
     const historySearchInput = document.getElementById('historySearchInput');
-    
+
     // Toast
     const toastContainer = document.getElementById('toast-container');
-    
+
     // =========================================================================
-    // State & Configuration
+    // State & helpers
     // =========================================================================
     let currentUser = null;
-    let aiConfig = { token: null, endpoint: null, model: 'deepseek-chat' }; // Changed to DeepSeek
-    let activeTab = 'text';
-    let uploadedFile = null;
-    let extractedText = '';
-    let uploadedImage = null;
-    let imageDataURL = null;
-    let allHistoryEntries = [];
+    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+    let attachments = [];   // { type, name, textContent?, dataURL?, ocrText?, ocrProcessing?, processing? }
     let isRestoring = false;
     let saveTimeout = null;
-    const STORAGE_KEY = 'rehab_presentation_state';
-    
+    const STORAGE_KEY = 'rehab_presentation_state_v2';
+
     const database = firebase.database();
-    
-    // =========================================================================
-    // Utilities
-    // =========================================================================
+
     function showToast(message, type = 'success', duration = 3500) {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
         toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i><span>${message}</span>`;
         toastContainer.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(20px)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
     }
-    
+
     function escapeHtml(str) {
         if (!str) return '';
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
+        return str.replace(/[&<>]/g, m => m === '&' ? '&amp;' : m === '<' ? '&lt;' : '&gt;');
     }
-    
-    // UPDATED: Fetch DeepSeek API key from Firebase database
+
     async function fetchTokens() {
         try {
-            // Read from 'tokens/deepseek' node as shown in your database screenshot
             const snapshot = await database.ref('tokens/deepseek').once('value');
             const data = snapshot.val();
-            if (data && data.api_key) {
+            if (data?.api_key) {
                 aiConfig.token = data.api_key;
-                aiConfig.endpoint = 'https://api.deepseek.com/v1'; // DeepSeek base URL
-                aiConfig.model = 'deepseek-chat'; // or 'deepseek-reasoner' for chain-of-thought
-                console.log('DeepSeek API loaded successfully');
+                console.log('DeepSeek API loaded');
                 return true;
             }
-            console.warn('DeepSeek API key not found at tokens/deepseek/api_key');
+            console.warn('DeepSeek API key missing');
             return false;
         } catch (error) {
             console.error('Token fetch error:', error);
             return false;
         }
     }
-    
+
     function updateWordCount() {
         if (textInput) {
             const words = textInput.value.trim().split(/\s+/).filter(w => w.length > 0).length;
             textWordCount.textContent = `${words} word${words !== 1 ? 's' : ''}`;
         }
     }
-    
+
     function validateForm() {
-        const hasContent = (activeTab === 'text' && textInput.value.trim()) ||
-                          (activeTab === 'document' && (uploadedFile || extractedText)) ||
-                          (activeTab === 'image' && imageDataURL);
+        const hasText = textInput.value.trim() !== '';
+        const hasFiles = attachments.length > 0;
         const hasProfession = professionSelect.value !== '';
         const hasPatientName = patientName.value.trim() !== '';
-        generateBtn.disabled = !(hasContent && hasProfession && hasPatientName);
+        generateBtn.disabled = !((hasText || hasFiles) && hasProfession && hasPatientName);
     }
-    
+
     // =========================================================================
-    // Auto-Save to localStorage
+    // Upload Modal Management
     // =========================================================================
+    function openUploadModal() {
+        uploadModal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeUploadModalFn() {
+        uploadModal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    multiDropZone.addEventListener('click', (e) => {
+        if (e.target.closest('.attachment-chip')) return;
+        openUploadModal();
+    });
+
+    closeUploadModalBtn.addEventListener('click', closeUploadModalFn);
+    uploadModalOverlay.addEventListener('click', closeUploadModalFn);
+
+    uploadOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const action = option.dataset.action;
+            closeUploadModalFn();
+            switch (action) {
+                case 'camera':
+                    cameraInput.click();
+                    break;
+                case 'photo':
+                    multiFileInput.accept = 'image/*';
+                    multiFileInput.click();
+                    break;
+                case 'document':
+                    multiFileInput.accept = '.pdf,.docx,.txt,.doc';
+                    multiFileInput.click();
+                    break;
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && uploadModal.classList.contains('active')) {
+            closeUploadModalFn();
+        }
+    });
+
+    // =========================================================================
+    // Attachment rendering and file processing (DOCX, OCR)
+    // =========================================================================
+    function renderAttachments() {
+        if (attachments.length === 0) {
+            attachmentsList.style.display = 'none';
+            attachmentsList.innerHTML = '';
+            return;
+        }
+        attachmentsList.style.display = 'flex';
+        attachmentsList.innerHTML = '';
+
+        attachments.forEach((att, index) => {
+            const chip = document.createElement('div');
+            chip.className = 'attachment-chip';
+
+            if (att.type === 'image' && att.dataURL) {
+                const img = document.createElement('img');
+                img.src = att.dataURL;
+                img.alt = att.name;
+                chip.appendChild(img);
+            } else {
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'file-icon';
+                iconDiv.innerHTML = '<i class="fas fa-file-alt"></i>';
+                chip.appendChild(iconDiv);
+            }
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = att.name.length > 20 ? att.name.substring(0, 20) + '...' : att.name;
+            nameSpan.title = att.name;
+            chip.appendChild(nameSpan);
+
+            // Show processing indicator for documents
+            if (att.processing) {
+                const spinner = document.createElement('span');
+                spinner.className = 'attachment-processing';
+                spinner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                spinner.style.fontSize = '0.75rem';
+                spinner.style.color = 'var(--text-secondary)';
+                spinner.style.marginLeft = '0.25rem';
+                chip.appendChild(spinner);
+            }
+
+            // Show OCR processing indicator for images
+            if (att.ocrProcessing) {
+                const spinner = document.createElement('span');
+                spinner.className = 'attachment-processing';
+                spinner.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Extracting text...';
+                spinner.style.fontSize = '0.75rem';
+                spinner.style.color = 'var(--text-secondary)';
+                spinner.style.marginLeft = '0.25rem';
+                chip.appendChild(spinner);
+            }
+
+            // Show OCR completed indicator
+            if (att.type === 'image' && !att.ocrProcessing && att.ocrText !== undefined) {
+                const checkIcon = document.createElement('span');
+                checkIcon.className = 'attachment-ocr-done';
+                checkIcon.innerHTML = att.ocrText ? '✓ Text found' : '⚠ No text';
+                checkIcon.style.fontSize = '0.7rem';
+                checkIcon.style.color = att.ocrText ? '#10b981' : '#f59e0b';
+                checkIcon.style.marginLeft = '0.25rem';
+                chip.appendChild(checkIcon);
+            }
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-attachment';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = 'Remove attachment';
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                attachments.splice(index, 1);
+                renderAttachments();
+                validateForm();
+                saveProgress();
+            });
+            chip.appendChild(removeBtn);
+
+            attachmentsList.appendChild(chip);
+        });
+    }
+
+    // Load mammoth for DOCX
+    async function loadMammoth() {
+        if (window.mammoth) return window.mammoth;
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
+            script.onload = () => resolve(window.mammoth);
+            script.onerror = () => reject(new Error('Failed to load the document converter. Please check your internet connection.'));
+            document.head.appendChild(script);
+        });
+    }
+
+    // Load Tesseract.js for OCR
+    async function loadTesseract() {
+        if (window.Tesseract) return window.Tesseract;
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/tesseract.js@v5.0.0/dist/tesseract.min.js';
+            script.onload = () => resolve(window.Tesseract);
+            script.onerror = () => reject(new Error('Failed to load image text extractor. Please check your internet connection.'));
+            document.head.appendChild(script);
+        });
+    }
+
+    // OCR on a data URL image, returns extracted text (or empty string)
+    async function runOCR(dataURL) {
+        try {
+            const Tesseract = await loadTesseract();
+            const result = await Tesseract.recognize(dataURL, 'eng', {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        console.log('OCR progress:', Math.round(m.progress * 100) + '%');
+                    }
+                }
+            });
+            return result.data.text.trim();
+        } catch (err) {
+            console.warn('OCR failed:', err);
+            return ''; // Return empty string, app will use fallback text
+        }
+    }
+
+    async function extractTextFromFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+
+        if (ext === 'txt') {
+            const reader = new FileReader();
+            return new Promise((resolve, reject) => {
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = () => reject(new Error('Could not read the text file. It might be corrupted.'));
+                reader.readAsText(file);
+            });
+        }
+
+        if (ext === 'pdf') {
+            try {
+                const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = '';
+                const maxPages = Math.min(pdf.numPages, 30);
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const content = await page.getTextContent();
+                    fullText += content.items.map(item => item.str).join(' ') + '\n';
+                }
+                if (pdf.numPages > maxPages) {
+                    fullText += `\n[Note: Document has ${pdf.numPages} pages, only first ${maxPages} processed.]`;
+                }
+                return fullText;
+            } catch (err) {
+                throw new Error('Could not read this PDF. It may be encrypted or damaged.');
+            }
+        }
+
+        if (ext === 'docx') {
+            try {
+                const mammoth = await loadMammoth();
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                return result.value;
+            } catch (err) {
+                throw new Error('Could not read this Word document (.docx). Please make sure the file is not corrupted.');
+            }
+        }
+
+        if (ext === 'doc') {
+            throw new Error('Old .doc files are not supported. Please save the file as .docx (Word 2007 or newer) or convert to PDF.');
+        }
+
+        throw new Error('This file type is not supported. Please upload a PDF, Word (.docx), or plain text file.');
+    }
+
+    // Compress image and return data URL
     async function compressImageIfNeeded(dataURL) {
-        if (!dataURL || dataURL.length < 1.5 * 1024 * 1024) return dataURL;
+        if (!dataURL || dataURL.length < 500 * 1024) return dataURL;
         return new Promise(resolve => {
             const img = new Image();
             img.onload = () => {
@@ -174,331 +375,228 @@ document.addEventListener('DOMContentLoaded', async () => {
             img.src = dataURL;
         });
     }
-    
-    async function saveProgress() {
-        if (isRestoring) {
-            console.log('[SAVE] Skipping save during restore');
+
+    async function processFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+
+        if (['pdf', 'docx', 'doc', 'txt'].includes(ext)) {
+            const idx = attachments.push({
+                type: 'document',
+                name: file.name,
+                textContent: null,
+                processing: true
+            }) - 1;
+            renderAttachments();
+            showToast('Processing document…', 'info', 2000);
+            try {
+                const text = await extractTextFromFile(file);
+                attachments[idx].textContent = text.substring(0, 15000);
+                attachments[idx].processing = false;
+                renderAttachments();
+                showToast('Document added successfully', 'success');
+            } catch (err) {
+                attachments.splice(idx, 1);
+                renderAttachments();
+                showToast(err.message, 'error');
+                return;
+            }
+        } else if (file.type.startsWith('image/')) {
+            // Image: compress, then OCR in background
+            const reader = new FileReader();
+            const dataURL = await new Promise(resolve => {
+                reader.onload = e => resolve(e.target.result);
+                reader.readAsDataURL(file);
+            });
+            const compressed = await compressImageIfNeeded(dataURL);
+
+            // Add attachment with OCR placeholder
+            const attObj = {
+                type: 'image',
+                name: file.name,
+                dataURL: compressed,
+                ocrText: '',
+                ocrProcessing: true
+            };
+            const idx = attachments.push(attObj) - 1;
+            renderAttachments();
+            showToast('Image added, extracting text…', 'info', 2000);
+
+            // Run OCR in background without blocking
+            runOCR(compressed)
+                .then(ocrResult => {
+                    attachments[idx].ocrText = ocrResult || '';
+                    attachments[idx].ocrProcessing = false;
+                    renderAttachments();
+                    if (ocrResult) {
+                        showToast('Text extracted from image', 'success', 2000);
+                    } else {
+                        showToast('No text found in image, it will be included as a note.', 'info', 2500);
+                    }
+                    saveProgress();
+                })
+                .catch(err => {
+                    console.warn('OCR error', err);
+                    attachments[idx].ocrText = '';
+                    attachments[idx].ocrProcessing = false;
+                    renderAttachments();
+                    saveProgress();
+                });
+        } else {
+            showToast(`File type not supported: ${file.name}`, 'error');
             return;
         }
-        if (saveTimeout) clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(async () => {
-            const state = {
-                version: 1,
-                activeTab,
-                textContent: textInput?.value || '',
-                extractedText: extractedText,
-                uploadedFileName: uploadedFile?.name || null,
-                imageDataURL: await compressImageIfNeeded(imageDataURL),
-                uploadedImageName: uploadedImage?.name || null,
-                patientName: patientName?.value || '',
-                patientAge: patientAge?.value || '',
-                patientGender: patientGender?.value || '',
-                patientMRN: patientMRN?.value || '',
-                patientDiagnosis: patientDiagnosis?.value || '',
-                profession: professionSelect?.value || '',
-                outline: document.querySelector('input[name="outline"]:checked')?.value || 'soap',
-                customOutline: customOutline?.value || '',
-                additionalInstructions: additionalInstructions?.value || '',
-                timestamp: Date.now()
-            };
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-                console.log('[SAVE] Progress saved to localStorage');
-            } catch (e) {
-                if (e.name === 'QuotaExceededError') {
-                    const { imageDataURL: _, ...stateWithoutImage } = state;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateWithoutImage));
-                    showToast('Storage limit reached. Image not saved.', 'warning');
-                }
-            }
-        }, 300);
-    }
-    
-    async function loadProgress() {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (!saved) {
-            console.log('[LOAD] No saved state found');
-            return false;
-        }
-        try {
-            isRestoring = true;
-            const state = JSON.parse(saved);
-            console.log('[LOAD] Restoring saved state from:', new Date(state.timestamp).toLocaleString());
-            
-            // Restore active tab
-            if (state.activeTab) {
-                const targetBtn = document.querySelector(`.tab-btn[data-tab="${state.activeTab}"]`);
-                if (targetBtn) {
-                    targetBtn.click();
-                } else {
-                    activeTab = state.activeTab;
-                    // Manually show the correct panel
-                    Object.values(tabPanels).forEach(p => p.classList.remove('active'));
-                    tabPanels[state.activeTab]?.classList.add('active');
-                    tabBtns.forEach(b => {
-                        b.classList.remove('active');
-                        if (b.dataset.tab === state.activeTab) b.classList.add('active');
-                    });
-                }
-            }
-            
-            // Restore text
-            if (state.textContent) {
-                textInput.value = state.textContent;
-                updateWordCount();
-            }
-            
-            // Restore extracted document text
-            if (state.extractedText) extractedText = state.extractedText;
-            if (state.uploadedFileName) {
-                uploadedFile = { name: state.uploadedFileName };
-                docFileInfo.style.display = 'block';
-                docFileInfo.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span><i class="fas fa-file-alt"></i> ${escapeHtml(state.uploadedFileName)}</span>
-                        <button id="removeDocBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">&times;</button>
-                    </div>
-                `;
-                document.getElementById('removeDocBtn')?.addEventListener('click', removeDocument);
-            }
-            
-            // Restore image
-            if (state.imageDataURL && state.uploadedImageName) {
-                imageDataURL = state.imageDataURL;
-                previewImage.src = imageDataURL;
-                imagePreviewArea.style.display = 'block';
-                uploadedImage = { name: state.uploadedImageName };
-            }
-            
-            // Restore patient form
-            if (state.patientName) patientName.value = state.patientName;
-            if (state.patientAge) patientAge.value = state.patientAge;
-            if (state.patientGender) patientGender.value = state.patientGender;
-            if (state.patientMRN) patientMRN.value = state.patientMRN;
-            if (state.patientDiagnosis) patientDiagnosis.value = state.patientDiagnosis;
-            if (state.profession) professionSelect.value = state.profession;
-            
-            // Restore outline
-            if (state.outline) {
-                const radio = document.querySelector(`input[name="outline"][value="${state.outline}"]`);
-                if (radio) {
-                    radio.checked = true;
-                    customOutline.style.display = state.outline === 'custom' ? 'block' : 'none';
-                    if (customOutlineHint) customOutlineHint.style.display = state.outline === 'custom' ? 'flex' : 'none';
-                }
-            }
-            if (state.customOutline) customOutline.value = state.customOutline;
-            if (state.additionalInstructions) additionalInstructions.value = state.additionalInstructions;
-            
-            validateForm();
-            console.log('[LOAD] Progress restored successfully');
-            showToast('Previous session restored', 'info', 2000);
-            
-            isRestoring = false;
-            return true;
-        } catch (e) {
-            console.error('[LOAD] Restore error:', e);
-            isRestoring = false;
-            return false;
-        }
-    }
-    
-    // Attach save triggers to all form elements
-    const saveTriggers = [
-        textInput, patientName, patientAge, patientGender, patientMRN, 
-        patientDiagnosis, customOutline, additionalInstructions
-    ];
-    saveTriggers.forEach(el => { if (el) el.addEventListener('input', saveProgress); });
-    patientGender?.addEventListener('change', saveProgress);
-    professionSelect?.addEventListener('change', saveProgress);
-    outlineRadios.forEach(r => r.addEventListener('change', saveProgress));
-    
-    // =========================================================================
-    // Tab Switching
-    // =========================================================================
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tab = btn.dataset.tab;
-            tabBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            Object.values(tabPanels).forEach(p => p.classList.remove('active'));
-            tabPanels[tab].classList.add('active');
-            activeTab = tab;
-            validateForm();
-            saveProgress();
-        });
-    });
-    
-    // =========================================================================
-    // Text Input
-    // =========================================================================
-    textInput.addEventListener('input', () => {
-        updateWordCount();
+
         validateForm();
         saveProgress();
+    }
+
+    function handleFiles(files) {
+        if (!files || files.length === 0) return;
+        const maxFiles = 10 - attachments.length;
+        if (files.length > maxFiles) {
+            showToast(`You can add up to ${maxFiles} more file${maxFiles !== 1 ? 's' : ''} (max 10 total)`, 'warning');
+            return;
+        }
+        Array.from(files).forEach(f => processFile(f));
+        multiFileInput.accept = '.pdf,.docx,.txt,.doc,image/*';
+    }
+
+    multiFileInput.addEventListener('change', () => {
+        if (multiFileInput.files.length) {
+            handleFiles(multiFileInput.files);
+            multiFileInput.value = '';
+        }
     });
-    
+
+    cameraInput.addEventListener('change', () => {
+        if (cameraInput.files.length) {
+            handleFiles(cameraInput.files);
+            cameraInput.value = '';
+        }
+    });
+
+    multiDropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        multiDropZone.style.borderColor = 'var(--presentation-accent)';
+    });
+
+    multiDropZone.addEventListener('dragleave', () => {
+        multiDropZone.style.borderColor = 'var(--border-light)';
+    });
+
+    multiDropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        multiDropZone.style.borderColor = 'var(--border-light)';
+        handleFiles(e.dataTransfer.files);
+    });
+
     clearTextBtn.addEventListener('click', () => {
+        if (textInput.value.trim() && !confirm('Clear all text?')) return;
         textInput.value = '';
         updateWordCount();
         validateForm();
         saveProgress();
         showToast('Text cleared', 'info');
     });
-    
+
+    textInput.addEventListener('input', () => {
+        updateWordCount();
+        validateForm();
+    });
+
     // =========================================================================
-    // Document Upload
+    // Auto‑save
     // =========================================================================
-    async function extractTextFromFile(file) {
-        return new Promise(async (resolve, reject) => {
-            const ext = file.name.split('.').pop().toLowerCase();
-            
-            if (ext === 'txt') {
-                const reader = new FileReader();
-                reader.onload = e => resolve(e.target.result);
-                reader.onerror = reject;
-                reader.readAsText(file);
-            } else if (ext === 'pdf') {
-                try {
-                    const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs');
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
-                    const arrayBuffer = await file.arrayBuffer();
-                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    let fullText = '';
-                    const maxPages = Math.min(pdf.numPages, 30);
-                    for (let i = 1; i <= maxPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        fullText += textContent.items.map(item => item.str).join(' ') + '\n';
-                    }
-                    if (pdf.numPages > maxPages) {
-                        fullText += `\n[Note: Document has ${pdf.numPages} pages. Only first ${maxPages} pages were processed.]`;
-                    }
-                    resolve(fullText);
-                } catch (err) {
-                    reject(err);
-                }
-            } else if (ext === 'docx' || ext === 'doc') {
-                reject(new Error('DOCX/DOC files are not supported directly. Please convert to PDF or paste as text.'));
-            } else {
-                reject(new Error('Unsupported file type'));
+    async function saveProgress() {
+        if (isRestoring) return;
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            const state = {
+                version: 3,
+                textContent: textInput.value,
+                attachmentMeta: attachments.map(a => ({
+                    type: a.type,
+                    name: a.name,
+                    ocrText: a.ocrText || ''  // store OCR text so it persists
+                })),
+                patientName: patientName.value,
+                patientAge: patientAge.value,
+                patientGender: patientGender.value,
+                patientMRN: patientMRN.value,
+                patientDiagnosis: patientDiagnosis.value,
+                profession: professionSelect.value,
+                outline: document.querySelector('input[name="outline"]:checked')?.value || 'soap',
+                customOutline: customOutline.value,
+                additionalInstructions: additionalInstructions.value,
+                timestamp: Date.now()
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                console.log('Progress saved');
+            } catch (e) {
+                const { attachmentMeta, ...rest } = state;
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rest)); } catch (e2) { /* ignore */ }
             }
-        });
+        }, 300);
     }
-    
-    function handleDocUpload(file) {
-        uploadedFile = file;
-        docFileInfo.style.display = 'block';
-        docFileInfo.innerHTML = `
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span><i class="fas fa-file-alt"></i> ${escapeHtml(file.name)} (${(file.size/1024).toFixed(1)} KB)</span>
-                <button id="removeDocBtn" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem;">&times;</button>
-            </div>
-        `;
-        document.getElementById('removeDocBtn')?.addEventListener('click', removeDocument);
-        
-        showToast('Extracting text from document...', 'info');
-        extractTextFromFile(file).then(text => {
-            extractedText = text.substring(0, 15000);
-            showToast('Document loaded successfully', 'success');
+
+    async function loadProgress() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (!saved) return false;
+        try {
+            isRestoring = true;
+            const state = JSON.parse(saved);
+            if (state.textContent) {
+                textInput.value = state.textContent;
+                updateWordCount();
+            }
+            if (state.attachmentMeta?.length) {
+                attachments = state.attachmentMeta.map(m => ({
+                    type: m.type,
+                    name: m.name,
+                    ocrText: m.ocrText || '',
+                    ocrProcessing: false,
+                    textContent: m.type === 'document' ? null : undefined,
+                    dataURL: null
+                }));
+                renderAttachments();
+                showToast('Previously attached files shown below. Some may need re‑upload.', 'warning', 4000);
+            }
+            if (state.patientName) patientName.value = state.patientName;
+            if (state.patientAge) patientAge.value = state.patientAge;
+            if (state.patientGender) patientGender.value = state.patientGender;
+            if (state.patientMRN) patientMRN.value = state.patientMRN;
+            if (state.patientDiagnosis) patientDiagnosis.value = state.patientDiagnosis;
+            if (state.profession) professionSelect.value = state.profession;
+            if (state.outline) {
+                const radio = document.querySelector(`input[name="outline"][value="${state.outline}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    if (state.outline === 'custom') {
+                        customOutline.style.display = 'block';
+                        if (customOutlineHint) customOutlineHint.style.display = 'flex';
+                    }
+                }
+            }
+            if (state.customOutline) customOutline.value = state.customOutline;
+            if (state.additionalInstructions) additionalInstructions.value = state.additionalInstructions;
             validateForm();
-            saveProgress();
-        }).catch(err => {
-            console.error('Extraction error:', err);
-            showToast('Failed to extract text: ' + err.message, 'error');
-        });
-    }
-    
-    function removeDocument() {
-        uploadedFile = null;
-        extractedText = '';
-        docFileInfo.style.display = 'none';
-        docFileInfo.innerHTML = '';
-        docFileInput.value = '';
-        validateForm();
-        saveProgress();
-        showToast('Document removed', 'info');
-    }
-    
-    docDropZone.addEventListener('dragover', e => e.preventDefault());
-    docDropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        docDropZone.style.borderColor = 'var(--border-light)';
-        if (e.dataTransfer.files.length) handleDocUpload(e.dataTransfer.files[0]);
-    });
-    docDropZone.addEventListener('dragenter', () => docDropZone.style.borderColor = 'var(--presentation-accent)');
-    docDropZone.addEventListener('dragleave', () => docDropZone.style.borderColor = 'var(--border-light)');
-    docDropZone.addEventListener('click', () => docFileInput.click());
-    browseDocBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        docFileInput.click();
-    });
-    docFileInput.addEventListener('change', () => {
-        if (docFileInput.files.length) handleDocUpload(docFileInput.files[0]);
-        docFileInput.value = '';
-    });
-    
-    // =========================================================================
-    // Image Upload
-    // =========================================================================
-    function handleImageUpload(file) {
-        if (!file.type.startsWith('image/')) {
-            showToast('Please select an image file', 'error');
-            return;
+            isRestoring = false;
+            return true;
+        } catch (e) {
+            console.error('Restore error:', e);
+            isRestoring = false;
+            return false;
         }
-        
-        const reader = new FileReader();
-        reader.onload = e => {
-            imageDataURL = e.target.result;
-            previewImage.src = imageDataURL;
-            imagePreviewArea.style.display = 'block';
-            uploadedImage = file;
-            validateForm();
-            saveProgress();
-            showToast('Image loaded successfully', 'success');
-        };
-        reader.readAsDataURL(file);
     }
-    
-    function removeImage() {
-        imageDataURL = null;
-        imagePreviewArea.style.display = 'none';
-        previewImage.src = '';
-        imageFileInput.value = '';
-        uploadedImage = null;
-        validateForm();
-        saveProgress();
-        showToast('Image removed', 'info');
-    }
-    
-    imageDropZone.addEventListener('dragover', e => e.preventDefault());
-    imageDropZone.addEventListener('drop', e => {
-        e.preventDefault();
-        imageDropZone.style.borderColor = 'var(--border-light)';
-        if (e.dataTransfer.files.length) handleImageUpload(e.dataTransfer.files[0]);
-    });
-    imageDropZone.addEventListener('dragenter', () => imageDropZone.style.borderColor = 'var(--presentation-accent)');
-    imageDropZone.addEventListener('dragleave', () => imageDropZone.style.borderColor = 'var(--border-light)');
-    imageDropZone.addEventListener('click', () => imageFileInput.click());
-    browseImageBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        imageFileInput.click();
-    });
-    imageFileInput.addEventListener('change', () => {
-        if (imageFileInput.files.length) handleImageUpload(imageFileInput.files[0]);
-        imageFileInput.value = '';
-    });
-    removeImageBtn.addEventListener('click', removeImage);
-    
-    // =========================================================================
-    // Form Validation (additional triggers)
-    // =========================================================================
-    [patientName, patientAge, patientDiagnosis].forEach(el => {
-        if (el) el.addEventListener('input', validateForm);
-    });
-    patientGender?.addEventListener('change', validateForm);
-    professionSelect?.addEventListener('change', validateForm);
-    
+
+    // Attach save triggers to form elements
+    [textInput, patientName, patientAge, patientMRN, patientDiagnosis, customOutline, additionalInstructions]
+        .forEach(el => el?.addEventListener('input', saveProgress));
+    patientGender?.addEventListener('change', saveProgress);
+    professionSelect?.addEventListener('change', saveProgress);
+    outlineRadios.forEach(r => r.addEventListener('change', saveProgress));
+
     // Outline custom toggle
     outlineRadios.forEach(radio => {
         radio.addEventListener('change', () => {
@@ -508,15 +606,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             saveProgress();
         });
     });
-    
+
+    // Additional form validation triggers
+    [patientName, patientAge, patientDiagnosis].forEach(el => el?.addEventListener('input', validateForm));
+    patientGender?.addEventListener('change', validateForm);
+    professionSelect?.addEventListener('change', validateForm);
+
     // =========================================================================
-    // AI Generation
+    // AI Generation – *NO* direct vision API; uses OCR text instead
     // =========================================================================
     function getSelectedOutline() {
         const selected = document.querySelector('input[name="outline"]:checked')?.value || 'soap';
-        if (selected === 'custom') {
-            return customOutline.value.trim() || 'Custom presentation outline';
-        }
+        if (selected === 'custom') return customOutline.value.trim() || 'Custom outline';
         const outlines = {
             soap: 'SOAP format: Subjective (patient report), Objective (findings), Assessment, Plan',
             full: 'Full assessment: Relevant History, Examination findings, Functional status, Recommendations',
@@ -524,20 +625,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         return outlines[selected] || outlines.soap;
     }
-    
+
     async function generatePresentation() {
+        // Ensure we have API token
         if (!aiConfig.token) {
-            const success = await fetchTokens();
-            if (!success) throw new Error('AI service unavailable. Please check your DeepSeek API key.');
+            const ok = await fetchTokens();
+            if (!ok) throw new Error('The AI service is not set up. Please contact support.');
         }
-        
-        let contentText = '';
-        if (activeTab === 'text') {
-            contentText = textInput.value.trim();
-        } else if (activeTab === 'document') {
-            contentText = extractedText;
+
+        // 1) Gather text from the editor
+        let combinedText = textInput.value.trim();
+
+        // 2) Append text from documents
+        const docTexts = attachments
+            .filter(a => a.type === 'document' && a.textContent)
+            .map(a => a.textContent)
+            .join('\n\n');
+        if (docTexts) {
+            combinedText += (combinedText ? '\n\n--- Document Content ---\n\n' : '') + docTexts;
         }
-        
+
+        // 3) Append OCR text from images
+        const imageOcrTexts = attachments
+            .filter(a => a.type === 'image' && a.ocrText)
+            .map(a => a.ocrText)
+            .join('\n\n');
+        if (imageOcrTexts) {
+            combinedText += (combinedText ? '\n\n--- Text Extracted from Images ---\n\n' : '') + imageOcrTexts;
+        }
+
+        // If no text at all, throw error (should not happen because validation requires content)
+        if (!combinedText && attachments.length === 0) {
+            throw new Error('No content to generate presentation from.');
+        }
+
         const patientInfo = {
             name: patientName.value.trim() || 'N/A',
             age: patientAge.value || 'N/A',
@@ -545,106 +666,112 @@ document.addEventListener('DOMContentLoaded', async () => {
             mrn: patientMRN.value.trim() || 'N/A',
             diagnosis: patientDiagnosis.value.trim() || 'N/A'
         };
-        
         const profession = professionSelect.options[professionSelect.selectedIndex]?.text || 'Healthcare Professional';
         const outline = getSelectedOutline();
-        const instructions = additionalInstructions.value.trim() || 'None';
-        
-        const systemPrompt = `You are a clinical presentation assistant helping a ${profession} prepare a ward round presentation.
-Create a professional, concise presentation using the provided patient information and clinical notes.
+        const instructions = additionalInstructions.value.trim() || 'None provided';
 
-Follow this outline exactly: ${outline}
+        const systemPrompt = `You are an expert clinical presentation assistant helping a ${profession} prepare a comprehensive ward round presentation.
 
-Format your response with clear markdown headings (## for main sections, ### for subsections), bullet points (-) for lists, and **bold** for emphasis.
-Use professional clinical language. Do NOT use tables.
+Your task is to create a **thorough, detailed, and professional** presentation that demonstrates deep clinical reasoning and provides actionable insights.
 
-Example format:
-## Subjective
-- Patient reports...
-- Key concerns...
+**CRITICAL INSTRUCTIONS:**
 
-## Objective
-- Vital signs...
-- Physical exam findings...
+1. **Follow this outline structure exactly:** ${outline}
 
-## Assessment
-- Primary diagnosis...
-- Differential considerations...
+2. **Be comprehensive and detailed:**
+   - Each section should contain **substantial content** (not just 1-2 lines)
+   - Include **specific clinical details**, measurements, observations, and findings
+   - Provide **clear clinical reasoning** for assessments and decisions
+   - Give **actionable, specific recommendations** with rationale
+   - The total output should be **at least 400-500 words** (longer if data permits)
 
-## Plan
-- Recommended interventions...
-- Follow-up needed...`;
-        
-        let userContent = `Patient Information:
+3. **Format requirements:**
+   - Use markdown headings: ## for main sections, ### for subsections
+   - Use bullet points (-) for lists
+   - Use **bold** for emphasis on key findings or critical items
+   - Use professional clinical language
+   - Do NOT use tables
+   - Maintain clear section separation
+
+4. **Quality standards:**
+   - Write at the level expected for a professional multidisciplinary team meeting
+   - Include relevant functional assessments (mobility, ADLs, cognition, communication, etc.)
+   - Consider holistic patient needs (physical, psychological, social)
+   - Reference evidence-based practice where appropriate
+   - Highlight risks, precautions, and safety considerations
+   - Include measurable goals and outcome measures where possible
+
+5. **Tone:** Professional, objective, and patient-centered. Be specific rather than vague.
+
+Make this presentation worthy of a senior clinician's review.`;
+
+        let userContent = `**PATIENT INFORMATION:**
 - Name: ${patientInfo.name}
 - Age: ${patientInfo.age}
 - Gender: ${patientInfo.gender}
 - MRN: ${patientInfo.mrn}
-- Diagnosis: ${patientInfo.diagnosis}
+- Primary Diagnosis: ${patientInfo.diagnosis}
 
-Clinician Role: ${profession}
+**CLINICIAN ROLE:** ${profession}
 
-Additional Instructions: ${instructions}
+**ADDITIONAL INSTRUCTIONS:** ${instructions}
 
-`;
-        
-        if (activeTab === 'image' && imageDataURL) {
-            userContent += `Please analyze the provided image and create a ward round presentation focusing on the visible findings.`;
-        } else {
-            userContent += `Clinical Notes/Information:\n${contentText}`;
-        }
-        
-        let messages = [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userContent }
+**CLINICAL NOTES & EXTRACTED TEXT:**
+${combinedText || 'No clinical notes provided.'}
+
+---
+
+Please create a detailed, comprehensive ward round presentation based on the above information. Ensure each section contains thorough clinical detail and actionable recommendations.`;
+
+        // Always use text-only messages – no image_url parts
+        const messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent }
         ];
-        
-        // DeepSeek supports vision with the same OpenAI-compatible format
-        if (activeTab === 'image' && imageDataURL) {
-            messages = [
-                { role: "system", content: systemPrompt },
-                { 
-                    role: "user", 
-                    content: [
-                        { type: "text", text: userContent },
-                        { type: "image_url", image_url: { url: imageDataURL } }
-                    ]
-                }
-            ];
-        }
-        
-        // DeepSeek API endpoint
+
+        console.log('[AI] Sending request to DeepSeek API...');
+        console.log('[AI] Text length:', combinedText.length, 'characters');
+
         const url = `${aiConfig.endpoint}/chat/completions`;
-        
         const response = await fetch(url, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json', 
-                'Authorization': `Bearer ${aiConfig.token}` 
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${aiConfig.token}`
             },
-            body: JSON.stringify({ 
-                model: aiConfig.model,  // 'deepseek-chat' or 'deepseek-reasoner'
-                messages: messages, 
-                max_tokens: 5000, 
-                temperature: 0.3
+            body: JSON.stringify({
+                model: aiConfig.model,
+                messages,
+                max_tokens: 6000,
+                temperature: 0.3,
+                top_p: 0.9
             })
         });
-        
+
         if (!response.ok) {
-            const err = await response.json();
-            console.error('DeepSeek API error:', err);
-            throw new Error(err.error?.message || 'DeepSeek API error');
+            const errData = await response.json().catch(() => ({}));
+            console.error('[AI] API error:', errData);
+            
+            if (response.status === 401) {
+                throw new Error('Authentication failed. Please check your API key.');
+            } else if (response.status === 429) {
+                throw new Error('Too many requests. Please wait a moment and try again.');
+            } else if (response.status === 503) {
+                throw new Error('The AI service is temporarily busy. Please try again in a few minutes.');
+            } else {
+                const msg = errData?.error?.message || `Service error (${response.status})`;
+                throw new Error(msg);
+            }
         }
-        
+
         const data = await response.json();
+        console.log('[AI] Response received, tokens used:', data.usage?.total_tokens || 'N/A');
         
-        // DeepSeek returns the same format as OpenAI
         return data.choices[0].message.content;
     }
-    
+
     async function saveToHistory(rawMarkdown, htmlContent) {
         if (!currentUser) return null;
-        
         try {
             const ref = await database.ref(`users/${currentUser.uid}/caseHistory`).push({
                 contentType: 'presentation',
@@ -660,26 +787,27 @@ Additional Instructions: ${instructions}
                 resultsMarkdown: rawMarkdown,
                 resultsHtml: htmlContent,
                 timestamp: firebase.database.ServerValue.TIMESTAMP,
-                date: new Date().toLocaleDateString()
+                date: new Date().toLocaleDateString(),
+                time: new Date().toLocaleTimeString()
             });
-            
             return ref.key;
         } catch (error) {
-            console.error('Error saving to history:', error);
+            showToast('Could not save to history. Check your connection.', 'error');
             return null;
         }
     }
-    
+
     // =========================================================================
     // Preview Modal
     // =========================================================================
     function showPreviewModal(htmlContent, historyId) {
-        const existing = document.querySelector('.preview-modal');
-        if (existing) existing.remove();
+        const exist = document.querySelector('.preview-modal');
+        if (exist) exist.remove();
         
         const patient = patientName.value.trim() || 'Patient';
         const dateStr = new Date().toLocaleString();
-        
+        const professionText = professionSelect.options[professionSelect.selectedIndex]?.text || '';
+
         const modalHtml = `
             <div class="preview-modal">
                 <div class="preview-overlay"></div>
@@ -691,22 +819,24 @@ Additional Instructions: ${instructions}
                     </div>
                     <div class="preview-card-body">
                         <div class="preview-info">
-                            <span class="preview-badge">✅ Ready to view</span>
+                            <span class="preview-badge">✅ Generated Successfully</span>
                             <span class="preview-date">${dateStr}</span>
                         </div>
                         <p class="preview-description">
-                            Ward round presentation for <strong>${escapeHtml(patient)}</strong> has been generated successfully.
+                            Ward round presentation for <strong>${escapeHtml(patient)}</strong> 
+                            ${professionText ? `(${escapeHtml(professionText)})` : ''} 
+                            has been generated and saved to your history.
                         </p>
                         <div class="preview-actions">
                             <button class="preview-btn primary" id="viewFullPresentationBtn">
                                 📖 View Full Presentation
                             </button>
                             <button class="preview-btn secondary" id="closePreviewBtn">
-                                Close
+                                ✕ Close
                             </button>
                         </div>
                         <div class="preview-note">
-                            <small>🔒 The full report will open in a new tab with editing and export options.</small>
+                            <small>The full presentation will open in a new tab with editing and export options.</small>
                         </div>
                     </div>
                 </div>
@@ -716,193 +846,209 @@ Additional Instructions: ${instructions}
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         const modal = document.querySelector('.preview-modal');
         
-        const closeModal = () => modal.remove();
+        const close = () => {
+            modal.style.opacity = '0';
+            modal.style.transition = 'opacity 0.2s ease';
+            setTimeout(() => modal.remove(), 200);
+        };
         
-        modal.querySelector('.preview-close').addEventListener('click', closeModal);
-        modal.querySelector('#closePreviewBtn').addEventListener('click', closeModal);
-        modal.querySelector('.preview-overlay').addEventListener('click', closeModal);
+        modal.querySelector('.preview-close').addEventListener('click', close);
+        modal.querySelector('#closePreviewBtn').addEventListener('click', close);
+        modal.querySelector('.preview-overlay').addEventListener('click', close);
         
         modal.querySelector('#viewFullPresentationBtn').addEventListener('click', () => {
             if (historyId) {
                 window.open(`caseresult.html?id=${historyId}`, '_blank');
-                closeModal();
+                close();
             } else {
-                showToast('Error: Presentation ID not found', 'error');
+                showToast('Presentation ID missing', 'error');
+            }
+        });
+        
+        document.addEventListener('keydown', function escHandler(e) {
+            if (e.key === 'Escape') { 
+                close(); 
+                document.removeEventListener('keydown', escHandler); 
             }
         });
     }
-    
+
     // =========================================================================
-    // Generate Handler (with button loading state)
+    // Generate button handler
     // =========================================================================
     generateBtn.addEventListener('click', async () => {
+        // Validation
         if (!currentUser) {
-            showToast('Please login to generate presentation', 'error');
-            const loginBtn = document.getElementById('loginBtn');
-            if (loginBtn) loginBtn.click();
+            showToast('Please log in first', 'error');
+            document.getElementById('loginBtn')?.click();
             return;
         }
         
-        // Validate required fields
-        if (!patientName.value.trim()) {
-            showToast('Please enter patient name', 'error');
-            return;
-        }
-        if (!professionSelect.value) {
-            showToast('Please select your profession', 'error');
-            return;
+        if (!patientName.value.trim()) { 
+            showToast('Please enter the patient\'s name', 'error'); 
+            patientName.focus(); 
+            return; 
         }
         
-        const originalText = generateBtn.innerHTML;
+        if (!professionSelect.value) { 
+            showToast('Please select your profession', 'error'); 
+            professionSelect.focus(); 
+            return; 
+        }
+        
+        if (!textInput.value.trim() && attachments.length === 0) {
+            showToast('Enter some notes or attach files', 'error');
+            textInput.focus();
+            return;
+        }
+
+        // Check if any image is still undergoing OCR
+        const ocrPending = attachments.some(a => a.type === 'image' && a.ocrProcessing);
+        if (ocrPending) {
+            showToast('Still extracting text from images. Please wait a moment.', 'info', 3000);
+            return;
+        }
+
+        const origHTML = generateBtn.innerHTML;
         generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
-        
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Presentation…';
+
         try {
+            const start = Date.now();
             const rawMarkdown = await generatePresentation();
             const htmlContent = marked.parse(rawMarkdown);
-            
             const historyId = await saveToHistory(rawMarkdown, htmlContent);
             currentHistoryIdInput.value = historyId || '';
-            
-            // Clear saved progress since presentation is complete
             localStorage.removeItem(STORAGE_KEY);
-            
             showPreviewModal(htmlContent, historyId);
-            showToast('Presentation generated successfully!', 'success');
-            
+            const secs = ((Date.now() - start) / 1000).toFixed(1);
+            showToast(`Presentation generated in ${secs}s`, 'success');
         } catch (err) {
-            console.error('Generation error:', err);
-            let errorMsg = err.message;
-            if (errorMsg.includes('token') || errorMsg.includes('API') || errorMsg.includes('DeepSeek')) {
-                errorMsg = 'AI service temporarily unavailable. Please check your DeepSeek API key or try again.';
-            }
-            showToast('Generation failed: ' + errorMsg, 'error');
+            console.error('[GENERATE] Error:', err);
+            
+            let msg = err.message;
+            if (msg.includes('API key') || msg.includes('token') || msg.includes('not set up'))
+                msg = 'The AI service is not configured correctly. Please contact support.';
+            else if (msg.toLowerCase().includes('rate'))
+                msg = 'Too many requests. Please wait a moment and try again.';
+            else if (msg.includes('busy') || msg.includes('503'))
+                msg = 'The service is temporarily busy. Please try again in a few minutes.';
+            else if (msg.includes('network') || msg.includes('fetch'))
+                msg = 'Network error. Please check your internet connection.';
+            
+            showToast(`Error: ${msg}`, 'error', 5000);
         } finally {
             generateBtn.disabled = false;
-            generateBtn.innerHTML = originalText;
+            generateBtn.innerHTML = origHTML;
             validateForm();
         }
     });
-    
+
     // =========================================================================
-    // History Drawer with Delete Functionality
+    // History drawer
     // =========================================================================
+    let allHistoryEntries = [];
+
     async function deleteHistoryItem(key, event) {
         event.stopPropagation();
-        
-        if (!currentUser) {
-            showToast('Please login to delete history', 'error');
-            return;
-        }
-        
-        if (!confirm('Are you sure you want to delete this presentation from history?')) {
-            return;
-        }
-        
+        if (!currentUser) return showToast('Log in to manage history', 'error');
+        if (!confirm('Permanently delete this presentation?')) return;
         try {
-            // Delete from user's history
             await database.ref(`users/${currentUser.uid}/caseHistory/${key}`).remove();
-            
-            // Also delete from public if it exists
-            await database.ref(`publicAnalysis/${key}`).remove();
-            
-            showToast('Presentation deleted from history', 'success');
-            
-            // Reload history
+            try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) { }
+            showToast('Deleted', 'success');
             loadHistory();
         } catch (error) {
-            console.error('Delete error:', error);
-            showToast('Failed to delete presentation', 'error');
+            showToast('Failed to delete. Try again.', 'error');
         }
     }
-    
+
     function renderHistory(entries) {
+        if (!historyList) return;
         historyList.innerHTML = '';
         if (!entries.length) {
-            historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No history found</p></div>';
+            historyList.innerHTML = `
+                <div class="empty-state">
+                    <i class="bx bx-folder-open"></i>
+                    <p>No presentation history found</p>
+                    <small>Generate your first presentation to see it here</small>
+                </div>
+            `;
             return;
         }
-        
         entries.forEach(([key, item]) => {
             const div = document.createElement('div');
             div.className = 'history-item';
             div.innerHTML = `
-                <div class="history-info" style="flex: 1;">
-                    <span class="history-name">${escapeHtml(item.patientName || 'Patient')} - ${escapeHtml(item.documentType || 'Presentation')}</span>
+                <div class="history-info" style="flex:1;">
+                    <span class="history-name">${escapeHtml(item.patientName || 'Unknown Patient')}</span>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(item.documentType || 'Presentation')}</span>
                     <div class="history-meta">
-                        <span>${escapeHtml(item.date || '')}</span>
-                        <span>${escapeHtml(item.profession || '')}</span>
+                        <span><i class="far fa-calendar-alt"></i> ${escapeHtml(item.date || '')}</span>
+                        <span><i class="far fa-clock"></i> ${escapeHtml(item.time || '')}</span>
+                        ${item.profession ? `<span><i class="fas fa-user-md"></i> ${escapeHtml(item.profession)}</span>` : ''}
                     </div>
                 </div>
-                <div class="history-actions" style="display: flex; gap: 8px;">
-                    
-                    <button class="delete-btn" data-key="${key}" title="Delete Presentation" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.2rem; padding: 5px; border-radius: 50%; transition: all 0.2s;">
-                        <i class="bx bx-trash"></i>
+                <div class="history-actions">
+                    <button class="delete-btn" data-key="${key}" title="Delete Presentation" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.1rem; padding: 6px; border-radius: 50%; transition: all 0.2s;">
+                        <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
             `;
             
+            const deleteBtn = div.querySelector('.delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => deleteHistoryItem(key, e));
+            }
             
-            
-            // Delete button handler
-            div.querySelector('.delete-btn').addEventListener('click', (e) => {
-                deleteHistoryItem(key, e);
-            });
-            
-            // Click on the item itself (except buttons)
             div.addEventListener('click', (e) => {
-                if (!e.target.closest('button')) {
-                    window.open(`caseresult.html?id=${key}`, '_blank');
-                }
+                if (!e.target.closest('button')) window.open(`caseresult.html?id=${key}`, '_blank');
             });
             
             historyList.appendChild(div);
         });
     }
-    
+
     function filterHistory(term) {
-        const searchTerm = term.toLowerCase().trim();
-        if (!searchTerm) {
-            renderHistory(allHistoryEntries);
-            return;
+        const s = term.toLowerCase().trim();
+        if (!s) renderHistory(allHistoryEntries);
+        else {
+            const filtered = allHistoryEntries.filter(([_, item]) =>
+                (item.patientName || '').toLowerCase().includes(s) ||
+                (item.profession || '').toLowerCase().includes(s) ||
+                (item.diagnosis || '').toLowerCase().includes(s) ||
+                (item.documentType || '').toLowerCase().includes(s)
+            );
+            renderHistory(filtered);
         }
-        const filtered = allHistoryEntries.filter(([_, item]) => 
-            (item.patientName || '').toLowerCase().includes(searchTerm) ||
-            (item.profession || '').toLowerCase().includes(searchTerm) ||
-            (item.diagnosis || '').toLowerCase().includes(searchTerm)
-        );
-        renderHistory(filtered);
     }
-    
+
     function loadHistory() {
         if (!currentUser) return;
-        
         database.ref(`users/${currentUser.uid}/caseHistory`)
             .orderByChild('timestamp')
             .on('value', snapshot => {
                 const data = snapshot.val();
-                if (!data) {
-                    allHistoryEntries = [];
-                    renderHistory([]);
-                    return;
-                }
-                
-                const entries = Object.entries(data)
+                if (!data) { allHistoryEntries = []; renderHistory([]); return; }
+                allHistoryEntries = Object.entries(data)
                     .filter(([_, item]) => item.contentType === 'presentation')
-                    .sort((a, b) => b[1].timestamp - a[1].timestamp);
-                
-                allHistoryEntries = entries;
+                    .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
                 filterHistory(historySearchInput?.value || '');
+            }, error => {
+                console.error('History load error:', error);
+                allHistoryEntries = [];
+                renderHistory([]);
             });
     }
-    
+
+    // History drawer controls
     if (historyNavBtn) {
         historyNavBtn.addEventListener('click', () => {
-            if (!currentUser) {
-                showToast('Please login to view history', 'error');
+            if (!currentUser) { 
+                showToast('Please log in to view history', 'error'); 
                 const loginBtn = document.getElementById('loginBtn');
                 if (loginBtn) loginBtn.click();
-                return;
+                return; 
             }
             historyDrawer.classList.add('active');
             loadHistory();
@@ -910,66 +1056,65 @@ Additional Instructions: ${instructions}
     }
     
     if (closeDrawerBtn) {
-        closeDrawerBtn.addEventListener('click', () => {
-            historyDrawer.classList.remove('active');
-        });
+        closeDrawerBtn.addEventListener('click', () => historyDrawer.classList.remove('active'));
     }
     
-    if (historySearchInput) {
-        historySearchInput.addEventListener('input', e => filterHistory(e.target.value));
-    }
-    
-    // Close drawer on outside click
-    document.addEventListener('click', (e) => {
-        if (historyDrawer && historyDrawer.classList.contains('active') &&
+    document.addEventListener('click', e => {
+        if (historyDrawer?.classList.contains('active') && 
             !historyDrawer.contains(e.target) &&
-            e.target !== historyNavBtn &&
+            e.target !== historyNavBtn && 
             !historyNavBtn?.contains(e.target)) {
             historyDrawer.classList.remove('active');
         }
     });
     
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && historyDrawer && historyDrawer.classList.contains('active')) {
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && historyDrawer?.classList.contains('active')) {
             historyDrawer.classList.remove('active');
         }
     });
     
+    if (historySearchInput) {
+        historySearchInput.addEventListener('input', e => filterHistory(e.target.value));
+    }
+
     // =========================================================================
-    // Auth & Init
+    // Auth & initialization
     // =========================================================================
     firebase.auth().onAuthStateChanged(user => {
         currentUser = user;
-        if (user) {
-            console.log('User logged in:', user.email);
-            if (historyNavBtn) historyNavBtn.style.display = 'block';
-            loadHistory();
-        } else {
-            console.log('User logged out');
-            if (historyNavBtn) historyNavBtn.style.display = 'none';
+        if (user) { 
+            console.log('[AUTH] User logged in:', user.email);
+            historyNavBtn.style.display = 'block'; 
+            loadHistory(); 
+        } else { 
+            console.log('[AUTH] User logged out');
+            historyNavBtn.style.display = 'none'; 
         }
         validateForm();
     });
-    
-    // Initialize
-    await fetchTokens();
-    updateWordCount();
-    validateForm();
-    
-    // Load saved progress (auto-save) - wait for DOM to be fully ready
-    setTimeout(async () => {
-        const restored = await loadProgress();
-        if (!restored) {
-            console.log('No saved session found');
-        }
+
+    // Initialize app
+    async function initialize() {
+        console.log('[INIT] Starting Presentation Assistant...');
         
-        // Ensure custom outline hint is properly initialized
-        const selectedOutline = document.querySelector('input[name="outline"]:checked');
-        if (selectedOutline && selectedOutline.value === 'custom') {
-            customOutline.style.display = 'block';
-            if (customOutlineHint) customOutlineHint.style.display = 'flex';
-        }
-    }, 100);
-    
-    console.log('Presentation Assistant initialized with DeepSeek API');
+        await fetchTokens();
+        updateWordCount();
+        validateForm();
+        
+        setTimeout(async () => { 
+            const restored = await loadProgress();
+            if (!restored) console.log('[INIT] Fresh session started');
+            
+            const selectedRadio = document.querySelector('input[name="outline"]:checked');
+            if (selectedRadio?.value === 'custom') {
+                customOutline.style.display = 'block';
+                if (customOutlineHint) customOutlineHint.style.display = 'flex';
+            }
+        }, 100);
+        
+        console.log('[INIT] Presentation Assistant ready (DOCX, OCR, text‑only DeepSeek)');
+    }
+
+    initialize();
 });
