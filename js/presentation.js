@@ -1,4 +1,4 @@
-// js/presentation.js – Multi‑file, Camera, DOCX support, Image‑to‑Text (OCR), Friendly Errors
+// js/presentation.js – Multi‑mode (Presentation/Report/Documentation), Multi‑file, Camera, DOCX, OCR
 
 // Marked configuration
 if (typeof marked !== 'undefined') {
@@ -38,14 +38,35 @@ document.addEventListener('DOMContentLoaded', async () => {
     const patientDiagnosis = document.getElementById('patientDiagnosis');
     const professionSelect = document.getElementById('professionSelect');
 
-    // Outline
-    const outlineRadios = document.querySelectorAll('input[name="outline"]');
-    const customOutline = document.getElementById('customOutline');
-    const customOutlineHint = document.getElementById('customOutlineHint');
+    // Mode tabs
+    const modeTabs = document.querySelectorAll('.mode-tab');
+    
+    // Config sections (mode-dependent)
+    const configSections = document.querySelectorAll('.config-mode-section');
+    
+    // Outline radio groups for each mode
+    const outlineRadiosPresentation = document.querySelectorAll('input[name="outlinePresentation"]');
+    const outlineRadiosReport = document.querySelectorAll('input[name="outlineReport"]');
+    const outlineRadiosDocumentation = document.querySelectorAll('input[name="outlineDocumentation"]');
+    
+    // Custom outline textareas and hints for each mode
+    const customOutlinePresentation = document.getElementById('customOutlinePresentation');
+    const customOutlineHintPresentation = document.getElementById('customOutlineHintPresentation');
+    const customOutlineReport = document.getElementById('customOutlineReport');
+    const customOutlineHintReport = document.getElementById('customOutlineHintReport');
+    const customOutlineDocumentation = document.getElementById('customOutlineDocumentation');
+    const customOutlineHintDocumentation = document.getElementById('customOutlineHintDocumentation');
 
     // Additional
     const additionalInstructions = document.getElementById('additionalInstructions');
     const generateBtn = document.getElementById('generateBtn');
+    const generateBtnText = document.getElementById('generateBtnText');
+
+    // Suggested instruction chips
+    const suggestionChips = document.getElementById('suggestionChips');
+
+    // Output size radios
+    const outputSizeRadios = document.getElementsByName('outputSize');
 
     // Hidden history ID
     const currentHistoryIdInput = document.getElementById('currentHistoryId');
@@ -68,7 +89,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let attachments = [];   // { type, name, textContent?, dataURL?, ocrText?, ocrProcessing?, processing? }
     let isRestoring = false;
     let saveTimeout = null;
-    const STORAGE_KEY = 'rehab_presentation_state_v2';
+    let currentMode = 'presentation'; // 'presentation' | 'report' | 'documentation'
+    const STORAGE_KEY = 'rehab_presentation_state_v3';
 
     const database = firebase.database();
 
@@ -123,6 +145,62 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =========================================================================
+    // Mode Switching
+    // =========================================================================
+    function switchMode(mode) {
+        if (mode === currentMode) return;
+        
+        currentMode = mode;
+        
+        // Update active tab styling
+        modeTabs.forEach(t => {
+            t.classList.toggle('active', t.dataset.mode === mode);
+        });
+        
+        // Show/hide config sections
+        configSections.forEach(section => {
+            section.style.display = section.dataset.mode === mode ? 'block' : 'none';
+        });
+        
+        // Update generate button text
+        const buttonLabels = {
+            presentation: 'Generate Presentation',
+            report: 'Generate Report',
+            documentation: 'Generate Documentation'
+        };
+        if (generateBtnText) {
+            generateBtnText.textContent = buttonLabels[mode] || 'Generate';
+        }
+        
+        // Reset custom outline visibility for the new mode
+        if (mode === 'presentation') {
+            const checked = document.querySelector('input[name="outlinePresentation"]:checked');
+            const isCustom = checked?.value === 'custom';
+            if (customOutlinePresentation) customOutlinePresentation.style.display = isCustom ? 'block' : 'none';
+            if (customOutlineHintPresentation) customOutlineHintPresentation.style.display = isCustom ? 'flex' : 'none';
+        } else if (mode === 'report') {
+            const checked = document.querySelector('input[name="outlineReport"]:checked');
+            const isCustom = checked?.value === 'custom';
+            if (customOutlineReport) customOutlineReport.style.display = isCustom ? 'block' : 'none';
+            if (customOutlineHintReport) customOutlineHintReport.style.display = isCustom ? 'flex' : 'none';
+        } else if (mode === 'documentation') {
+            const checked = document.querySelector('input[name="outlineDocumentation"]:checked');
+            const isCustom = checked?.value === 'custom';
+            if (customOutlineDocumentation) customOutlineDocumentation.style.display = isCustom ? 'block' : 'none';
+            if (customOutlineHintDocumentation) customOutlineHintDocumentation.style.display = isCustom ? 'flex' : 'none';
+        }
+        
+        validateForm();
+        saveProgress();
+    }
+
+    modeTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            switchMode(tab.dataset.mode);
+        });
+    });
+
+    // =========================================================================
     // Upload Modal Management
     // =========================================================================
     function openUploadModal() {
@@ -169,6 +247,102 @@ document.addEventListener('DOMContentLoaded', async () => {
             closeUploadModalFn();
         }
     });
+
+    // =========================================================================
+    // Suggestion chips click handler
+    // =========================================================================
+    if (suggestionChips) {
+        suggestionChips.addEventListener('click', (e) => {
+            const chip = e.target.closest('.suggestion-chip');
+            if (!chip) return;
+            const text = chip.dataset.text;
+            if (text && additionalInstructions) {
+                // Toggle active state on chips
+                const wasActive = chip.classList.contains('active');
+                suggestionChips.querySelectorAll('.suggestion-chip').forEach(c => c.classList.remove('active'));
+                
+                if (!wasActive) {
+                    chip.classList.add('active');
+                    additionalInstructions.value = text;
+                } else {
+                    additionalInstructions.value = '';
+                }
+                
+                saveProgress();
+                validateForm();
+                showToast(wasActive ? 'Instruction removed' : 'Instruction added', 'info');
+            }
+        });
+    }
+
+    // =========================================================================
+    // Output size helper
+    // =========================================================================
+    function getSelectedOutputSize() {
+        const selected = document.querySelector('input[name="outputSize"]:checked');
+        return selected ? parseInt(selected.value, 10) : 5000; // default Detailed
+    }
+
+    // =========================================================================
+    // Outline helper functions
+    // =========================================================================
+    function setupOutlineToggle(radios, customTextarea, customHint) {
+        radios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                const isCustom = radio.value === 'custom';
+                if (customTextarea) customTextarea.style.display = isCustom ? 'block' : 'none';
+                if (customHint) customHint.style.display = isCustom ? 'flex' : 'none';
+                saveProgress();
+            });
+        });
+    }
+
+    // Setup outline toggles for all three modes
+    setupOutlineToggle(outlineRadiosPresentation, customOutlinePresentation, customOutlineHintPresentation);
+    setupOutlineToggle(outlineRadiosReport, customOutlineReport, customOutlineHintReport);
+    setupOutlineToggle(outlineRadiosDocumentation, customOutlineDocumentation, customOutlineHintDocumentation);
+
+    function getSelectedOutline() {
+        let selectedRadio;
+        let customText = '';
+        
+        if (currentMode === 'presentation') {
+            selectedRadio = document.querySelector('input[name="outlinePresentation"]:checked');
+            customText = customOutlinePresentation?.value.trim() || '';
+        } else if (currentMode === 'report') {
+            selectedRadio = document.querySelector('input[name="outlineReport"]:checked');
+            customText = customOutlineReport?.value.trim() || '';
+        } else if (currentMode === 'documentation') {
+            selectedRadio = document.querySelector('input[name="outlineDocumentation"]:checked');
+            customText = customOutlineDocumentation?.value.trim() || '';
+        }
+
+        if (!selectedRadio) return 'SOAP format';
+
+        const value = selectedRadio.value;
+        if (value === 'custom') return customText || 'Custom outline';
+
+        // Define template outlines per mode
+        const outlines = {
+            presentation: {
+                soap: 'SOAP format: Subjective (patient report), Objective (findings), Assessment, Plan',
+                full: 'Full assessment: Relevant History, Examination findings, Functional status, Recommendations',
+                quick: 'Quick update: Key changes since last review, Current status, Next steps'
+            },
+            report: {
+                progress: 'Progress Note structure: Interval history, Current status, Plan for next period',
+                discharge: 'Discharge Summary structure: Admission diagnosis, Course, Condition at discharge, Follow‑up plan',
+                consult: 'Consultation Note structure: Reason for consult, History, Findings, Recommendations'
+            },
+            documentation: {
+                soap: 'SOAP note: Subjective, Objective, Assessment, Plan',
+                admission: 'Admission note: History of present illness, Review of systems, Physical exam, Impression, Plan',
+                daily: 'Daily progress note: Events, Vitals, Physical exam, Lab results, Plan'
+            }
+        };
+
+        return outlines[currentMode]?.[value] || 'Standard clinical note structure';
+    }
 
     // =========================================================================
     // Attachment rendering and file processing (DOCX, OCR)
@@ -277,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // OCR on a data URL image, returns extracted text (or empty string)
+    // OCR on a data URL image
     async function runOCR(dataURL) {
         try {
             const Tesseract = await loadTesseract();
@@ -291,7 +465,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return result.data.text.trim();
         } catch (err) {
             console.warn('OCR failed:', err);
-            return ''; // Return empty string, app will use fallback text
+            return '';
         }
     }
 
@@ -401,7 +575,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
         } else if (file.type.startsWith('image/')) {
-            // Image: compress, then OCR in background
             const reader = new FileReader();
             const dataURL = await new Promise(resolve => {
                 reader.onload = e => resolve(e.target.result);
@@ -409,7 +582,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             const compressed = await compressImageIfNeeded(dataURL);
 
-            // Add attachment with OCR placeholder
             const attObj = {
                 type: 'image',
                 name: file.name,
@@ -421,7 +593,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             renderAttachments();
             showToast('Image added, extracting text…', 'info', 2000);
 
-            // Run OCR in background without blocking
             runOCR(compressed)
                 .then(ocrResult => {
                     attachments[idx].ocrText = ocrResult || '';
@@ -512,12 +683,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
             const state = {
-                version: 3,
+                version: 4,
+                mode: currentMode,
                 textContent: textInput.value,
                 attachmentMeta: attachments.map(a => ({
                     type: a.type,
                     name: a.name,
-                    ocrText: a.ocrText || ''  // store OCR text so it persists
+                    ocrText: a.ocrText || ''
                 })),
                 patientName: patientName.value,
                 patientAge: patientAge.value,
@@ -525,15 +697,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 patientMRN: patientMRN.value,
                 patientDiagnosis: patientDiagnosis.value,
                 profession: professionSelect.value,
-                outline: document.querySelector('input[name="outline"]:checked')?.value || 'soap',
-                customOutline: customOutline.value,
+                outlinePresentation: document.querySelector('input[name="outlinePresentation"]:checked')?.value || 'soap',
+                outlineReport: document.querySelector('input[name="outlineReport"]:checked')?.value || 'progress',
+                outlineDocumentation: document.querySelector('input[name="outlineDocumentation"]:checked')?.value || 'soap',
+                customOutlinePresentation: customOutlinePresentation?.value || '',
+                customOutlineReport: customOutlineReport?.value || '',
+                customOutlineDocumentation: customOutlineDocumentation?.value || '',
                 additionalInstructions: additionalInstructions.value,
+                outputSize: document.querySelector('input[name="outputSize"]:checked')?.value || '5000',
                 timestamp: Date.now()
             };
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
                 console.log('Progress saved');
             } catch (e) {
+                // If storage is full, try without attachment data
                 const { attachmentMeta, ...rest } = state;
                 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rest)); } catch (e2) { /* ignore */ }
             }
@@ -546,6 +724,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             isRestoring = true;
             const state = JSON.parse(saved);
+            
+            // Restore mode first
+            if (state.mode && state.mode !== currentMode) {
+                switchMode(state.mode);
+            }
+            
             if (state.textContent) {
                 textInput.value = state.textContent;
                 updateWordCount();
@@ -568,18 +752,53 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (state.patientMRN) patientMRN.value = state.patientMRN;
             if (state.patientDiagnosis) patientDiagnosis.value = state.patientDiagnosis;
             if (state.profession) professionSelect.value = state.profession;
-            if (state.outline) {
-                const radio = document.querySelector(`input[name="outline"][value="${state.outline}"]`);
+            
+            // Restore presentation outline
+            if (state.outlinePresentation) {
+                const radio = document.querySelector(`input[name="outlinePresentation"][value="${state.outlinePresentation}"]`);
                 if (radio) {
                     radio.checked = true;
-                    if (state.outline === 'custom') {
-                        customOutline.style.display = 'block';
-                        if (customOutlineHint) customOutlineHint.style.display = 'flex';
+                    if (state.outlinePresentation === 'custom') {
+                        if (customOutlinePresentation) customOutlinePresentation.style.display = 'block';
+                        if (customOutlineHintPresentation) customOutlineHintPresentation.style.display = 'flex';
                     }
                 }
             }
-            if (state.customOutline) customOutline.value = state.customOutline;
+            
+            // Restore report outline
+            if (state.outlineReport) {
+                const radio = document.querySelector(`input[name="outlineReport"][value="${state.outlineReport}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    if (state.outlineReport === 'custom') {
+                        if (customOutlineReport) customOutlineReport.style.display = 'block';
+                        if (customOutlineHintReport) customOutlineHintReport.style.display = 'flex';
+                    }
+                }
+            }
+            
+            // Restore documentation outline
+            if (state.outlineDocumentation) {
+                const radio = document.querySelector(`input[name="outlineDocumentation"][value="${state.outlineDocumentation}"]`);
+                if (radio) {
+                    radio.checked = true;
+                    if (state.outlineDocumentation === 'custom') {
+                        if (customOutlineDocumentation) customOutlineDocumentation.style.display = 'block';
+                        if (customOutlineHintDocumentation) customOutlineHintDocumentation.style.display = 'flex';
+                    }
+                }
+            }
+            
+            if (state.customOutlinePresentation) customOutlinePresentation.value = state.customOutlinePresentation;
+            if (state.customOutlineReport) customOutlineReport.value = state.customOutlineReport;
+            if (state.customOutlineDocumentation) customOutlineDocumentation.value = state.customOutlineDocumentation;
             if (state.additionalInstructions) additionalInstructions.value = state.additionalInstructions;
+            
+            if (state.outputSize) {
+                const sizeRadio = document.querySelector(`input[name="outputSize"][value="${state.outputSize}"]`);
+                if (sizeRadio) sizeRadio.checked = true;
+            }
+            
             validateForm();
             isRestoring = false;
             return true;
@@ -591,21 +810,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Attach save triggers to form elements
-    [textInput, patientName, patientAge, patientMRN, patientDiagnosis, customOutline, additionalInstructions]
+    [textInput, patientName, patientAge, patientMRN, patientDiagnosis, additionalInstructions,
+     customOutlinePresentation, customOutlineReport, customOutlineDocumentation]
         .forEach(el => el?.addEventListener('input', saveProgress));
+    
     patientGender?.addEventListener('change', saveProgress);
     professionSelect?.addEventListener('change', saveProgress);
-    outlineRadios.forEach(r => r.addEventListener('change', saveProgress));
-
-    // Outline custom toggle
-    outlineRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            const isCustom = radio.value === 'custom';
-            customOutline.style.display = isCustom ? 'block' : 'none';
-            if (customOutlineHint) customOutlineHint.style.display = isCustom ? 'flex' : 'none';
-            saveProgress();
-        });
+    
+    // Save on outline radio changes for all modes
+    [outlineRadiosPresentation, outlineRadiosReport, outlineRadiosDocumentation].forEach(group => {
+        group.forEach(r => r.addEventListener('change', saveProgress));
     });
+    
+    // Save output size selection
+    if (outputSizeRadios.length) {
+        outputSizeRadios.forEach(r => r.addEventListener('change', saveProgress));
+    }
 
     // Additional form validation triggers
     [patientName, patientAge, patientDiagnosis].forEach(el => el?.addEventListener('input', validateForm));
@@ -613,30 +833,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     professionSelect?.addEventListener('change', validateForm);
 
     // =========================================================================
-    // AI Generation – *NO* direct vision API; uses OCR text instead
+    // AI Generation – Mode‑adaptive prompts
     // =========================================================================
-    function getSelectedOutline() {
-        const selected = document.querySelector('input[name="outline"]:checked')?.value || 'soap';
-        if (selected === 'custom') return customOutline.value.trim() || 'Custom outline';
-        const outlines = {
-            soap: 'SOAP format: Subjective (patient report), Objective (findings), Assessment, Plan',
-            full: 'Full assessment: Relevant History, Examination findings, Functional status, Recommendations',
-            quick: 'Quick update: Key changes since last review, Current status, Next steps'
-        };
-        return outlines[selected] || outlines.soap;
-    }
-
     async function generatePresentation() {
-        // Ensure we have API token
         if (!aiConfig.token) {
             const ok = await fetchTokens();
             if (!ok) throw new Error('The AI service is not set up. Please contact support.');
         }
 
-        // 1) Gather text from the editor
+        // Gather text from the editor
         let combinedText = textInput.value.trim();
 
-        // 2) Append text from documents
+        // Append text from documents
         const docTexts = attachments
             .filter(a => a.type === 'document' && a.textContent)
             .map(a => a.textContent)
@@ -645,7 +853,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             combinedText += (combinedText ? '\n\n--- Document Content ---\n\n' : '') + docTexts;
         }
 
-        // 3) Append OCR text from images
+        // Append OCR text from images
         const imageOcrTexts = attachments
             .filter(a => a.type === 'image' && a.ocrText)
             .map(a => a.ocrText)
@@ -654,9 +862,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             combinedText += (combinedText ? '\n\n--- Text Extracted from Images ---\n\n' : '') + imageOcrTexts;
         }
 
-        // If no text at all, throw error (should not happen because validation requires content)
         if (!combinedText && attachments.length === 0) {
-            throw new Error('No content to generate presentation from.');
+            throw new Error('No content to generate from.');
         }
 
         const patientInfo = {
@@ -669,10 +876,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         const profession = professionSelect.options[professionSelect.selectedIndex]?.text || 'Healthcare Professional';
         const outline = getSelectedOutline();
         const instructions = additionalInstructions.value.trim() || 'None provided';
+        const maxTokens = getSelectedOutputSize();
 
-        const systemPrompt = `You are an expert clinical presentation assistant helping a ${profession} prepare a comprehensive ward round presentation.
+        // Mode-specific labels and descriptions
+        const modeLabels = {
+            presentation: 'Ward Round Case Presentation',
+            report: 'Clinical Report',
+            documentation: 'Clinical Documentation'
+        };
+        const modeText = modeLabels[currentMode] || 'Clinical Document';
+        
+        const modeContext = {
+            presentation: 'a multidisciplinary team ward round meeting',
+            report: 'a formal clinical report for the medical record',
+            documentation: 'clinical documentation for the patient chart'
+        };
+        const contextText = modeContext[currentMode] || 'clinical review';
 
-Your task is to create a **thorough, detailed, and professional** presentation that demonstrates deep clinical reasoning and provides actionable insights.
+        const systemPrompt = `You are an expert clinical assistant helping a ${profession} prepare a comprehensive **${modeText}**.
+
+Your task is to create a **thorough, detailed, and professional** ${modeText.toLowerCase()} that demonstrates deep clinical reasoning and provides actionable insights, appropriate for ${contextText}.
 
 **CRITICAL INSTRUCTIONS:**
 
@@ -683,18 +906,18 @@ Your task is to create a **thorough, detailed, and professional** presentation t
    - Include **specific clinical details**, measurements, observations, and findings
    - Provide **clear clinical reasoning** for assessments and decisions
    - Give **actionable, specific recommendations** with rationale
-   - The total output should be **at least 400-500 words** (longer if data permits)
+   - The total output should be appropriate for the token limit provided
 
 3. **Format requirements:**
    - Use markdown headings: ## for main sections, ### for subsections
    - Use bullet points (-) for lists
    - Use **bold** for emphasis on key findings or critical items
-   - Use professional clinical language
+   - Use professional clinical language appropriate for ${currentMode === 'documentation' ? 'medical records' : currentMode === 'report' ? 'formal reports' : 'multidisciplinary presentations'}
    - Do NOT use tables
    - Maintain clear section separation
 
 4. **Quality standards:**
-   - Write at the level expected for a professional multidisciplinary team meeting
+   - Write at the level expected for ${contextText}
    - Include relevant functional assessments (mobility, ADLs, cognition, communication, etc.)
    - Consider holistic patient needs (physical, psychological, social)
    - Reference evidence-based practice where appropriate
@@ -703,9 +926,11 @@ Your task is to create a **thorough, detailed, and professional** presentation t
 
 5. **Tone:** Professional, objective, and patient-centered. Be specific rather than vague.
 
-Make this presentation worthy of a senior clinician's review.`;
+Make this **${modeText}** worthy of a senior clinician's review.`;
 
-        let userContent = `**PATIENT INFORMATION:**
+        let userContent = `**TASK:** Create a ${modeText.toLowerCase()} for the following patient.
+
+**PATIENT INFORMATION:**
 - Name: ${patientInfo.name}
 - Age: ${patientInfo.age}
 - Gender: ${patientInfo.gender}
@@ -721,16 +946,15 @@ ${combinedText || 'No clinical notes provided.'}
 
 ---
 
-Please create a detailed, comprehensive ward round presentation based on the above information. Ensure each section contains thorough clinical detail and actionable recommendations.`;
+Please create a detailed ${modeText.toLowerCase()} based on the above information. Ensure each section contains thorough clinical detail and actionable recommendations.`;
 
-        // Always use text-only messages – no image_url parts
         const messages = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent }
         ];
 
         console.log('[AI] Sending request to DeepSeek API...');
-        console.log('[AI] Text length:', combinedText.length, 'characters');
+        console.log('[AI] Mode:', currentMode, '| Text length:', combinedText.length, 'chars | Max tokens:', maxTokens);
 
         const url = `${aiConfig.endpoint}/chat/completions`;
         const response = await fetch(url, {
@@ -742,7 +966,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
             body: JSON.stringify({
                 model: aiConfig.model,
                 messages,
-                max_tokens: 6000,
+                max_tokens: maxTokens,
                 temperature: 0.3,
                 top_p: 0.9
             })
@@ -772,11 +996,19 @@ Please create a detailed, comprehensive ward round presentation based on the abo
 
     async function saveToHistory(rawMarkdown, htmlContent) {
         if (!currentUser) return null;
+        
+        const modeLabels = {
+            presentation: 'Case Presentation',
+            report: 'Clinical Report',
+            documentation: 'Documentation'
+        };
+        const docType = modeLabels[currentMode] || 'Clinical Document';
+        
         try {
             const ref = await database.ref(`users/${currentUser.uid}/caseHistory`).push({
-                contentType: 'presentation',
-                fileName: `Presentation - ${patientName.value || 'Patient'}`,
-                documentType: 'Ward Round',
+                contentType: currentMode,
+                fileName: `${docType} - ${patientName.value || 'Patient'}`,
+                documentType: docType,
                 patientName: patientName.value.trim(),
                 patientAge: patientAge.value,
                 patientGender: patientGender.value,
@@ -786,6 +1018,8 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                 results: rawMarkdown,
                 resultsMarkdown: rawMarkdown,
                 resultsHtml: htmlContent,
+                outputSize: getSelectedOutputSize(),
+                mode: currentMode,
                 timestamp: firebase.database.ServerValue.TIMESTAMP,
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString()
@@ -807,6 +1041,13 @@ Please create a detailed, comprehensive ward round presentation based on the abo
         const patient = patientName.value.trim() || 'Patient';
         const dateStr = new Date().toLocaleString();
         const professionText = professionSelect.options[professionSelect.selectedIndex]?.text || '';
+        
+        const modeLabels = {
+            presentation: 'Presentation',
+            report: 'Report',
+            documentation: 'Documentation'
+        };
+        const modeLabel = modeLabels[currentMode] || 'Document';
 
         const modalHtml = `
             <div class="preview-modal">
@@ -814,7 +1055,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                 <div class="preview-card">
                     <div class="preview-card-header">
                         <div class="preview-icon">📋</div>
-                        <h3>Presentation Ready</h3>
+                        <h3>${modeLabel} Ready</h3>
                         <button class="preview-close">&times;</button>
                     </div>
                     <div class="preview-card-body">
@@ -823,20 +1064,20 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                             <span class="preview-date">${dateStr}</span>
                         </div>
                         <p class="preview-description">
-                            Ward round presentation for <strong>${escapeHtml(patient)}</strong> 
+                            ${modeLabel} for <strong>${escapeHtml(patient)}</strong> 
                             ${professionText ? `(${escapeHtml(professionText)})` : ''} 
                             has been generated and saved to your history.
                         </p>
                         <div class="preview-actions">
                             <button class="preview-btn primary" id="viewFullPresentationBtn">
-                                📖 View Full Presentation
+                                📖 View Full ${modeLabel}
                             </button>
                             <button class="preview-btn secondary" id="closePreviewBtn">
                                 ✕ Close
                             </button>
                         </div>
                         <div class="preview-note">
-                            <small>The full presentation will open in a new tab with editing and export options.</small>
+                            <small>The full ${modeLabel.toLowerCase()} will open in a new tab with editing and export options.</small>
                         </div>
                     </div>
                 </div>
@@ -861,7 +1102,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                 window.open(`caseresult.html?id=${historyId}`, '_blank');
                 close();
             } else {
-                showToast('Presentation ID missing', 'error');
+                showToast('Document ID missing', 'error');
             }
         });
         
@@ -877,7 +1118,6 @@ Please create a detailed, comprehensive ward round presentation based on the abo
     // Generate button handler
     // =========================================================================
     generateBtn.addEventListener('click', async () => {
-        // Validation
         if (!currentUser) {
             showToast('Please log in first', 'error');
             document.getElementById('loginBtn')?.click();
@@ -902,7 +1142,6 @@ Please create a detailed, comprehensive ward round presentation based on the abo
             return;
         }
 
-        // Check if any image is still undergoing OCR
         const ocrPending = attachments.some(a => a.type === 'image' && a.ocrProcessing);
         if (ocrPending) {
             showToast('Still extracting text from images. Please wait a moment.', 'info', 3000);
@@ -911,7 +1150,13 @@ Please create a detailed, comprehensive ward round presentation based on the abo
 
         const origHTML = generateBtn.innerHTML;
         generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Presentation…';
+        
+        const loadingLabels = {
+            presentation: 'Generating Presentation…',
+            report: 'Generating Report…',
+            documentation: 'Generating Documentation…'
+        };
+        generateBtn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${loadingLabels[currentMode] || 'Generating…'}`;
 
         try {
             const start = Date.now();
@@ -922,7 +1167,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
             localStorage.removeItem(STORAGE_KEY);
             showPreviewModal(htmlContent, historyId);
             const secs = ((Date.now() - start) / 1000).toFixed(1);
-            showToast(`Presentation generated in ${secs}s`, 'success');
+            showToast(`Generated in ${secs}s`, 'success');
         } catch (err) {
             console.error('[GENERATE] Error:', err);
             
@@ -952,7 +1197,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
     async function deleteHistoryItem(key, event) {
         event.stopPropagation();
         if (!currentUser) return showToast('Log in to manage history', 'error');
-        if (!confirm('Permanently delete this presentation?')) return;
+        if (!confirm('Permanently delete this document?')) return;
         try {
             await database.ref(`users/${currentUser.uid}/caseHistory/${key}`).remove();
             try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) { }
@@ -970,8 +1215,8 @@ Please create a detailed, comprehensive ward round presentation based on the abo
             historyList.innerHTML = `
                 <div class="empty-state">
                     <i class="bx bx-folder-open"></i>
-                    <p>No presentation history found</p>
-                    <small>Generate your first presentation to see it here</small>
+                    <p>No document history found</p>
+                    <small>Generate your first document to see it here</small>
                 </div>
             `;
             return;
@@ -979,10 +1224,14 @@ Please create a detailed, comprehensive ward round presentation based on the abo
         entries.forEach(([key, item]) => {
             const div = document.createElement('div');
             div.className = 'history-item';
+            
+            const modeLabel = item.mode === 'report' ? 'Report' : 
+                             item.mode === 'documentation' ? 'Documentation' : 'Presentation';
+            
             div.innerHTML = `
                 <div class="history-info" style="flex:1;">
                     <span class="history-name">${escapeHtml(item.patientName || 'Unknown Patient')}</span>
-                    <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(item.documentType || 'Presentation')}</span>
+                    <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(modeLabel)}</span>
                     <div class="history-meta">
                         <span><i class="far fa-calendar-alt"></i> ${escapeHtml(item.date || '')}</span>
                         <span><i class="far fa-clock"></i> ${escapeHtml(item.time || '')}</span>
@@ -990,7 +1239,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                     </div>
                 </div>
                 <div class="history-actions">
-                    <button class="delete-btn" data-key="${key}" title="Delete Presentation" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.1rem; padding: 6px; border-radius: 50%; transition: all 0.2s;">
+                    <button class="delete-btn" data-key="${key}" title="Delete Document" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.1rem; padding: 6px; border-radius: 50%; transition: all 0.2s;">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
@@ -1017,7 +1266,8 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                 (item.patientName || '').toLowerCase().includes(s) ||
                 (item.profession || '').toLowerCase().includes(s) ||
                 (item.diagnosis || '').toLowerCase().includes(s) ||
-                (item.documentType || '').toLowerCase().includes(s)
+                (item.documentType || '').toLowerCase().includes(s) ||
+                (item.mode || '').toLowerCase().includes(s)
             );
             renderHistory(filtered);
         }
@@ -1031,7 +1281,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
                 const data = snapshot.val();
                 if (!data) { allHistoryEntries = []; renderHistory([]); return; }
                 allHistoryEntries = Object.entries(data)
-                    .filter(([_, item]) => item.contentType === 'presentation')
+                    .filter(([_, item]) => ['presentation', 'report', 'documentation'].includes(item.contentType))
                     .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
                 filterHistory(historySearchInput?.value || '');
             }, error => {
@@ -1096,7 +1346,7 @@ Please create a detailed, comprehensive ward round presentation based on the abo
 
     // Initialize app
     async function initialize() {
-        console.log('[INIT] Starting Presentation Assistant...');
+        console.log('[INIT] Starting Multi‑mode Clinical Assistant...');
         
         await fetchTokens();
         updateWordCount();
@@ -1106,14 +1356,13 @@ Please create a detailed, comprehensive ward round presentation based on the abo
             const restored = await loadProgress();
             if (!restored) console.log('[INIT] Fresh session started');
             
-            const selectedRadio = document.querySelector('input[name="outline"]:checked');
-            if (selectedRadio?.value === 'custom') {
-                customOutline.style.display = 'block';
-                if (customOutlineHint) customOutlineHint.style.display = 'flex';
-            }
+            // Ensure correct mode section visibility after restore
+            configSections.forEach(section => {
+                section.style.display = section.dataset.mode === currentMode ? 'block' : 'none';
+            });
         }, 100);
         
-        console.log('[INIT] Presentation Assistant ready (DOCX, OCR, text‑only DeepSeek)');
+        console.log('[INIT] Multi‑mode assistant ready (Presentation, Report, Documentation)');
     }
 
     initialize();

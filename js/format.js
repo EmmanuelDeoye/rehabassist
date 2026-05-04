@@ -1,5 +1,5 @@
-// js/format.js - Complete Assessment Format Generator with Preview Modal
-// Updated with modal popup similar to standardized page
+// js/format.js - Complete Assessment Format Generator with Subscription Check
+// Updated with modal popup and plan-based history saving
 
 // Global variables
 let githubToken = '';
@@ -8,7 +8,7 @@ let currentUser = null;
 let historyItems = [];
 
 document.addEventListener('DOMContentLoaded', async function() {
-  console.log('Format.js loaded');
+  console.log('Format.js loaded with subscription integration');
   
   // DOM elements - Form
   const form = document.getElementById('assessmentForm');
@@ -206,14 +206,42 @@ document.addEventListener('DOMContentLoaded', async function() {
     return div.innerHTML;
   }
 
-  // ===== PREVIEW MODAL (similar to standardized page) =====
-  function showPreviewModal(html, formData, assessmentId) {
+  // ===== NEW: Check Subscription Plan Access =====
+  async function checkPlanAccess() {
+    if (!currentUser) return false;
+    
+    try {
+      const snap = await database.ref(`users/${currentUser.uid}/subscription/plan`).once('value');
+      const plan = snap.val();
+      
+      // Return true if user has Basic, Pro, or Premium plan
+      // Return false for Free plan or if no subscription exists
+      return plan && plan !== 'free';
+    } catch (error) {
+      console.error('Subscription check error:', error);
+      return false;
+    }
+  }
+
+  // ===== UPDATED: PREVIEW MODAL with subscription notice =====
+  function showPreviewModal(html, formData, assessmentId, hasHistoryAccess) {
     // Remove any existing preview modal
     const existingModal = document.querySelector('.preview-modal');
     if (existingModal) existingModal.remove();
 
     const previewModal = document.createElement('div');
     previewModal.className = 'preview-modal';
+    
+    // Determine the view action based on whether we have an assessment ID
+    const viewAction = assessmentId 
+      ? `window.open('formatresult.html?id=${assessmentId}', '_blank'); document.querySelector('.preview-modal').remove();`
+      : `(function() {
+           const w = window.open('', '_blank');
+           w.document.write(decodeURIComponent('${encodeURIComponent(html)}'));
+           w.document.close();
+           document.querySelector('.preview-modal').remove();
+         })();`;
+
     previewModal.innerHTML = `
       <div class="preview-overlay"></div>
       <div class="preview-card">
@@ -232,15 +260,37 @@ document.addEventListener('DOMContentLoaded', async function() {
             <strong>${escapeHtml(formData.name)}</strong> has been generated successfully.
           </p>
           <div class="preview-actions">
-            <button class="preview-btn primary" id="viewFullAssessmentBtn">
+            <button class="preview-btn primary" id="viewFullAssessmentBtn"
+                    onclick="${viewAction}">
               📖 View Full Assessment
             </button>
             <button class="preview-btn secondary" id="closePreviewBtn">
               Close
             </button>
           </div>
+          ${!hasHistoryAccess ? `
+            <div style="margin-top: 16px; padding: 12px 16px; background: #fff5f5; border: 1px solid #fecaca; border-radius: 12px; display: flex; align-items: flex-start; gap: 10px;">
+              <span style="font-size: 1.2rem; flex-shrink: 0;">⚠️</span>
+              <div>
+                <p style="color: #dc2626; margin: 0 0 4px 0; font-size: 0.85rem; font-weight: 600;">
+                  History Saving Not Available
+                </p>
+                <p style="color: #991b1b; margin: 0; font-size: 0.8rem; line-height: 1.4;">
+                  Assessment history is only saved for <strong>Basic plan</strong> and above. 
+                  <a href="index.html#subscriptionPlans" style="color: #dc2626; font-weight: 600; text-decoration: underline;">Upgrade your plan</a> 
+                  to automatically save, retrieve, and download your assessments anytime.
+                </p>
+              </div>
+            </div>
+          ` : `
+            <div style="margin-top: 16px; padding: 10px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
+              <p style="color: #15803d; margin: 0; font-size: 0.8rem;">
+                ✅ This assessment has been saved to your history.
+              </p>
+            </div>
+          `}
           <div class="preview-note">
-            <small>💡 The assessment will open in a new tab for printing or saving as PDF.</small>
+            <small>💡 The assessment opens in a new tab for printing or saving as PDF.</small>
           </div>
         </div>
       </div>
@@ -259,16 +309,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (closeActionBtn) closeActionBtn.addEventListener('click', closeModal);
     overlay.addEventListener('click', closeModal);
 
-    // View full assessment button
-    const viewBtn = previewModal.querySelector('#viewFullAssessmentBtn');
-    viewBtn.addEventListener('click', () => {
-      if (assessmentId) {
-        window.open(`formatresult.html?id=${assessmentId}`, '_blank');
+    // Escape key to close
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
         closeModal();
-      } else {
-        showToast('Error: Assessment ID not found', true);
+        document.removeEventListener('keydown', escHandler);
       }
-    });
+    };
+    document.addEventListener('keydown', escHandler);
   }
 
   // ===== UPDATED BUILD PROMPT =====
@@ -647,7 +695,7 @@ Return ONLY the HTML.`;
     deleteConfirmModal.classList.add('show');
   };
 
-  // ===== Form Submission =====
+  // ===== UPDATED: Form Submission with Plan Check =====
   
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -728,19 +776,34 @@ Return ONLY the HTML.`;
         throw new Error('Empty response from API');
       }
 
-      // Save to history and get the new ID
-      const newId = await saveToHistory(formData, html);
+      // Store generated HTML for download functions
+      window.currentGeneratedText = html;
+      window.currentFormData = formData;
 
-      // Store the ID for later use
-      if (newId) {
-        window.currentAssessmentId = newId;
-        // Show modal with the assessment ID
-        showPreviewModal(html, formData, newId);
+      let assessmentId = null;
+      let hasHistoryAccess = false;
+
+      if (currentUser) {
+        // Check if user has a paid plan
+        hasHistoryAccess = await checkPlanAccess();
+
+        if (hasHistoryAccess) {
+          // Save to history only for Basic, Pro, or Premium users
+          assessmentId = await saveToHistory(formData, html);
+          if (assessmentId) {
+            window.currentAssessmentId = assessmentId;
+          }
+        } else {
+          // Show toast for free users
+          showToast('Assessment generated! Upgrade to Basic plan to save history.', false, 4000);
+        }
       } else {
-        showToast('Failed to save assessment to history', true);
+        showToast('Assessment generated! Login to save to history.', false, 4000);
       }
+
+      // Show preview modal with appropriate access flag
+      showPreviewModal(html, formData, assessmentId, hasHistoryAccess);
       
-      showToast('Assessment format generated successfully!');
     } catch (error) {
       console.error('Generation error:', error);
       showToast('Failed to generate. Please try again.', true);
@@ -793,13 +856,13 @@ Return ONLY the HTML.`;
 </head>
 <body>
   <div style="text-align: center; margin-bottom: 2rem;">
-    <h1>rehab.ai Assessment</h1>
+    <h1>rehablix Assessment</h1>
     <p>Generated: ${new Date().toLocaleString()}</p>
     <hr>
   </div>
   ${html}
   <hr>
-  <p style="font-size: 0.8rem; color: #666;">Generated by rehab.ai - Intelligent Rehabilitation Tools</p>
+  <p style="font-size: 0.8rem; color: #666;">Generated by rehablix - Intelligent Rehabilitation Tools</p>
 </body>
 </html>`;
     
@@ -844,13 +907,13 @@ Return ONLY the HTML.`;
 </head>
 <body>
   <div style="text-align: center; margin-bottom: 2rem;">
-    <h1>rehab.ai Assessment</h1>
+    <h1>rehablix Assessment</h1>
     <p>Generated: ${new Date().toLocaleString()}</p>
     <hr>
   </div>
   ${html}
   <hr>
-  <p style="font-size: 0.8rem; color: #666;">Generated by rehab.ai - Intelligent Rehabilitation Tools</p>
+  <p style="font-size: 0.8rem; color: #666;">Generated by rehablix - Intelligent Rehabilitation Tools</p>
 </body>
 </html>`;
 
@@ -1007,5 +1070,5 @@ Return ONLY the HTML.`;
     });
   }
 
-  console.log('Format.js fully initialized with preview modal');
+  console.log('Format.js fully initialized with subscription integration');
 });

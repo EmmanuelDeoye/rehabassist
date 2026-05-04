@@ -1,12 +1,12 @@
-// js/caseresult.js - Case Presentation Editor with public/private sharing
+// js/caseresult.js - Case Result Editor (presentation / report / documentation)
 
 // Configure marked for proper rendering
 if (typeof marked !== 'undefined') {
     marked.setOptions({
-        breaks: true,        // Convert \n to <br>
-        gfm: true,          // GitHub Flavored Markdown
-        headerIds: false,   // No header IDs
-        mangle: false       // Don't escape HTML
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
     });
 }
 
@@ -24,6 +24,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     const charCountSpan = document.getElementById('charCount');
     const saveStatusSpan = document.getElementById('saveStatus');
     const toastContainer = document.getElementById('toast-container');
+    const pageModeLabel = document.getElementById('pageModeLabel');
+    
+    // Title element
+    const pageTitle = document.querySelector('head title');
+    const headerTitle = document.querySelector('.case-header-content h1');
     
     // Action Buttons
     const shareBtn = document.getElementById('shareBtn');
@@ -66,9 +71,30 @@ document.addEventListener('DOMContentLoaded', async function() {
     historyId = urlParams.get('id');
     
     if (!historyId) {
-        showToast('No presentation ID provided', 'error');
-        editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> No presentation found. Please generate a presentation first.</div>';
+        showToast('No document ID provided', 'error');
+        editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> No document found. Please generate one first.</div>';
         return;
+    }
+    
+    // =========================================================================
+    // Helper: mode display name
+    // =========================================================================
+    function getModeLabel(mode) {
+        const labels = {
+            presentation: 'Case Presentation',
+            report: 'Clinical Report',
+            documentation: 'Documentation'
+        };
+        return labels[mode] || 'Clinical Document';
+    }
+    
+    function getModeShort(mode) {
+        const shorts = {
+            presentation: 'case presentation',
+            report: 'report',
+            documentation: 'documentation'
+        };
+        return shorts[mode] || 'document';
     }
     
     // =========================================================================
@@ -123,7 +149,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             });
             const editModeSpan = document.getElementById('editMode');
             if (editModeSpan) editModeSpan.textContent = 'Read-only Mode';
-            showToast('📖 You are viewing a shared presentation (read-only)', 'info', 3000);
+            showToast('📖 You are viewing a shared document (read-only)', 'info', 3000);
         } else {
             editor.setAttribute('contenteditable', 'true');
             document.querySelectorAll('.format-btn, .format-select, .action-btn[id="saveEditBtn"]').forEach(el => {
@@ -149,7 +175,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     async function togglePublic(event) {
         const isChecked = event.target.checked;
         if (!currentUser || !historyId || !currentIsOwner) {
-            showToast('You are not the owner of this presentation.', 'error');
+            showToast('You are not the owner of this document.', 'error');
             event.target.checked = !isChecked;
             return;
         }
@@ -171,10 +197,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                     lastEditedDate: new Date().toLocaleString()
                 };
                 await database.ref(`publicAnalysis/${historyId}`).set(publicData);
-                showToast('✅ Presentation is now public. Anyone with the link can view it.', 'success');
+                showToast('✅ Document is now public. Anyone with the link can view it.', 'success');
             } else {
                 await database.ref(`publicAnalysis/${historyId}`).remove();
-                showToast('🔒 Presentation is now private.', 'success');
+                showToast('🔒 Document is now private.', 'success');
             }
             
             if (caseLastEditedSpan) {
@@ -190,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     async function saveToFirebase() {
         if (!currentUser || !historyId || isSaving) return;
         if (!currentIsOwner) {
-            showToast('You cannot edit a shared presentation.', 'error');
+            showToast('You cannot edit a shared document.', 'error');
             return;
         }
         
@@ -244,19 +270,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     function htmlToMarkdown(html) {
         let text = html;
         
-        // Convert headings
         text = text.replace(/<h1>(.*?)<\/h1>/gi, '# $1\n\n');
         text = text.replace(/<h2>(.*?)<\/h2>/gi, '## $1\n\n');
         text = text.replace(/<h3>(.*?)<\/h3>/gi, '### $1\n\n');
         text = text.replace(/<h4>(.*?)<\/h4>/gi, '#### $1\n\n');
         
-        // Convert formatting
         text = text.replace(/<strong>(.*?)<\/strong>/gi, '**$1**');
         text = text.replace(/<b>(.*?)<\/b>/gi, '**$1**');
         text = text.replace(/<em>(.*?)<\/em>/gi, '*$1*');
         text = text.replace(/<i>(.*?)<\/i>/gi, '*$1*');
         
-        // Convert lists
         text = text.replace(/<ul>(.*?)<\/ul>/gis, (match, content) => {
             return content.replace(/<li>(.*?)<\/li>/gi, '- $1\n');
         });
@@ -265,14 +288,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             return content.replace(/<li>(.*?)<\/li>/gi, () => `${i++}. $1\n`);
         });
         
-        // Handle line breaks and paragraphs
         text = text.replace(/<br\s*\/?>/gi, '\n');
         text = text.replace(/<p>(.*?)<\/p>/gi, '$1\n\n');
         
-        // Remove remaining HTML tags
         text = text.replace(/<[^>]*>/g, '');
         
-        // Decode HTML entities
         const textarea = document.createElement('textarea');
         textarea.innerHTML = text;
         text = textarea.value;
@@ -297,7 +317,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateSaveStatus('Editing...');
     }
     
-    // Attach formatting button handlers
     document.querySelectorAll('.format-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -349,7 +368,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             let ownerId = null;
             currentIsOwner = false;
             
-            // First try to load from user's own history
             if (currentUser) {
                 const snapshot = await database.ref(`users/${currentUser.uid}/caseHistory/${historyId}`).once('value');
                 data = snapshot.val();
@@ -360,7 +378,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            // If not found, try public path
             if (!data) {
                 const publicSnapshot = await database.ref(`publicAnalysis/${historyId}`).once('value');
                 data = publicSnapshot.val();
@@ -371,11 +388,21 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
             }
             
-            if (!data || data.contentType !== 'presentation') {
-                throw new Error('Presentation not found or private');
+            // Accept presentation, report, documentation
+            const validTypes = ['presentation', 'report', 'documentation'];
+            if (!data || !validTypes.includes(data.contentType)) {
+                throw new Error('Document not found or is private');
             }
             
             analysisData = data;
+            const mode = data.contentType; // 'presentation', 'report', 'documentation'
+            const modeLabel = getModeLabel(mode);
+            const modeShort = getModeShort(mode);
+            
+            // Update page title & header & nav subtitle
+            if (pageTitle) pageTitle.textContent = `rehablix · ${modeLabel}`;
+            if (headerTitle) headerTitle.textContent = modeLabel;
+            if (pageModeLabel) pageModeLabel.textContent = modeShort;
             
             // Update metadata
             if (casePatientNameSpan) {
@@ -399,40 +426,28 @@ document.addEventListener('DOMContentLoaded', async function() {
                 caseLastEditedSpan.textContent = data.lastEditedDate || data.date || '-';
             }
             
-            // Load content with proper HTML rendering
             let content = '';
             if (data.resultsHtml && data.resultsHtml.trim().length > 0) {
-                // Use pre-parsed HTML
                 content = data.resultsHtml;
-                console.log('Using resultsHtml');
             } else if (data.resultsMarkdown && data.resultsMarkdown.trim().length > 0) {
-                // Parse markdown to HTML
                 content = marked.parse(data.resultsMarkdown);
-                console.log('Parsed resultsMarkdown');
             } else if (data.results && data.results.trim().length > 0) {
-                // Parse raw results to HTML
                 content = marked.parse(data.results);
-                console.log('Parsed results');
             } else {
                 content = '<p>No content available</p>';
             }
             
-            // Set as HTML
             editor.innerHTML = content;
             updateWordAndCharCount();
-            
-            // Set editor mode based on ownership
             setEditorReadOnly(!currentIsOwner);
-            
-            // Update public toggle visibility
             updatePublicToggleVisibility();
             
-            console.log('Presentation loaded successfully');
+            console.log(`${modeLabel} loaded successfully`);
             
         } catch (err) {
             console.error('Load error:', err);
-            showToast('Failed to load presentation: ' + err.message, 'error');
-            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> Error loading presentation. It may be private or does not exist.</div>';
+            showToast('Failed to load document: ' + err.message, 'error');
+            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> Error loading document. It may be private or does not exist.</div>';
         }
     }
     
@@ -441,16 +456,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     // =========================================================================
     editor.addEventListener('input', () => {
         if (!currentIsOwner) return;
-        
         updateWordAndCharCount();
-        
         if (autoSaveTimer) clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => saveToFirebase(), 3000);
         updateSaveStatus('Editing...');
     });
     
     editor.addEventListener('keydown', (e) => {
-        // Ctrl+S to save
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
             if (currentIsOwner) {
@@ -504,12 +516,14 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const patientName = analysisData?.patientName || 'Patient';
                 const profession = analysisData?.profession || '';
                 const diagnosis = analysisData?.diagnosis || '';
+                const mode = analysisData?.contentType || 'presentation';
+                const modeLabel = getModeLabel(mode);
                 
                 const doc = new docx.Document({
                     sections: [{
                         children: [
                             new docx.Paragraph({ 
-                                text: `Ward Round Presentation - ${patientName}`, 
+                                text: `${modeLabel} - ${patientName}`, 
                                 heading: docx.HeadingLevel.HEADING_1 
                             }),
                             new docx.Paragraph({ 
@@ -531,11 +545,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `Presentation_${patientName.replace(/\s+/g, '_')}_${Date.now()}.docx`;
+                a.download = `${modeLabel.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}_${Date.now()}.docx`;
                 a.click();
                 URL.revokeObjectURL(url);
                 
-                showToast('Presentation downloaded successfully', 'success');
+                showToast('Document downloaded successfully', 'success');
             } catch (err) {
                 console.error('Download error:', err);
                 showToast('Export failed', 'error');
@@ -557,10 +571,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             const element = document.getElementById('editorContent');
             const patientName = analysisData?.patientName || 'patient';
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
             
             const opt = {
                 margin: [0.5, 0.5, 0.5, 0.5],
-                filename: `Presentation_${patientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
+                filename: `${modeLabel.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`,
                 image: { type: 'jpeg', quality: 0.98 },
                 html2canvas: { scale: 2, letterRendering: true },
                 jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
@@ -584,12 +600,14 @@ document.addEventListener('DOMContentLoaded', async function() {
             const patientName = analysisData?.patientName || 'Patient';
             const profession = analysisData?.profession || 'N/A';
             const diagnosis = analysisData?.diagnosis || 'N/A';
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
             
             printWindow.document.write(`
                 <!DOCTYPE html>
                 <html>
                 <head>
-                    <title>Ward Round Presentation - ${patientName}</title>
+                    <title>${modeLabel} - ${patientName}</title>
                     <style>
                         body { 
                             font-family: Arial, sans-serif; 
@@ -598,8 +616,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                             max-width: 800px; 
                             margin: 0 auto;
                         }
-                        h1 { color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 0.5rem; }
-                        h2 { color: #6366f1; margin-top: 1.5rem; }
+                        h1 { color: #009688; border-bottom: 2px solid #009688; padding-bottom: 0.5rem; }
+                        h2 { color: #009688; margin-top: 1.5rem; }
                         h3 { color: #4f46e5; }
                         table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
                         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -611,14 +629,14 @@ document.addEventListener('DOMContentLoaded', async function() {
                     </style>
                 </head>
                 <body>
-                    <h1>Ward Round Presentation - ${patientName}</h1>
+                    <h1>${modeLabel} - ${patientName}</h1>
                     <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
                     <p><strong>Clinician:</strong> ${profession}</p>
                     <p><strong>Diagnosis:</strong> ${diagnosis}</p>
                     <hr>
                     ${editor.innerHTML}
                     <hr>
-                    <p style="font-size: 0.8rem; color: #666;">Generated by rehablix Presentation Assistant</p>
+                    <p style="font-size: 0.8rem; color: #666;">Generated by rehablix</p>
                 </body>
                 </html>
             `);
@@ -677,22 +695,28 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     if (shareEmailBtn) {
         shareEmailBtn.addEventListener('click', () => {
-            const subject = encodeURIComponent(`Ward Round Presentation: ${analysisData?.patientName || 'Patient'}`);
-            const body = encodeURIComponent(`Check out this presentation: ${shareLink.value}`);
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
+            const subject = encodeURIComponent(`${modeLabel}: ${analysisData?.patientName || 'Patient'}`);
+            const body = encodeURIComponent(`Check out this ${modeLabel.toLowerCase()}: ${shareLink.value}`);
             window.location.href = `mailto:?subject=${subject}&body=${body}`;
         });
     }
     
     if (shareWhatsAppBtn) {
         shareWhatsAppBtn.addEventListener('click', () => {
-            const text = encodeURIComponent(`Check out this ward round presentation: ${shareLink.value}`);
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
+            const text = encodeURIComponent(`Check out this ${modeLabel.toLowerCase()}: ${shareLink.value}`);
             window.open(`https://wa.me/?text=${text}`, '_blank');
         });
     }
     
     if (shareTwitterBtn) {
         shareTwitterBtn.addEventListener('click', () => {
-            const text = encodeURIComponent(`Check out this ward round presentation: ${shareLink.value}`);
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
+            const text = encodeURIComponent(`${modeLabel}: ${shareLink.value}`);
             window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
         });
     }
@@ -706,8 +730,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         await loadAnalysis();
     });
     
-    // Initialize word count
     updateWordAndCharCount();
-    
-    console.log('Case Presentation Editor initialized');
+    console.log('Case Result Editor initialized (multi-mode)');
 });
