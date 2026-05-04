@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-    <title>rehablix · Ward Round Presentation</title>
+    <title>rehablix · Clinical Documentation & Presentation</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -30,7 +30,7 @@
                 <span class="logo-icon" aria-hidden="true"></span>
                 <div class="logo-text">
                     <span class="logo-lop">rehablix</span>
-                    <span class="logo-full">presentation</span>
+                    <span class="logo-full">doc. assistant</span>
                 </div>
             </div>
             <div class="nav-right">
@@ -58,6 +58,22 @@
 
     <main class="presentation-main">
         <div class="container">
+            <!-- Mode Switcher Tabs -->
+            <div class="mode-tabs">
+                <button class="mode-tab active" data-mode="presentation">
+                    <i class="fas fa-user-md"></i>
+                    <span>Case Presentation</span>
+                </button>
+                <button class="mode-tab" data-mode="report">
+                    <i class="fas fa-file-alt"></i>
+                    <span>Report</span>
+                </button>
+                <button class="mode-tab" data-mode="documentation">
+                    <i class="fas fa-file-medical-alt"></i>
+                    <span>Documentation</span>
+                </button>
+            </div>
+
             <div class="workspace-grid">
                 <!-- LEFT: Always-visible text area + multi-file attachments -->
                 <div class="glass-card input-area">
@@ -72,7 +88,7 @@
                         <button class="clear-btn" id="clearTextBtn"><i class="fas fa-eraser"></i> Clear</button>
                     </div>
 
-                    <!-- Multi‑file drop zone – NO VISIBLE BUTTONS -->
+                    <!-- Multi‑file drop zone -->
                     <div class="drop-zone" id="multiDropZone">
                         <div class="drop-content">
                             <i class="fas fa-cloud-upload-alt"></i>
@@ -89,7 +105,7 @@
                     <div class="attachments-list" id="attachmentsList" style="display: none;"></div>
                 </div>
 
-                <!-- RIGHT: Patient info & settings -->
+                <!-- RIGHT: Patient info & mode-dependent settings -->
                 <div class="glass-card config-area">
                     <h3><i class="fas fa-user-circle"></i> Patient Information</h3>
                     <div class="patient-form">
@@ -137,42 +153,143 @@
                         </div>
                     </div>
 
-                    <h3><i class="fas fa-list-alt"></i> Presentation Outline</h3>
-                    <div class="outline-selector">
-                        <label class="outline-option">
-                            <input type="radio" name="outline" value="soap" checked>
-                            <span class="outline-name">SOAP Format</span>
-                            <span class="outline-desc">Subjective, Objective, Assessment, Plan</span>
-                        </label>
-                        <label class="outline-option">
-                            <input type="radio" name="outline" value="full">
-                            <span class="outline-name">Full Assessment</span>
-                            <span class="outline-desc">History, Examination, Findings, Recommendations</span>
-                        </label>
-                        <label class="outline-option">
-                            <input type="radio" name="outline" value="quick">
-                            <span class="outline-name">Quick Update</span>
-                            <span class="outline-desc">Key changes, Current status, Next steps</span>
-                        </label>
-                        <label class="outline-option">
-                            <input type="radio" name="outline" value="custom">
-                            <span class="outline-name">Custom Outline</span>
-                            <span class="outline-desc">Describe your structure below</span>
-                        </label>
-                    </div>
-                    <textarea id="customOutline" rows="4" placeholder="e.g., 1. Background, 2. Progress, 3. Concerns, 4. Plan" style="display: none;"></textarea>
-                    <div class="outline-hint" id="customOutlineHint" style="display: none;">
-                        <i class="fas fa-lightbulb"></i>
-                        <span>Number each section on a new line for best results</span>
+                    <!-- ============================================================
+                         MODE-SPECIFIC SECTIONS
+                         ============================================================ -->
+                    
+                    <!-- 1. CASE PRESENTATION (default) -->
+                    <div class="config-mode-section" data-mode="presentation">
+                        <h3><i class="fas fa-list-alt"></i> Presentation Outline</h3>
+                        <div class="outline-selector">
+                            <label class="outline-option">
+                                <input type="radio" name="outlinePresentation" value="soap" checked>
+                                <span class="outline-name">SOAP Format</span>
+                                <span class="outline-desc">Subjective, Objective, Assessment, Plan</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlinePresentation" value="full">
+                                <span class="outline-name">Full Assessment</span>
+                                <span class="outline-desc">History, Examination, Findings, Recommendations</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlinePresentation" value="quick">
+                                <span class="outline-name">Quick Update</span>
+                                <span class="outline-desc">Key changes, Current status, Next steps</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlinePresentation" value="custom">
+                                <span class="outline-name">Custom Outline</span>
+                                <span class="outline-desc">Describe your structure below</span>
+                            </label>
+                        </div>
+                        <textarea id="customOutlinePresentation" rows="4" placeholder="e.g., 1. Background, 2. Progress, 3. Concerns, 4. Plan" style="display: none;"></textarea>
+                        <div class="outline-hint" id="customOutlineHintPresentation" style="display: none;">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Number each section on a new line for best results</span>
+                        </div>
                     </div>
 
+                    <!-- 2. REPORT -->
+                    <div class="config-mode-section" data-mode="report" style="display: none;">
+                        <h3><i class="fas fa-file-alt"></i> Report Structure</h3>
+                        <div class="outline-selector">
+                            <label class="outline-option">
+                                <input type="radio" name="outlineReport" value="progress" checked>
+                                <span class="outline-name">Progress Note</span>
+                                <span class="outline-desc">Interval history, current status, plan</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineReport" value="discharge">
+                                <span class="outline-name">Discharge Summary</span>
+                                <span class="outline-desc">Course, outcomes, follow‑up</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineReport" value="consult">
+                                <span class="outline-name">Consultation Note</span>
+                                <span class="outline-desc">Reason for consult, findings, recommendations</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineReport" value="custom">
+                                <span class="outline-name">Custom Report</span>
+                                <span class="outline-desc">Define your own structure</span>
+                            </label>
+                        </div>
+                        <textarea id="customOutlineReport" rows="4" placeholder="e.g., 1. Summary, 2. Findings, 3. Recommendations" style="display: none;"></textarea>
+                        <div class="outline-hint" id="customOutlineHintReport" style="display: none;">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Number each section on a new line for best results</span>
+                        </div>
+                    </div>
+
+                    <!-- 3. DOCUMENTATION -->
+                    <div class="config-mode-section" data-mode="documentation" style="display: none;">
+                        <h3><i class="fas fa-notes-medical"></i> Documentation Template</h3>
+                        <div class="outline-selector">
+                            <label class="outline-option">
+                                <input type="radio" name="outlineDocumentation" value="soap" checked>
+                                <span class="outline-name">SOAP Note</span>
+                                <span class="outline-desc">Subjective, Objective, Assessment, Plan</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineDocumentation" value="admission">
+                                <span class="outline-name">Admission Note</span>
+                                <span class="outline-desc">HPI, Exam, Impression, Plan</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineDocumentation" value="daily">
+                                <span class="outline-name">Daily Progress</span>
+                                <span class="outline-desc">Events, Vitals, Exam, Plan</span>
+                            </label>
+                            <label class="outline-option">
+                                <input type="radio" name="outlineDocumentation" value="custom">
+                                <span class="outline-name">Custom Note</span>
+                                <span class="outline-desc">Describe your structure below</span>
+                            </label>
+                        </div>
+                        <textarea id="customOutlineDocumentation" rows="4" placeholder="e.g., 1. History, 2. Exam, 3. Plan" style="display: none;"></textarea>
+                        <div class="outline-hint" id="customOutlineHintDocumentation" style="display: none;">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Number each section on a new line for best results</span>
+                        </div>
+                    </div>
+
+                    <!-- COMMON: Additional Instructions -->
                     <div class="form-group">
                         <label>Additional Instructions (optional)</label>
+                        <div class="suggested-instructions">
+                            <div class="suggestion-chips" id="suggestionChips">
+                                <button type="button" class="suggestion-chip" data-text="Focus on mobility and transfers">Focus on mobility</button>
+                                <button type="button" class="suggestion-chip" data-text="Emphasize cognitive and communication aspects">Cognition &amp; communication</button>
+                                <button type="button" class="suggestion-chip" data-text="Include psychosocial considerations">Psychosocial factors</button>
+                                <button type="button" class="suggestion-chip" data-text="Highlight safety risks and precautions">Safety &amp; risks</button>
+                                <button type="button" class="suggestion-chip" data-text="Provide specific outcome measures">Outcome measures</button>
+                                <button type="button" class="suggestion-chip" data-text="Focus on discharge planning">Discharge planning</button>
+                            </div>
+                        </div>
                         <textarea id="additionalInstructions" rows="2" placeholder="Focus on mobility, cognition, etc."></textarea>
                     </div>
 
+                    <!-- COMMON: Output Detail Level -->
+                    <div class="output-size-selector">
+                        <label>Output Detail Level</label>
+                        <div class="size-options">
+                            <label class="size-option">
+                                <input type="radio" name="outputSize" value="2000">
+                                <span>Minimal (2000 tokens)</span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="outputSize" value="3500">
+                                <span>Moderate (3500 tokens)</span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="outputSize" value="5000" checked>
+                                <span>Detailed (5000 tokens)</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <button id="generateBtn" class="generate-btn" disabled>
-                        <i class="fas fa-magic"></i> Generate Presentation
+                        <i class="fas fa-magic"></i> <span id="generateBtnText">Generate Presentation</span>
                     </button>
                 </div>
             </div>
@@ -242,7 +359,7 @@
     <!-- History Drawer with Search -->
     <aside class="history-drawer" id="historyDrawer">
         <div class="drawer-header">
-            <h3><i class='bx bx-time-five'></i> Presentation History</h3>
+            <h3><i class='bx bx-time-five'></i> Document History</h3>
             <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
         </div>
         <div class="history-search">
