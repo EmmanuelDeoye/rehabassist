@@ -42,14 +42,19 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // Search input handler
-  searchInput.addEventListener('input', (e) => {
-    filterTools(e.target.value);
-  });
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      filterTools(e.target.value);
+    });
+  }
 
   // Focus search when magnifying glass is clicked
-  document.getElementById('searchToggle').addEventListener('click', () => {
-    searchInput.focus();
-  });
+  const searchToggle = document.getElementById('searchToggle');
+  if (searchToggle && searchInput) {
+    searchToggle.addEventListener('click', () => {
+      searchInput.focus();
+    });
+  }
 
   // ----- Theme logic -----
   function initTheme() {
@@ -80,7 +85,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  themeToggle.addEventListener('click', cycleTheme);
+  if (themeToggle) {
+    themeToggle.addEventListener('click', cycleTheme);
+  }
 
   // System theme change listener
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -90,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Initialize
+  // Initialize theme
   initTheme();
   
   // Add click tracking (optional)
@@ -133,14 +140,141 @@ document.addEventListener('DOMContentLoaded', function() {
       
       lastScrollTop = scrollTop;
     });
-  }
 
-  // Optional: Add click tracking
-  if (floatingBtn) {
+    // Optional: Add click tracking
     floatingBtn.addEventListener('click', () => {
       console.log('AI Assistant button clicked');
       // You can add analytics tracking here
     });
+  }
+
+  // ----- PWA Install Button -----
+  let deferredPrompt;
+  
+  // Create the install button
+  const installBtn = document.createElement('button');
+  installBtn.id = 'installAppBtn';
+  installBtn.className = 'floating-install-btn';
+  installBtn.innerHTML = `
+    <span class="install-icon">📲</span>
+    <span>Install App</span>
+  `;
+  document.body.appendChild(installBtn);
+
+  // Check if app is already installed (running in standalone mode)
+  function isAppInstalled() {
+    return window.matchMedia('(display-mode: standalone)').matches || 
+           window.matchMedia('(display-mode: fullscreen)').matches ||
+           window.matchMedia('(display-mode: minimal-ui)').matches ||
+           navigator.standalone || // iOS Safari
+           false;
+  }
+
+  // Remove button if already installed
+  if (isAppInstalled()) {
+    installBtn.remove();
+    console.log('App already installed, removing install button');
+  } else {
+    // Listen for the beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent the default mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later
+      deferredPrompt = e;
+      // Show the install button with a subtle animation
+      setTimeout(() => {
+        installBtn.classList.add('visible');
+      }, 1000); // Delay appearance slightly for better UX
+      console.log('beforeinstallprompt fired - install button shown');
+    });
+
+    // Handle install button click
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        console.log('No deferred prompt available');
+        // Fallback: show instructions based on platform
+        showInstallInstructions();
+        return;
+      }
+
+      try {
+        // Show the native install prompt
+        deferredPrompt.prompt();
+        
+        // Wait for the user's choice
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install: ${outcome}`);
+        
+        // Clear the deferred prompt
+        deferredPrompt = null;
+        
+        // Hide the button regardless of outcome
+        installBtn.classList.remove('visible');
+        
+        // If user accepted, show success feedback
+        if (outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+          // Optional: show a toast or redirect
+          setTimeout(() => {
+            installBtn.remove();
+          }, 300);
+        }
+      } catch (error) {
+        console.error('Install prompt error:', error);
+        installBtn.classList.remove('visible');
+      }
+    });
+
+    // Track when the app is successfully installed
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA was installed successfully');
+      installBtn.classList.remove('visible');
+      setTimeout(() => {
+        installBtn.remove();
+      }, 300);
+      
+      // Optional: Show a success toast
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = '✅ App installed successfully!';
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 3000);
+      }
+    });
+
+    // Fallback: if beforeinstallprompt never fires but app isn't installed
+    setTimeout(() => {
+      if (!deferredPrompt && !isAppInstalled()) {
+        // Show button anyway with install instructions
+        installBtn.classList.add('visible');
+        installBtn.addEventListener('click', showInstallInstructions, { once: true });
+      }
+    }, 3000);
+  }
+
+  // Show platform-specific install instructions
+  function showInstallInstructions() {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    const isDesktop = !isIOS && !isAndroid;
+    
+    let message = '';
+    if (isIOS) {
+      message = '📱 Tap the Share button and select "Add to Home Screen"';
+    } else if (isAndroid) {
+      message = '📱 Tap the menu (⋮) and select "Install app" or "Add to Home Screen"';
+    } else {
+      message = '💻 Click the install icon in your browser\'s address bar';
+    }
+    
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 5000);
+    } else {
+      alert(message);
+    }
   }
 
   console.log('rehablix ready');

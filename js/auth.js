@@ -301,20 +301,33 @@ function initializeAuth() {
     }
   });
 
+  // ----- Profile Menu Item -----
   if (profileMenuItem) {
     profileMenuItem.addEventListener('click', () => {
       if (dropdownMenu) dropdownMenu.classList.remove('show');
-      showToast('👤 Profile page coming soon!');
+      // Open profile modal (defined in modal.js)
+      if (typeof window.openProfileModal === 'function') {
+        window.openProfileModal();
+      } else {
+        showToast('👤 Profile page coming soon!');
+      }
     });
   }
 
+  // ----- Settings Menu Item -----
   if (settingsMenuItem) {
     settingsMenuItem.addEventListener('click', () => {
       if (dropdownMenu) dropdownMenu.classList.remove('show');
-      showToast('⚙️ Settings page coming soon!');
+      // Open settings modal (defined in modal.js)
+      if (typeof window.openSettingsModal === 'function') {
+        window.openSettingsModal();
+      } else {
+        showToast('⚙️ Settings page coming soon!');
+      }
     });
   }
 
+  // ----- Logout Menu Item -----
   if (logoutMenuItem) {
     logoutMenuItem.addEventListener('click', async () => {
       if (dropdownMenu) dropdownMenu.classList.remove('show');

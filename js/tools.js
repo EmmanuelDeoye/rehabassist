@@ -1,5 +1,6 @@
 // js/tools.js
 // Creates a slide-out drawer from the home icon with dropdown-menu styling
+// Includes an "Install App" button at the bottom of the drawer
 
 (function() {
   // Wait for DOM to be ready
@@ -80,6 +81,12 @@
             </a>
           `;
         }).join('')}
+        <!-- Install App Section (hidden by default) -->
+        <div class="tools-drawer-divider"></div>
+        <button class="tools-drawer-item install-app-btn" id="drawerInstallBtn" style="display: none;">
+          <span class="tools-item-icon">📲</span>
+          <span class="tools-item-name">Install App</span>
+        </button>
       </div>
     `;
 
@@ -97,7 +104,7 @@
       toolsDrawer.classList.add('open');
       overlay.classList.add('visible');
       document.body.style.overflow = 'hidden';
-      // Optional: rotate the chevron when open
+      // Rotate the chevron
       const chevron = toolsBtn.querySelector('.chevron-icon');
       if (chevron) {
         chevron.style.transform = 'rotate(180deg)';
@@ -110,7 +117,6 @@
       toolsDrawer.classList.remove('open');
       overlay.classList.remove('visible');
       document.body.style.overflow = '';
-      // Rotate chevron back
       const chevron = toolsBtn.querySelector('.chevron-icon');
       if (chevron) {
         chevron.style.transform = 'rotate(0deg)';
@@ -148,6 +154,104 @@
       e.stopPropagation();
     });
 
-    console.log('Tools drawer initialized with chevron icon');
+    // ----- PWA Install Button Logic -----
+    const installBtn = document.getElementById('drawerInstallBtn');
+    let deferredPrompt;
+
+    // Check if app is already installed
+    function isAppInstalled() {
+      return window.matchMedia('(display-mode: standalone)').matches || 
+             window.matchMedia('(display-mode: fullscreen)').matches ||
+             window.matchMedia('(display-mode: minimal-ui)').matches ||
+             navigator.standalone || // iOS Safari
+             false;
+    }
+
+    // Show install button if not installed and event available
+    function showInstallButton() {
+      if (!isAppInstalled() && deferredPrompt) {
+        installBtn.style.display = 'flex';
+      } else {
+        installBtn.style.display = 'none';
+      }
+    }
+
+    // Listen for the beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent the default mini-info bar
+      e.preventDefault();
+      // Store the event
+      deferredPrompt = e;
+      // Show the button in the drawer
+      showInstallButton();
+    });
+
+    // Handle install button click
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        // Fallback: show manual instructions
+        showInstallInstructions();
+        return;
+      }
+
+      try {
+        // Show the native prompt
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`Install prompt outcome: ${outcome}`);
+        deferredPrompt = null;
+
+        // Hide the button (app will be installed or user dismissed)
+        installBtn.style.display = 'none';
+
+        if (outcome === 'accepted') {
+          console.log('App installed');
+        }
+      } catch (error) {
+        console.error('Install prompt error:', error);
+        installBtn.style.display = 'none';
+      }
+    });
+
+    // Watch for successful install
+    window.addEventListener('appinstalled', () => {
+      console.log('PWA installed');
+      installBtn.style.display = 'none';
+      deferredPrompt = null;
+    });
+
+    // Fallback when beforeinstallprompt isn't fired but app isn't installed
+    window.addEventListener('load', () => {
+      // If after a short delay there's no install prompt, show manual instructions button
+      if (!deferredPrompt && !isAppInstalled()) {
+        // We still show the button; clicking it will show instructions
+        installBtn.style.display = 'flex';
+        installBtn.addEventListener('click', showInstallInstructionsOnce);
+      }
+    });
+
+    function showInstallInstructions() {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      let message = '';
+
+      if (isIOS) {
+        message = '📱 Tap the Share button and select "Add to Home Screen"';
+      } else if (isAndroid) {
+        message = '📱 Tap the menu (⋮) and select "Install app" or "Add to Home Screen"';
+      } else {
+        message = '💻 Look for the install icon in your browser address bar';
+      }
+
+      alert(message); // Can be replaced with a toast if toast module is available
+    }
+
+    function showInstallInstructionsOnce(e) {
+      showInstallInstructions();
+      // Remove the manual trigger after first click
+      installBtn.removeEventListener('click', showInstallInstructionsOnce);
+    }
+
+    console.log('Tools drawer initialized with install button');
   }
 })();
