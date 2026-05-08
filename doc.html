@@ -22,6 +22,12 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/documentation.css">
+    <link rel="manifest" href="/manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+  }
+</script>
 </head>
 <body>
     <!-- Navbar -->
@@ -86,20 +92,24 @@
             <!-- Workspace Grid -->
             <div class="workspace-grid">
                 <div class="glass-card upload-area">
-                    <!-- Text Upload Section -->
-                    <div class="upload-view" id="textUploadSection">
-                        <div class="text-input-container">
-                            <div class="text-header">
-                                <i class="fas fa-paste"></i>
-                                <h3>Paste or type your text</h3>
-                            </div>
-                            <textarea id="plainTextInput" rows="12" placeholder="Paste clinical notes, reports, or any text here..."></textarea>
-                            <div class="text-footer">
-                                <span id="textWordCount">0 words</span>
-                                <button class="clear-text-btn" id="clearTextBtn">Clear</button>
-                            </div>
-                        </div>
-                    </div>
+                    <div class="upload-view" id="textUploadSection" style="position: relative;">
+    <div class="text-input-container">
+        <div class="text-header">
+            <i class="fas fa-paste"></i>
+            <h3>Paste or type your text</h3>
+        </div>
+        <textarea id="plainTextInput" rows="12" placeholder="Paste clinical notes, reports, or any text here..."></textarea>
+        <!-- FLOATING MIC BUTTON -->
+        <button class="voice-input-btn" id="voiceInputBtn" title="Record voice note (click to start/stop)">
+            <i class="fas fa-microphone"></i>
+        </button>
+        <span class="voice-status" id="voiceStatus">Recording…</span>
+        <div class="text-footer">
+            <span id="textWordCount">0 words</span>
+            <button class="clear-text-btn" id="clearTextBtn">Clear</button>
+        </div>
+    </div>
+</div>
 
                     <!-- Document Upload Section -->
                     <div class="upload-view" id="documentUploadSection" style="display: none;">
@@ -246,6 +256,8 @@
             </div>
         </div>
     </aside>
+    
+    
 
     <!-- Scripts -->
     <script src="js/config.js"></script>

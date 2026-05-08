@@ -10,6 +10,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/auth.css">
+  <link rel="manifest" href="/manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+  }
+</script>
 </head>
 <body>
   <nav class="navbar">
@@ -135,7 +141,7 @@
     </section>
     
     <!-- Subscription Plans Section -->
-<section class="subscription-section" id="subscriptionPlans">
+<section class="subscription-section" id="subscriptionPlans" style="display:none">
   <div class="plans-container">
     <div class="plans-header">
       <span class="plans-badge">Pricing</span>
@@ -269,7 +275,7 @@
   </main>
 
   <footer class="site-footer">
-    <p>© rehablix — AI tools for rehabilitation</p>
+    <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
   </footer>
 
   <!-- Floating AI Button -->
