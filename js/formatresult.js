@@ -192,7 +192,7 @@ async function togglePublic(event) {
       isPublic: isChecked,
       lastModified: new Date().toISOString()
     };
-    await firebase.database().ref(`history/${currentUser.uid}/${currentAssessmentId}`).update(updates);
+    await firebase.database().ref(`history/${currentUser.uid}/formats/${currentAssessmentId}`).update(updates);
     currentAssessmentData.isPublic = isChecked;
 
     if (isChecked) {
@@ -232,7 +232,7 @@ async function loadAssessmentFromFirebase(id) {
 
     // First, try to load from current user's history (if logged in)
     if (currentUser) {
-      const snapshot = await firebase.database().ref(`history/${currentUser.uid}/${id}`).once('value');
+      const snapshot = await firebase.database().ref(`history/${currentUser.uid}/formats/${id}`).once('value');
       data = snapshot.val();
       if (data) {
         ownerId = currentUser.uid;
@@ -417,7 +417,7 @@ async function saveChanges() {
       lastModified: new Date().toISOString()
     };
     
-    await firebase.database().ref(`history/${currentUser.uid}/${currentAssessmentId}`).update(updates);
+    await firebase.database().ref(`history/${currentUser.uid}/formats/${currentAssessmentId}`).update(updates);
     
     // Update local data
     currentAssessmentText = updatedHtml;

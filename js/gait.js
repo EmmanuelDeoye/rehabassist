@@ -607,7 +607,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       const notes = gaitNotes.value.trim() || '';
       const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
       
-      const newRef = await database.ref(`users/${currentUser.uid}/gaitHistory`).push({
+      const newRef = await database.ref(`history/${currentUser.uid}/gaitHistory`).push({
         contentType: 'gait',
         fileName: `Gait - ${patientName}`,
         documentType: 'Gait Analysis',
@@ -750,7 +750,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   function loadGaitHistory() {
     if (!currentUser) return;
     
-    database.ref(`users/${currentUser.uid}/gaitHistory`)
+    database.ref(`history/${currentUser.uid}/gaitHistory`)
       .orderByChild('timestamp')
       .on('value', (snapshot) => {
         const data = snapshot.val();

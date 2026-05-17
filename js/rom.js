@@ -1029,7 +1029,7 @@ The images show the progression from start position through full range of motion
     
     try {
       const jointName = assessmentMode === 'isolate' ? currentMovement.name : `Full ${jointSelect.options[jointSelect.selectedIndex].text} Assessment`;
-      const newRef = await database.ref(`users/${currentUser.uid}/analysisHistory`).push({
+      const newRef = await database.ref(`history/${currentUser.uid}/analysisHistory`).push({
         contentType: 'rom',
         fileName: `ROM - ${jointName}`,
         documentType: 'ROM Analysis',
@@ -1117,7 +1117,7 @@ The images show the progression from start position through full range of motion
   function loadRomHistory() {
     if (!currentUser) return;
     
-    database.ref(`users/${currentUser.uid}/analysisHistory`)
+    database.ref(`history/${currentUser.uid}/analysisHistory`)
       .orderByChild('timestamp')
       .on('value', (snapshot) => {
         historyList.innerHTML = '';

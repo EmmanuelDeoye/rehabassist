@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 lastEdited: firebase.database.ServerValue.TIMESTAMP,
                 lastEditedDate: new Date().toLocaleString()
             };
-            await firebase.database().ref(`users/${currentUser.uid}/analysisHistory/${historyId}`).update(updates);
+            await firebase.database().ref(`history/${currentUser.uid}/analysisHistory/${historyId}`).update(updates);
             analysisData.isPublic = isChecked;
     
             if (isChecked) {
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 lastEditedDate: new Date().toLocaleString()
             };
             
-            await firebase.database().ref(`users/${currentUser.uid}/analysisHistory/${historyId}`).update(updates);
+            await firebase.database().ref(`history/${currentUser.uid}/analysisHistory/${historyId}`).update(updates);
             
             // Update local data
             if (analysisData) {
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             
             // First, try to load from current user's history (if logged in)
             if (currentUser) {
-                const snapshot = await firebase.database().ref(`users/${currentUser.uid}/analysisHistory/${historyId}`).once('value');
+                const snapshot = await firebase.database().ref(`history/${currentUser.uid}/analysisHistory/${historyId}`).once('value');
                 data = snapshot.val();
                 if (data) {
                     ownerId = currentUser.uid;
@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Close
     if (closeDocBtn) {
         closeDocBtn.addEventListener('click', () => {
-            window.location.href = 'documentation.html';
+            window.location.href = 'doc.html';
         });
     }
     

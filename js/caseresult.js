@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 lastEdited: firebase.database.ServerValue.TIMESTAMP,
                 lastEditedDate: new Date().toLocaleString()
             };
-            await database.ref(`users/${currentUser.uid}/caseHistory/${historyId}`).update(updates);
+            await database.ref(`history/${currentUser.uid}/caseHistory/${historyId}`).update(updates);
             analysisData.isPublic = isChecked;
     
             if (isChecked) {
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 lastEditedDate: new Date().toLocaleString()
             };
             
-            await database.ref(`users/${currentUser.uid}/caseHistory/${historyId}`).update(updates);
+            await database.ref(`history/${currentUser.uid}/caseHistory/${historyId}`).update(updates);
             
             if (analysisData) {
                 analysisData.resultsMarkdown = markdown;
@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             currentIsOwner = false;
             
             if (currentUser) {
-                const snapshot = await database.ref(`users/${currentUser.uid}/caseHistory/${historyId}`).once('value');
+                const snapshot = await database.ref(`history/${currentUser.uid}/caseHistory/${historyId}`).once('value');
                 data = snapshot.val();
                 if (data) {
                     ownerId = currentUser.uid;

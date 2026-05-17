@@ -1,4 +1,4 @@
-// documentation.js - Auto-Save Works Without Login with Preview Modal & Delete History
+// documentation.js - Auto-Save Works Without Login with Preview Modal & Delete History + Voice Input
 document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 1. DOM ELEMENTS
@@ -50,6 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // History search
     const historySearchInput = document.getElementById('historySearchInput');
 
+    // Voice input elements
+    const voiceInputBtn = document.getElementById('voiceInputBtn');
+    const voiceStatusEl = document.getElementById('voiceStatus');
+
     // =========================================================================
     // 2. STATE & CONFIG
     // =========================================================================
@@ -70,6 +74,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let allHistoryEntries = []; // Store all entries for filtering
     const STORAGE_KEY = 'rehab_doc_assistant_state';
     
+    // Voice recording state
+    let mediaRecorder = null;
+    let audioChunks = [];
+    
     const MAX_TOKENS_PER_REQUEST = 4000;
     const MAX_CONTENT_LENGTH = 10000;
 
@@ -89,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
-        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${message}</span>`;
+        toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i><span>${message}</span>`;
         toastContainer.appendChild(toast);
         setTimeout(() => toast.remove(), duration);
     }
@@ -178,6 +186,33 @@ document.addEventListener('DOMContentLoaded', function() {
             if (m === '>') return '&gt;';
             return m;
         });
+    }
+
+    /**
+     * Insert text at the current cursor position (or append if textarea not focused)
+     */
+    function insertTextAtCursor(textarea, text) {
+        if (!textarea) return;
+        const isFocused = document.activeElement === textarea;
+        if (!isFocused) {
+            // Append to the end with a space if needed
+            textarea.value += (textarea.value.trim().length ? ' ' : '') + text;
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+        } else {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const before = textarea.value.substring(0, start);
+            const after = textarea.value.substring(end);
+            const needSpaceBefore = before.length && !before.endsWith(' ');
+            const needSpaceAfter = after.length && !after.startsWith(' ');
+            const insertion = (needSpaceBefore ? ' ' : '') + text + (needSpaceAfter ? ' ' : '');
+            textarea.value = before + insertion + after;
+            const newCursorPos = start + (needSpaceBefore ? 1 : 0) + text.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+        }
+        // Trigger input event in case other listeners rely on it
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     // =========================================================================
@@ -731,6 +766,88 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
+    // 9.5. VOICE INPUT (Floating Mic) for Text Area
+    // =========================================================================
+    if (voiceInputBtn && plainTextInput) {
+        voiceInputBtn.addEventListener('click', toggleVoiceRecording);
+    }
+
+    async function toggleVoiceRecording() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            // Stop recording
+            mediaRecorder.stop();
+            return;
+        }
+        await startVoiceRecording();
+    }
+
+    async function startVoiceRecording() {
+        // Ensure AI token is available for transcription
+        if (!aiConfig.token) {
+            const fetched = await fetchAPITokens();
+            if (!aiConfig.token) {
+                showToast('Speech recognition unavailable. Check AI connection.', 'error');
+                return;
+            }
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Use a widely supported MIME type
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                ? 'audio/webm;codecs=opus'
+                : MediaRecorder.isTypeSupported('audio/webm')
+                ? 'audio/webm'
+                : 'audio/mp4';
+            mediaRecorder = new MediaRecorder(stream, { mimeType });
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+                if (event.data && event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                // Clean up UI
+                voiceInputBtn.classList.remove('recording');
+                voiceStatusEl.style.display = 'none';
+                voiceInputBtn.disabled = true;
+                const originalIcon = voiceInputBtn.innerHTML;
+                voiceInputBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+                const blob = new Blob(audioChunks, { type: mimeType });
+                const audioFile = new File([blob], 'voice_note.webm', { type: mimeType });
+
+                try {
+                    // Reuse the existing Whisper transcription method
+                    const transcript = await transcribeAudio(audioFile);
+                    insertTextAtCursor(plainTextInput, transcript);
+                    updateWordCount();
+                    saveProgress();
+                    showToast('Voice note transcribed ✓', 'success');
+                } catch (err) {
+                    console.error('Voice transcription error:', err);
+                    showToast(`Transcription failed: ${err.message}`, 'error');
+                } finally {
+                    voiceInputBtn.disabled = false;
+                    voiceInputBtn.innerHTML = originalIcon;
+                }
+
+                // Release microphone
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            voiceInputBtn.classList.add('recording');
+            voiceStatusEl.style.display = 'inline-block';
+        } catch (err) {
+            console.error('Mic access error:', err);
+            showToast('Microphone access denied. Please allow microphone permissions.', 'error');
+        }
+    }
+
+    // =========================================================================
     // 10. ANALYSIS (AI CALL)
     // =========================================================================
     async function analyzeWithOpenAI(messages) {
@@ -889,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function autoSaveToHistory(contentType, fileName, results, transcription = null) {
         if (!currentUser) return null;
         const userId = currentUser.uid;
-        const newRef = await database.ref(`users/${userId}/analysisHistory`).push({
+        const newRef = await database.ref(`history/${userId}/analysisHistory`).push({
             contentType, 
             fileName: fileName || (contentType === 'text' ? 'Pasted Text' : (contentType === 'audio' ? 'Audio Session' : (contentType === 'image' ? 'Image Analysis' : 'Document'))),
             documentType, 
@@ -1013,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             // Delete from user's history
-            await database.ref(`users/${currentUser.uid}/analysisHistory/${key}`).remove();
+            await database.ref(`history/${currentUser.uid}/analysisHistory/${key}`).remove();
             
             // Also delete from public if it exists
             await database.ref(`publicAnalysis/${key}`).remove();
@@ -1100,7 +1217,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const historyListElem = document.getElementById('historyList');
         if (!historyListElem) return;
         
-        database.ref(`users/${currentUser.uid}/analysisHistory`).orderByChild('timestamp').on('value', (snapshot) => {
+        database.ref(`history/${currentUser.uid}/analysisHistory`).orderByChild('timestamp').on('value', (snapshot) => {
             const data = snapshot.val();
             if (!data) { 
                 allHistoryEntries = [];

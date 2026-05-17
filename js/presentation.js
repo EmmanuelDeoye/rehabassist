@@ -1005,7 +1005,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         const docType = modeLabels[currentMode] || 'Clinical Document';
         
         try {
-            const ref = await database.ref(`users/${currentUser.uid}/caseHistory`).push({
+            const ref = await database.ref(`history/${currentUser.uid}/caseHistory`).push({
                 contentType: currentMode,
                 fileName: `${docType} - ${patientName.value || 'Patient'}`,
                 documentType: docType,
@@ -1199,7 +1199,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         if (!currentUser) return showToast('Log in to manage history', 'error');
         if (!confirm('Permanently delete this document?')) return;
         try {
-            await database.ref(`users/${currentUser.uid}/caseHistory/${key}`).remove();
+            await database.ref(`history/${currentUser.uid}/caseHistory/${key}`).remove();
             try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) { }
             showToast('Deleted', 'success');
             loadHistory();
@@ -1275,7 +1275,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
 
     function loadHistory() {
         if (!currentUser) return;
-        database.ref(`users/${currentUser.uid}/caseHistory`)
+        database.ref(`history/${currentUser.uid}/caseHistory`)
             .orderByChild('timestamp')
             .on('value', snapshot => {
                 const data = snapshot.val();

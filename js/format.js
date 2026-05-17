@@ -206,24 +206,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     return div.innerHTML;
   }
 
-  // ===== NEW: Check Subscription Plan Access =====
+  // ===== UPDATED: Check Subscription Plan Access (FREE FOR NOW) =====
   async function checkPlanAccess() {
-    if (!currentUser) return false;
-    
-    try {
-      const snap = await database.ref(`users/${currentUser.uid}/subscription/plan`).once('value');
-      const plan = snap.val();
-      
-      // Return true if user has Basic, Pro, or Premium plan
-      // Return false for Free plan or if no subscription exists
-      return plan && plan !== 'free';
-    } catch (error) {
-      console.error('Subscription check error:', error);
-      return false;
-    }
+    // History saving is currently free for all authenticated users.
+    // To re-enable subscription checks later, restore the Firebase lookup:
+    // ----------------------------------------------------------------
+    // if (!currentUser) return false;
+    // const snap = await database.ref(`users/${currentUser.uid}/subscription/plan`).once('value');
+    // const plan = snap.val();
+    // return plan && plan !== 'free';
+    // ----------------------------------------------------------------
+    return !!currentUser;
   }
 
-  // ===== UPDATED: PREVIEW MODAL with subscription notice =====
+  // ===== PREVIEW MODAL =====
   function showPreviewModal(html, formData, assessmentId, hasHistoryAccess) {
     // Remove any existing preview modal
     const existingModal = document.querySelector('.preview-modal');
@@ -241,6 +237,40 @@ document.addEventListener('DOMContentLoaded', async function() {
            w.document.close();
            document.querySelector('.preview-modal').remove();
          })();`;
+
+    // Build history status message
+    let historyMessage = '';
+    if (hasHistoryAccess && assessmentId) {
+      historyMessage = `
+        <div style="margin-top: 16px; padding: 10px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
+          <p style="color: #15803d; margin: 0; font-size: 0.8rem;">
+            ✅ This assessment has been saved to your history.
+          </p>
+        </div>
+      `;
+    } else if (!currentUser) {
+      historyMessage = `
+        <div style="margin-top: 16px; padding: 12px 16px; background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; display: flex; align-items: flex-start; gap: 10px;">
+          <span style="font-size: 1.2rem; flex-shrink: 0;">💡</span>
+          <div>
+            <p style="color: #854d0e; margin: 0 0 4px 0; font-size: 0.85rem; font-weight: 600;">
+              Login to Save History
+            </p>
+            <p style="color: #a16207; margin: 0; font-size: 0.8rem; line-height: 1.4;">
+              Sign in to automatically save, retrieve, and download your assessments anytime.
+            </p>
+          </div>
+        </div>
+      `;
+    } else {
+      historyMessage = `
+        <div style="margin-top: 16px; padding: 10px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
+          <p style="color: #15803d; margin: 0; font-size: 0.8rem;">
+            ✅ Assessment generated successfully.
+          </p>
+        </div>
+      `;
+    }
 
     previewModal.innerHTML = `
       <div class="preview-overlay"></div>
@@ -268,27 +298,7 @@ document.addEventListener('DOMContentLoaded', async function() {
               Close
             </button>
           </div>
-          ${!hasHistoryAccess ? `
-            <div style="margin-top: 16px; padding: 12px 16px; background: #fff5f5; border: 1px solid #fecaca; border-radius: 12px; display: flex; align-items: flex-start; gap: 10px;">
-              <span style="font-size: 1.2rem; flex-shrink: 0;">⚠️</span>
-              <div>
-                <p style="color: #dc2626; margin: 0 0 4px 0; font-size: 0.85rem; font-weight: 600;">
-                  History Saving Not Available
-                </p>
-                <p style="color: #991b1b; margin: 0; font-size: 0.8rem; line-height: 1.4;">
-                  Assessment history is only saved for <strong>Basic plan</strong> and above. 
-                  <a href="index.html#subscriptionPlans" style="color: #dc2626; font-weight: 600; text-decoration: underline;">Upgrade your plan</a> 
-                  to automatically save, retrieve, and download your assessments anytime.
-                </p>
-              </div>
-            </div>
-          ` : `
-            <div style="margin-top: 16px; padding: 10px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px;">
-              <p style="color: #15803d; margin: 0; font-size: 0.8rem;">
-                ✅ This assessment has been saved to your history.
-              </p>
-            </div>
-          `}
+          ${historyMessage}
           <div class="preview-note">
             <small>💡 The assessment opens in a new tab for printing or saving as PDF.</small>
           </div>
@@ -319,7 +329,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.addEventListener('keydown', escHandler);
   }
 
-  // ===== UPDATED BUILD PROMPT =====
+  // ===== BUILD PROMPT =====
   function buildPrompt(data) {
     const sections = data.includeSections
       ? "SOAP notes may be included if clinically relevant."
@@ -519,7 +529,7 @@ Return ONLY the HTML.`;
     if (!currentUser) return;
     
     try {
-      const snapshot = await database.ref(`history/${currentUser.uid}`).once('value');
+      const snapshot = await database.ref(`history/${currentUser.uid}/formats`).once('value');
       const data = snapshot.val();
       
       historyItems = [];
@@ -563,7 +573,7 @@ Return ONLY the HTML.`;
       };
 
       // Save to Firebase
-      const newHistoryRef = database.ref(`history/${currentUser.uid}`).push();
+      const newHistoryRef = database.ref(`history/${currentUser.uid}/formats`).push();
       await newHistoryRef.set(historyItem);
       const newId = newHistoryRef.key;
       
@@ -588,7 +598,7 @@ Return ONLY the HTML.`;
     if (!currentUser || !itemId) return;
     
     try {
-      await database.ref(`history/${currentUser.uid}/${itemId}`).remove();
+      await database.ref(`history/${currentUser.uid}/formats/${itemId}`).remove();
       historyItems = historyItems.filter(item => item.id !== itemId);
       updateHistoryUI();
       showToast('Item deleted from history');
@@ -602,7 +612,7 @@ Return ONLY the HTML.`;
     if (!currentUser) return;
     
     try {
-      await database.ref(`history/${currentUser.uid}`).remove();
+      await database.ref(`history/${currentUser.uid}/formats`).remove();
       historyItems = [];
       updateHistoryUI();
       showToast('All history cleared');
@@ -695,7 +705,7 @@ Return ONLY the HTML.`;
     deleteConfirmModal.classList.add('show');
   };
 
-  // ===== UPDATED: Form Submission with Plan Check =====
+  // ===== UPDATED: Form Submission with Free History Saving =====
   
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -784,24 +794,21 @@ Return ONLY the HTML.`;
       let hasHistoryAccess = false;
 
       if (currentUser) {
-        // Check if user has a paid plan
+        // Check if user has access (currently free for all authenticated users)
         hasHistoryAccess = await checkPlanAccess();
 
         if (hasHistoryAccess) {
-          // Save to history only for Basic, Pro, or Premium users
+          // Save to history for all authenticated users
           assessmentId = await saveToHistory(formData, html);
           if (assessmentId) {
             window.currentAssessmentId = assessmentId;
           }
-        } else {
-          // Show toast for free users
-          showToast('Assessment generated! Upgrade to Basic plan to save history.', false, 4000);
         }
       } else {
         showToast('Assessment generated! Login to save to history.', false, 4000);
       }
 
-      // Show preview modal with appropriate access flag
+      // Show preview modal
       showPreviewModal(html, formData, assessmentId, hasHistoryAccess);
       
     } catch (error) {
@@ -824,6 +831,17 @@ Return ONLY the HTML.`;
         return;
       }
       downloadAsWord(window.currentGeneratedText, window.currentFormData);
+    });
+  }
+
+  if (downloadPdfOption) {
+    downloadPdfOption.addEventListener('click', () => {
+      downloadModal.classList.remove('show');
+      if (!window.currentGeneratedText || !window.currentFormData) {
+        showToast('No assessment to download', true);
+        return;
+      }
+      downloadAsPdf(window.currentGeneratedText, window.currentFormData);
     });
   }
 
@@ -1070,5 +1088,5 @@ Return ONLY the HTML.`;
     });
   }
 
-  console.log('Format.js fully initialized with subscription integration');
+  console.log('Format.js fully initialized with free history saving for all users');
 });
