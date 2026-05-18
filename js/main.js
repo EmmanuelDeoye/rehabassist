@@ -148,51 +148,57 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // ----- PWA Install Button -----
+  // ----- PWA Install Button (Enhanced) -----
   let deferredPrompt;
-  
-  // Create the install button
+  let installBtnDismissed = false;
+
+  // Create the install button (hidden by default)
   const installBtn = document.createElement('button');
   installBtn.id = 'installAppBtn';
   installBtn.className = 'floating-install-btn';
   installBtn.innerHTML = `
     <span class="install-icon">📲</span>
     <span>Install App</span>
+    <span class="install-close" title="Dismiss">&times;</span>
   `;
   document.body.appendChild(installBtn);
 
-  // Check if app is already installed (running in standalone mode)
+  // Check if app is already installed (standalone mode)
   function isAppInstalled() {
-    return window.matchMedia('(display-mode: standalone)').matches || 
+    return window.matchMedia('(display-mode: standalone)').matches ||
            window.matchMedia('(display-mode: fullscreen)').matches ||
            window.matchMedia('(display-mode: minimal-ui)').matches ||
-           navigator.standalone || // iOS Safari
+           navigator.standalone ||   // iOS Safari
            false;
   }
 
-  // Remove button if already installed
-  if (isAppInstalled()) {
+  // Check if installation was previously completed (persisted)
+  function wasPreviouslyInstalled() {
+    return localStorage.getItem('pwa-installed') === 'true';
+  }
+
+  // Remove button if already installed or previously dismissed
+  if (isAppInstalled() || wasPreviouslyInstalled()) {
     installBtn.remove();
-    console.log('App already installed, removing install button');
+    console.log('App installed or previously installed, hiding install button');
   } else {
-    // Listen for the beforeinstallprompt event
+    // Listen for the install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
-      // Prevent the default mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later
       deferredPrompt = e;
-      // Show the install button with a subtle animation
+      // Show button with a small delay for a smooth entrance
       setTimeout(() => {
-        installBtn.classList.add('visible');
-      }, 1000); // Delay appearance slightly for better UX
+        if (!installBtnDismissed) {
+          installBtn.classList.add('visible');
+        }
+      }, 1200);
       console.log('beforeinstallprompt fired - install button shown');
     });
 
-    // Handle install button click
-    installBtn.addEventListener('click', async () => {
+    // Click handler for the install button
+    const handleInstall = async () => {
       if (!deferredPrompt) {
-        console.log('No deferred prompt available');
-        // Fallback: show instructions based on platform
+        console.log('No install prompt available – showing manual instructions');
         showInstallInstructions();
         return;
       }
@@ -200,38 +206,52 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         // Show the native install prompt
         deferredPrompt.prompt();
-        
-        // Wait for the user's choice
         const { outcome } = await deferredPrompt.userChoice;
-        console.log(`User response to install: ${outcome}`);
+        console.log(`Install prompt outcome: ${outcome}`);
         
-        // Clear the deferred prompt
-        deferredPrompt = null;
-        
-        // Hide the button regardless of outcome
-        installBtn.classList.remove('visible');
-        
-        // If user accepted, show success feedback
         if (outcome === 'accepted') {
-          console.log('User accepted the install prompt');
-          // Optional: show a toast or redirect
-          setTimeout(() => {
-            installBtn.remove();
-          }, 300);
+          // Persist that installation happened
+          localStorage.setItem('pwa-installed', 'true');
+          installBtn.classList.remove('visible');
+          // Clean up after animation
+          setTimeout(() => installBtn.remove(), 300);
+        } else {
+          // User dismissed the native prompt; keep button visible but mark deferredPrompt as null
+          deferredPrompt = null;
+          // Optionally show the button again after a delay if you want to retry
         }
       } catch (error) {
         console.error('Install prompt error:', error);
-        installBtn.classList.remove('visible');
+        deferredPrompt = null;
+        // Button stays visible for retry
       }
+    };
+
+    // Attach click event to the main button area (not the close button)
+    installBtn.addEventListener('click', (e) => {
+      if (e.target.classList.contains('install-close')) return; // handled separately
+      handleInstall();
     });
 
-    // Track when the app is successfully installed
+    // Dismiss button (close)
+    const closeBtn = installBtn.querySelector('.install-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        installBtnDismissed = true;
+        installBtn.classList.remove('visible');
+        // Remove after transition
+        setTimeout(() => installBtn.remove(), 300);
+        console.log('Install button dismissed by user');
+      });
+    }
+
+    // If PWA is installed via other means (e.g., browser menu), clean up
     window.addEventListener('appinstalled', () => {
-      console.log('PWA was installed successfully');
+      console.log('PWA installed');
+      localStorage.setItem('pwa-installed', 'true');
       installBtn.classList.remove('visible');
-      setTimeout(() => {
-        installBtn.remove();
-      }, 300);
+      setTimeout(() => installBtn.remove(), 300);
       
       // Optional: Show a success toast
       const toast = document.getElementById('toast');
@@ -242,31 +262,33 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
-    // Fallback: if beforeinstallprompt never fires but app isn't installed
+    // Fallback: If beforeinstallprompt never fires but app isn't installed, show button after 3s
     setTimeout(() => {
-      if (!deferredPrompt && !isAppInstalled()) {
-        // Show button anyway with install instructions
+      if (!deferredPrompt && !isAppInstalled() && !installBtnDismissed) {
         installBtn.classList.add('visible');
-        installBtn.addEventListener('click', showInstallInstructions, { once: true });
+        // Attach a one‑time instruction fallback
+        installBtn.addEventListener('click', () => {
+          if (!deferredPrompt) showInstallInstructions();
+        }, { once: true });
       }
     }, 3000);
   }
 
-  // Show platform-specific install instructions
+  // Show platform‑specific install instructions (used as fallback)
   function showInstallInstructions() {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
-    const isDesktop = !isIOS && !isAndroid;
-    
     let message = '';
+    
     if (isIOS) {
-      message = '📱 Tap the Share button and select "Add to Home Screen"';
+      message = '📱 Tap the Share button and then "Add to Home Screen"';
     } else if (isAndroid) {
-      message = '📱 Tap the menu (⋮) and select "Install app" or "Add to Home Screen"';
+      message = '📱 Tap the menu (⋮) and then "Install app" or "Add to Home Screen"';
     } else {
-      message = '💻 Click the install icon in your browser\'s address bar';
+      message = '💻 Look for the install icon in your browser\'s address bar';
     }
     
+    // Use the toast element if it exists, otherwise fallback to alert
     const toast = document.getElementById('toast');
     if (toast) {
       toast.textContent = message;
