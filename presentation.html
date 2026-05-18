@@ -1,8 +1,23 @@
 <!-- presentation.html -->
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
+<html lang="en">
+<head>  
+  <!-- Inline script to set theme before paint -->
+  <script>
+    (function() {
+      var stored = localStorage.getItem('rehab-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        // No preference saved or set to "system" → follow device setting
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
     <title>rehablix · Clinical Documentation & Presentation</title>
     <!-- Firebase SDK -->
@@ -266,7 +281,7 @@
                                 <button type="button" class="suggestion-chip" data-text="Focus on discharge planning">Discharge planning</button>
                             </div>
                         </div>
-                        <textarea id="additionalInstructions" rows="2" placeholder="Focus on mobility, cognition, etc."></textarea>
+                        <textarea id="additionalInstructions" rows="4" placeholder="Focus on mobility, cognition, etc."></textarea>
                     </div>
 
                     <!-- COMMON: Output Detail Level -->
@@ -355,6 +370,10 @@
             <input type="hidden" id="currentHistoryId">
         </div>
     </main>
+    
+    <footer class="site-footer">
+    <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
+  </footer>
 
     <!-- History Drawer with Search -->
     <aside class="history-drawer" id="historyDrawer">

@@ -1,7 +1,22 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
+<html lang="en">
+<head>  
+  <!-- Inline script to set theme before paint -->
+  <script>
+    (function() {
+      var stored = localStorage.getItem('rehab-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        // No preference saved or set to "system" → follow device setting
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
     <title>rehablix · Case Presentation</title>
     <!-- Firebase SDK -->
@@ -21,6 +36,12 @@
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/caseresult.css">
+    <link rel="manifest" href="/manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+  }
+</script>
 </head>
 <body>
     <nav class="navbar">
