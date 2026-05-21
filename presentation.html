@@ -283,6 +283,21 @@
                         </div>
                         <textarea id="additionalInstructions" rows="4" placeholder="Focus on mobility, cognition, etc."></textarea>
                     </div>
+                    
+                    <!-- NEW: Content Fidelity control -->
+<div class="form-group" style="margin-bottom: 1.5rem;">
+    <label style="margin-bottom: 0.6rem;">Content Fidelity</label>
+    <div class="size-options" style="flex-direction: column; gap: 0.5rem;">
+        <label class="size-option" style="padding: 0.6rem 1rem; border-radius: 0.75rem;">
+            <input type="radio" name="contentFidelity" value="strict" checked>
+            <span><strong>Strict</strong> – Use only provided information, no fabrications</span>
+        </label>
+        <label class="size-option" style="padding: 0.6rem 1rem; border-radius: 0.75rem;">
+            <input type="radio" name="contentFidelity" value="flexible">
+            <span><strong>Flexible</strong> – Allow AI to add plausible clinical details (use with caution)</span>
+        </label>
+    </div>
+</div>
 
                     <!-- COMMON: Output Detail Level -->
                     <div class="output-size-selector">
