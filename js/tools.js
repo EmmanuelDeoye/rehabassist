@@ -24,7 +24,8 @@
       { name: 'Documentation Assistant', url: 'doc.html', icon: '📃' },
       { name: 'ROM Analyzer', url: 'rom.html', icon: '🦵' },
       { name: 'Gait Monitor', url: 'gait.html', icon: '🎥' },
-      { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' }
+      { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' },
+      { name: 'Ask Me', url: 'ask.html', icon: '💬' }
     ];
 
     const currentPath = window.location.pathname.split('/').pop() || 'index.html';

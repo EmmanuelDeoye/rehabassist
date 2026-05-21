@@ -1,4 +1,5 @@
 // js/presentation.js – Multi‑mode (Presentation/Report/Documentation), Multi‑file, Camera, DOCX, OCR
+// Updated with Content Fidelity control (Strict vs Flexible)
 
 // Marked configuration
 if (typeof marked !== 'undefined') {
@@ -68,6 +69,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Output size radios
     const outputSizeRadios = document.getElementsByName('outputSize');
 
+    // Content fidelity radios
+    const contentFidelityRadios = document.getElementsByName('contentFidelity');
+
     // Hidden history ID
     const currentHistoryIdInput = document.getElementById('currentHistoryId');
 
@@ -90,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let isRestoring = false;
     let saveTimeout = null;
     let currentMode = 'presentation'; // 'presentation' | 'report' | 'documentation'
-    const STORAGE_KEY = 'rehab_presentation_state_v3';
+    const STORAGE_KEY = 'rehab_presentation_state_v4';
 
     const database = firebase.database();
 
@@ -281,6 +285,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     function getSelectedOutputSize() {
         const selected = document.querySelector('input[name="outputSize"]:checked');
         return selected ? parseInt(selected.value, 10) : 5000; // default Detailed
+    }
+
+    // =========================================================================
+    // Content Fidelity helper
+    // =========================================================================
+    function getContentFidelity() {
+        const selected = document.querySelector('input[name="contentFidelity"]:checked');
+        return selected ? selected.value : 'strict'; // default Strict
     }
 
     // =========================================================================
@@ -683,7 +695,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => {
             const state = {
-                version: 4,
+                version: 5,
                 mode: currentMode,
                 textContent: textInput.value,
                 attachmentMeta: attachments.map(a => ({
@@ -705,6 +717,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 customOutlineDocumentation: customOutlineDocumentation?.value || '',
                 additionalInstructions: additionalInstructions.value,
                 outputSize: document.querySelector('input[name="outputSize"]:checked')?.value || '5000',
+                contentFidelity: getContentFidelity(),
                 timestamp: Date.now()
             };
             try {
@@ -798,6 +811,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const sizeRadio = document.querySelector(`input[name="outputSize"][value="${state.outputSize}"]`);
                 if (sizeRadio) sizeRadio.checked = true;
             }
+
+            // Restore content fidelity
+            if (state.contentFidelity) {
+                const fidelityRadio = document.querySelector(`input[name="contentFidelity"][value="${state.contentFidelity}"]`);
+                if (fidelityRadio) fidelityRadio.checked = true;
+            }
             
             validateForm();
             isRestoring = false;
@@ -827,13 +846,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         outputSizeRadios.forEach(r => r.addEventListener('change', saveProgress));
     }
 
+    // Save content fidelity selection
+    if (contentFidelityRadios.length) {
+        contentFidelityRadios.forEach(r => r.addEventListener('change', saveProgress));
+    }
+
     // Additional form validation triggers
     [patientName, patientAge, patientDiagnosis].forEach(el => el?.addEventListener('input', validateForm));
     patientGender?.addEventListener('change', validateForm);
     professionSelect?.addEventListener('change', validateForm);
 
     // =========================================================================
-    // AI Generation – Mode‑adaptive prompts
+    // AI Generation – Mode‑adaptive prompts with Content Fidelity control
     // =========================================================================
     async function generatePresentation() {
         if (!aiConfig.token) {
@@ -877,6 +901,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const outline = getSelectedOutline();
         const instructions = additionalInstructions.value.trim() || 'None provided';
         const maxTokens = getSelectedOutputSize();
+        const fidelityMode = getContentFidelity();
+        const isStrict = fidelityMode === 'strict';
 
         // Mode-specific labels and descriptions
         const modeLabels = {
@@ -893,11 +919,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         const contextText = modeContext[currentMode] || 'clinical review';
 
+        // Build the fidelity rule
+        const fidelityRule = isStrict
+            ? `0. **FIDELITY RULE (STRICT):** You MUST NOT invent, assume, or add ANY clinical information, history, examination findings, or patient details that are not explicitly stated in the provided clinical notes. If a section lacks data, state clearly that the information is "not provided" or "not documented". Do NOT fabricate plausible details. Only organise and format what is given.`
+            : `0. **FIDELITY RULE (FLEXIBLE):** You may expand the provided information with plausible, clinically appropriate details where necessary to create a coherent document, but clearly indicate any inferred or typical findings as "likely" or "based on typical presentation". However, do not invent specific patient history events.`;
+
         const systemPrompt = `You are an expert clinical assistant helping a ${profession} prepare a comprehensive **${modeText}**.
 
 Your task is to create a **thorough, detailed, and professional** ${modeText.toLowerCase()} that demonstrates deep clinical reasoning and provides actionable insights, appropriate for ${contextText}.
 
 **CRITICAL INSTRUCTIONS:**
+
+${fidelityRule}
 
 1. **Follow this outline structure exactly:** ${outline}
 
@@ -941,6 +974,8 @@ Make this **${modeText}** worthy of a senior clinician's review.`;
 
 **ADDITIONAL INSTRUCTIONS:** ${instructions}
 
+**FIDELITY MODE:** ${isStrict ? 'STRICT – Use only provided information. Do NOT fabricate or assume ANY details.' : 'FLEXIBLE – You may add plausible clinical details where needed, but indicate inferred findings.'}
+
 **CLINICAL NOTES & EXTRACTED TEXT:**
 ${combinedText || 'No clinical notes provided.'}
 
@@ -954,7 +989,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         ];
 
         console.log('[AI] Sending request to DeepSeek API...');
-        console.log('[AI] Mode:', currentMode, '| Text length:', combinedText.length, 'chars | Max tokens:', maxTokens);
+        console.log('[AI] Mode:', currentMode, '| Fidelity:', fidelityMode, '| Text length:', combinedText.length, 'chars | Max tokens:', maxTokens);
 
         const url = `${aiConfig.endpoint}/chat/completions`;
         const response = await fetch(url, {
@@ -1019,6 +1054,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                 resultsMarkdown: rawMarkdown,
                 resultsHtml: htmlContent,
                 outputSize: getSelectedOutputSize(),
+                contentFidelity: getContentFidelity(),
                 mode: currentMode,
                 timestamp: firebase.database.ServerValue.TIMESTAMP,
                 date: new Date().toLocaleDateString(),
@@ -1049,6 +1085,10 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         };
         const modeLabel = modeLabels[currentMode] || 'Document';
 
+        const fidelityLabel = getContentFidelity() === 'strict' 
+            ? '🔒 Strict (no fabricated content)' 
+            : '⚠️ Flexible (may include inferred details)';
+
         const modalHtml = `
             <div class="preview-modal">
                 <div class="preview-overlay"></div>
@@ -1068,6 +1108,9 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                             ${professionText ? `(${escapeHtml(professionText)})` : ''} 
                             has been generated and saved to your history.
                         </p>
+                        <div style="margin-bottom: 16px; padding: 8px 12px; background: ${getContentFidelity() === 'strict' ? '#f0fdf4' : '#fefce8'}; border-radius: 8px; font-size: 0.8rem; color: ${getContentFidelity() === 'strict' ? '#15803d' : '#854d0e'};">
+                            ${fidelityLabel}
+                        </div>
                         <div class="preview-actions">
                             <button class="preview-btn primary" id="viewFullPresentationBtn">
                                 📖 View Full ${modeLabel}
@@ -1228,9 +1271,13 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             const modeLabel = item.mode === 'report' ? 'Report' : 
                              item.mode === 'documentation' ? 'Documentation' : 'Presentation';
             
+            const fidelityTag = item.contentFidelity === 'flexible' 
+                ? '<span style="font-size: 0.7rem; background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Flexible</span>' 
+                : '';
+            
             div.innerHTML = `
                 <div class="history-info" style="flex:1;">
-                    <span class="history-name">${escapeHtml(item.patientName || 'Unknown Patient')}</span>
+                    <span class="history-name">${escapeHtml(item.patientName || 'Unknown Patient')}${fidelityTag}</span>
                     <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(modeLabel)}</span>
                     <div class="history-meta">
                         <span><i class="far fa-calendar-alt"></i> ${escapeHtml(item.date || '')}</span>
@@ -1363,6 +1410,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         }, 100);
         
         console.log('[INIT] Multi‑mode assistant ready (Presentation, Report, Documentation)');
+        console.log('[INIT] Content Fidelity default:', getContentFidelity());
     }
 
     initialize();
