@@ -1,4 +1,5 @@
-// js/assign.js – Modern Assignment Maker with Modal Upload, Outline, Preview Modal, History, Export
+// js/assign.js – Modern Assignment Maker v2.0
+// Humanized AI, Multi-pass Generation, AI Detection Scoring, Cancel Support
 
 if (typeof marked !== 'undefined') {
   marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
@@ -30,15 +31,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const closeUploadModalBtn = document.getElementById('closeUploadModal');
   const uploadOptions = document.querySelectorAll('.upload-option');
 
-  // Results
-  const resultsContainer = document.getElementById('resultsContainer');
+  // Results loading
   const resultsLoading = document.getElementById('resultsLoading');
-  const resultEditor = document.getElementById('resultEditor');
-  const resultDate = document.getElementById('resultDate');
-  const copyResultBtn = document.getElementById('copyResultBtn');
-  const downloadWordBtn = document.getElementById('downloadWordBtn');
-  const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-  const regenerateBtn = document.getElementById('regenerateBtn');
 
   // Preview Modal
   const previewModal = document.getElementById('previewModal');
@@ -68,11 +62,181 @@ document.addEventListener('DOMContentLoaded', async () => {
   let generatedHtml = '';
   let currentHistoryId = null;
   let isGenerating = false;
-  let allHistoryEntries = [];
+  let aiAbortController = null;
 
   const database = firebase.database();
 
-  // ===== Helpers =====
+  // =========================================================================
+  // HUMANIZATION ENGINE
+  // =========================================================================
+  const HUMANIZATION_PATTERNS = {
+    bannedPhrases: [
+      'moreover', 'furthermore', 'notably', 'consequently', 'thus', 'hence',
+      'therein', 'hereby', 'whereby', 'aforementioned', 'heretofore',
+      'in conclusion', 'it is imperative to note', 'it is worth mentioning',
+      'it should be noted that', 'as previously stated', 'in summary',
+      'the findings revealed that', 'the results indicated that',
+      'it can be argued that', 'it is evident that', 'needless to say',
+      'it is important to highlight', 'it must be emphasized',
+      'it is crucial to understand', 'without a doubt', 'undoubtedly'
+    ],
+    sentenceStarters: [
+      'What this means in practice is',
+      'Interestingly,',
+      'From what I have seen,',
+      'In real-world settings,',
+      'A key thing to understand is',
+      'This is where it gets interesting:',
+      'To put it simply,',
+      'Looking at this practically,',
+      'One thing that stands out is',
+      'What matters most here is',
+      'The real question is',
+      'This brings up an important point:',
+      'It is worth asking whether',
+      'A practical example would be'
+    ],
+    reflections: [
+      'I found this particularly relevant because in my clinical experience,',
+      'During my placement, I noticed that',
+      'This reminded me of a case where',
+      'From observing patients, I have come to believe that',
+      'Personally, I think this matters because',
+      'In my view, what makes this important is',
+      'I have always found it interesting that',
+      'What struck me most about this topic is'
+    ]
+  };
+
+  function buildHumanizationPrompt() {
+    return `
+HUMANIZATION REQUIREMENTS (FOLLOW ALL):
+
+1. SENTENCE STRUCTURE:
+   - Vary sentence length dramatically: mix short sentences (5-10 words) with medium (15-25 words) and occasional long ones (30+ words).
+   - Start some sentences with "And" or "But" naturally for conversational flow.
+   - Use fragments occasionally for emphasis. Like this.
+   - Ask rhetorical questions sparingly to engage the reader.
+
+2. VOCABULARY:
+   - NEVER use these words/phrases: ${HUMANIZATION_PATTERNS.bannedPhrases.slice(0, 12).join(', ')}
+   - Replace overly formal words with natural alternatives where appropriate.
+   - Use everyday clinical language, not textbook jargon.
+   - Choose Anglo-Saxon words over Latin-derived ones when possible (e.g., "help" not "facilitate", "use" not "utilize").
+
+3. NATURAL FLOW:
+   - Write as if explaining to a colleague over coffee, not lecturing from a podium.
+   - Use contractions naturally (don't, it's, that's, I've, there's, wouldn't).
+   - Include 1-2 minor digressions that feel authentic, then return to the point.
+   - Occasionally acknowledge uncertainty: "It is hard to say for sure, but..."
+   - Vary paragraph length — some short (2 sentences), some longer (5-6 sentences).
+
+4. PERSONAL VOICE:
+   - Include 2-3 genuine personal reflections using phrases like:
+     ${HUMANIZATION_PATTERNS.reflections.slice(0, 3).join(' | ')}
+   - Refer to personal clinical or academic experience where relevant.
+   - Use "I" and "we" naturally where a real student would.
+
+5. IMPERFECTIONS (CRITICAL FOR PASSING AI DETECTION):
+   - Occasionally restate an idea in slightly different words (mild redundancy).
+   - Let one or two sentences run slightly longer than ideal.
+   - Use informal connectors naturally: "What this means is...", "Basically,", "So, what does this look like in practice?"
+   - End one paragraph with a slightly informal transition like "But there is more to it than that."
+   - Include one very short paragraph (1-2 sentences) for rhythm variation.
+
+6. NIGERIAN HEALTHCARE CONTEXT (when applicable):
+   - Reference local healthcare settings naturally where relevant.
+   - Mention Nigerian health institutions, practices, or challenges where appropriate.
+   - Use examples from Nigerian clinical or academic contexts.
+
+The final text MUST read like a thoughtful, slightly imperfect student wrote it — not a professor, not a textbook, not an AI. The text should pass AI detection tools with flying colors.`;
+  }
+
+  // =========================================================================
+  // AI DETECTION SCORING
+  // =========================================================================
+  function extractPlainText(html) {
+    if (!html) return '';
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+
+  function calculateHumanizationScore(htmlContent) {
+    const text = extractPlainText(htmlContent);
+    if (!text || text.length < 100) return null;
+
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 5);
+    if (sentences.length < 5) return null;
+
+    // 1. Sentence variation score (0-100)
+    const lengths = sentences.map(s => s.trim().split(/\s+/).length);
+    const avgLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;
+    const variance = lengths.reduce((sum, len) => sum + Math.pow(len - avgLength, 2), 0) / lengths.length;
+    const stdDev = Math.sqrt(variance);
+    const variationScore = Math.min(100, Math.round((stdDev / (avgLength || 1)) * 100));
+
+    // 2. Predictability score (0-100, lower is better)
+    let predictablePatterns = 0;
+    const totalSentences = sentences.length;
+
+    HUMANIZATION_PATTERNS.bannedPhrases.forEach(phrase => {
+      const regex = new RegExp(phrase, 'gi');
+      const matches = text.match(regex);
+      if (matches) predictablePatterns += matches.length;
+    });
+
+    const starts = sentences.map(s => s.trim().split(/\s+/).slice(0, 2).join(' ').toLowerCase());
+    const uniqueStarts = new Set(starts);
+    const startVariety = uniqueStarts.size / totalSentences;
+
+    const predictabilityScore = Math.max(0, Math.round(
+      (predictablePatterns / totalSentences) * 50 + (1 - startVariety) * 50
+    ));
+
+    // 3. AI likelihood score (0-100, lower is better)
+    const aiIndicators = [
+      /it is (important|essential|crucial|necessary) to/gi,
+      /(moreover|furthermore|consequently|thus|hence)/gi,
+      /in (conclusion|summary|essence)/gi,
+      /the (findings|results) (revealed|indicated|demonstrated|showed) that/gi,
+      /it (can|could|should|must) be (noted|argued|stated|mentioned)/gi,
+      /(significant|substantial|considerable) (impact|effect|influence|role)/gi,
+      /plays? a (vital|crucial|critical|key|important|significant) role/gi,
+      /has (revolutionized|transformed|changed) the (way|field|landscape)/gi
+    ];
+
+    let aiIndicatorCount = 0;
+    aiIndicators.forEach(pattern => {
+      const matches = text.match(pattern);
+      if (matches) aiIndicatorCount += matches.length;
+    });
+
+    const aiLikelihoodScore = Math.min(100, Math.round(
+      (aiIndicatorCount / totalSentences) * 40 +
+      (predictablePatterns / totalSentences) * 30 +
+      (1 - startVariety) * 30
+    ));
+
+    // 4. Overall humanization score (0-100, higher is better)
+    const overallScore = Math.round(
+      (variationScore * 0.3) +
+      ((100 - predictabilityScore) * 0.35) +
+      ((100 - aiLikelihoodScore) * 0.35)
+    );
+
+    return {
+      overall: Math.min(100, Math.max(0, overallScore)),
+      variation: variationScore,
+      predictability: predictabilityScore,
+      aiLikelihood: aiLikelihoodScore,
+      sentenceCount: totalSentences
+    };
+  }
+
+  // =========================================================================
+  // HELPERS
+  // =========================================================================
   function showToast(message, type = 'success', duration = 3500) {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -123,9 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const show = hasOutlineCheckbox.checked;
     outlineInput.style.display = show ? 'block' : 'none';
     outlineHint.style.display = show ? 'flex' : 'none';
-    if (show) {
-      outlineInput.focus();
-    }
+    if (show) outlineInput.focus();
   });
 
   // ===== Upload Modal =====
@@ -185,11 +347,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function handleFileUpload(file) {
     if (!file) return;
-    
-    // Show loading feedback
+
     attachBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     attachBtn.disabled = true;
-    
+
     try {
       const text = await extractText(file);
       uploadedFileText = text.substring(0, 15000);
@@ -219,7 +380,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function extractText(file) {
     const ext = file.name.split('.').pop().toLowerCase();
-    
+
     if (ext === 'txt') {
       const reader = new FileReader();
       return new Promise((resolve, reject) => {
@@ -267,7 +428,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (file.type.startsWith('image/')) {
-      return `[Image attached: ${file.name} - OCR not available in this version]`;
+      return `[Image attached: ${file.name} - OCR not available]`;
     }
 
     throw new Error('Unsupported file type. Please upload PDF, DOCX, TXT, or an image.');
@@ -284,41 +445,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // ===== Build Prompt =====
-  function buildPrompt(topic, course, type, volume, unit, tone, instructions, fileContent) {
-    const hasOutline = hasOutlineCheckbox.checked;
-    const outlineText = outlineInput.value.trim();
+  // =========================================================================
+  // MULTI-PASS AI GENERATION
+  // =========================================================================
+  async function callAIWithCancel(systemPrompt, userPrompt, maxTokens, temp, topP, freqPenalty, presPenalty) {
+    const response = await fetch(`${aiConfig.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${aiConfig.token}`
+      },
+      body: JSON.stringify({
+        model: aiConfig.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: maxTokens,
+        temperature: temp,
+        top_p: topP,
+        frequency_penalty: freqPenalty,
+        presence_penalty: presPenalty
+      }),
+      signal: aiAbortController?.signal
+    });
 
-    let outlineInstruction = '';
-    if (hasOutline && outlineText) {
-      outlineInstruction = `
-STRUCTURE REQUIREMENT (CRITICAL):
-You MUST follow this exact outline provided by the teacher/supervisor. Do NOT deviate from this structure:
-
-${outlineText}
-
-Follow this outline precisely while writing naturally within each section. Use the outline headings as your section headings.`;
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData?.error?.message || `API error (${response.status})`);
     }
 
-    return `Write a student assignment on "${topic}" for a ${course} course. It is a ${type} assignment.
-
-Requirements:
-- Length: approximately ${volume} ${unit}.
-- Tone: ${tone}.
-${instructions ? `- Additional instructions: ${instructions}` : ''}
-${outlineInstruction}
-${fileContent ? `- Reference material (use for background understanding only, do NOT copy directly): ${fileContent}` : ''}
-
-CRITICAL WRITING STYLE INSTRUCTIONS:
-1. Write in a genuinely human, student-like voice. Sound like a real healthcare student – use natural phrasing, occasional minor imperfections, personal reflections ("I observed that…", "I found this interesting because…", "In my experience…"), and vary sentence length. Avoid overly polished, robotic perfection.
-2. Use markdown for structure (## headings, - bullet points). Do NOT wrap the entire output in a code block or HTML tags.
-3. Start directly with the assignment title and content. Do NOT include any meta-commentary like "Here is the assignment" or "I have written the following".
-4. Include some personal opinions and reflections where appropriate to sound more human.
-5. The text must pass as human-written to both lecturers and AI detection tools.
-6. Use natural transitions between sections – avoid formulaic phrases like "In conclusion" every time.`;
+    return response.json();
   }
 
-  // ===== Generate Assignment =====
+  function cleanAIResponse(raw) {
+    let cleaned = raw.replace(/```html?/g, '').replace(/```/g, '').trim();
+    if (cleaned.includes('##') || cleaned.includes('**') || cleaned.includes('- ')) {
+      cleaned = marked.parse(cleaned);
+    }
+    return cleaned;
+  }
+
+  // ===== Generate Assignment (Multi-pass with Humanization) =====
   generateBtn.addEventListener('click', async () => {
     if (isGenerating) return;
 
@@ -342,7 +510,6 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
     const originalBtnHtml = generateBtn.innerHTML;
     generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Generating…</span>';
 
-    resultsContainer.style.display = 'none';
     resultsLoading.style.display = 'block';
     resultsLoading.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -355,77 +522,129 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
     const instructions = instructionsInput.value.trim();
     const fileContent = uploadedFileText ? `\n\nReference material:\n${uploadedFileText}` : '';
 
-    const prompt = buildPrompt(topic, course, type, volume, unit, tone, instructions, fileContent);
+    const humanizationRules = buildHumanizationPrompt();
+    aiAbortController = new AbortController();
 
     try {
       const startTime = Date.now();
-      
-      const response = await fetch(`${aiConfig.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${aiConfig.token}`
-        },
-        body: JSON.stringify({
-          model: aiConfig.model,
-          messages: [
-            { 
-              role: 'system', 
-              content: 'You are a skilled academic writer helping a healthcare student. You write naturally and authentically, never revealing that you are an AI. Your writing sounds human and passes AI detection.' 
-            },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 3000,
-          temperature: 0.8,
-          top_p: 0.95
-        })
-      });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        console.error('[AI] API error:', errData);
-        
-        if (response.status === 401) {
-          throw new Error('Authentication failed. Please contact support.');
-        } else if (response.status === 429) {
-          throw new Error('Too many requests. Please wait a moment and try again.');
-        } else if (response.status === 503) {
-          throw new Error('The AI service is temporarily busy. Please try again in a few minutes.');
-        } else {
-          const msg = errData?.error?.message || `Service error (${response.status})`;
-          throw new Error(msg);
-        }
-      }
+      // ===== PASS 1: Academic Draft =====
+      const pass1Prompt = `Write a well-structured student assignment on the topic "${topic}" for a ${course} course. This is a ${type} assignment.
 
-      const data = await response.json();
-      let raw = data.choices[0].message.content;
-      
-      // Clean up any code fences
-      raw = raw.replace(/```html?/g, '').replace(/```/g, '').trim();
-      generatedHtml = raw;
+REQUIREMENTS:
+- Length: approximately ${volume} ${unit}.
+- Tone: ${tone}.
+${instructions ? `- Additional instructions: ${instructions}` : ''}
+${hasOutlineCheckbox.checked && outlineInput.value.trim() ? `- CRITICAL: You MUST follow this exact outline structure:\n${outlineInput.value.trim()}` : ''}
+${fileContent ? `- Reference material (use for background understanding only, do NOT copy directly):\n${fileContent}` : ''}
 
-      // Update results editor
-      resultEditor.innerHTML = generatedHtml;
-      resultDate.textContent = new Date().toLocaleString();
+FORMATTING INSTRUCTIONS:
+1. Start with a clear title as a level-1 heading.
+2. Use proper HTML headings (h2 for main sections, h3 for subsections).
+3. Use bullet points and numbered lists where appropriate.
+4. Use <strong> tags for emphasis on key terms.
+5. Use proper paragraph breaks between sections.
+6. Each major section should have meaningful content.
+
+Return ONLY the HTML content. No markdown code fences, no explanations.`;
+
+      const pass1Response = await callAIWithCancel(
+        'You are a knowledgeable academic writer. Write comprehensive, well-structured academic content with proper HTML formatting. Stay strictly on the provided topic.',
+        pass1Prompt,
+        3000, 0.6, 0.9, 0.1, 0.1
+      );
+      let content = cleanAIResponse(pass1Response.choices[0].message.content);
+
+      // ===== PASS 2: Humanization =====
+      const pass2Prompt = `REWRITE the following assignment to sound like a real healthcare student wrote it. The assignment is about "${topic}" for a ${course} course.
+
+TONE: ${tone}
+
+${humanizationRules}
+
+ORIGINAL TEXT:
+${content.substring(0, 3000)}
+
+Rewrite this completely. Keep all the key information and academic quality, but make it sound genuinely human-written. The content MUST stay on the topic of "${topic}".
+Return ONLY the rewritten HTML. No markdown fences.`;
+
+      const pass2Response = await callAIWithCancel(
+        'You are an expert at making academic text sound naturally human-written. You rewrite text to sound like a real student wrote it, while staying true to the original topic.',
+        pass2Prompt,
+        3500, 0.9, 0.95, 0.4, 0.4
+      );
+      content = cleanAIResponse(pass2Response.choices[0].message.content);
+
+      // ===== PASS 3: Polish & Format =====
+      const pass3Prompt = `POLISH the following assignment about "${topic}". 
+
+- Fix any grammar issues
+- Improve formatting and readability
+- PRESERVE the natural human voice — do NOT make it sound more formal or AI-like
+- Keep personal reflections and natural phrasing intact
+- Ensure proper HTML structure
+
+ORIGINAL:
+${content}
+
+Return ONLY the polished HTML. No markdown fences.`;
+
+      const pass3Response = await callAIWithCancel(
+        'You are a careful editor who polishes text while preserving its natural human quality.',
+        pass3Prompt,
+        2000, 0.4, 0.9, 0.1, 0.1
+      );
+      content = cleanAIResponse(pass3Response.choices[0].message.content);
+
+      generatedHtml = content;
+
+      // Calculate humanization score
+      const score = calculateHumanizationScore(generatedHtml);
+      console.log('[SCORE] Humanization score:', score?.overall + '%', score);
 
       resultsLoading.style.display = 'none';
-      resultsContainer.style.display = 'block';
 
       // Save to history if logged in
       if (currentUser) {
-        currentHistoryId = await saveToHistory(generatedHtml);
+        currentHistoryId = await saveToHistory(generatedHtml, '');
       }
+
+      // Store in localStorage as fallback
+      const assignmentData = {
+        topic: topic,
+        course: course,
+        type: type,
+        typeLabel: type,
+        tone: tone,
+        toneLabel: tone,
+        volume: volume,
+        volumeUnit: unit,
+        hasOutline: hasOutlineCheckbox.checked,
+        outline: hasOutlineCheckbox.checked ? outlineInput.value.trim() : '',
+        html: generatedHtml,
+        markdown: '',
+        historyId: currentHistoryId,
+        generatedAt: new Date().toISOString(),
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        humanizationScore: score?.overall || null
+      };
+      localStorage.setItem('rehab_assignment_current', JSON.stringify(assignmentData));
 
       // Show preview modal
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       showPreviewModal();
-      showToast(`Assignment generated in ${elapsed}s`, 'success');
+      
+      const scoreMsg = score ? ` (Human Score: ${score.overall}%)` : '';
+      showToast(`Assignment generated in ${elapsed}s${scoreMsg}`, 'success');
 
     } catch (err) {
       console.error('[GENERATE] Error:', err);
-      
+
       let errorMessage = err.message;
-      if (errorMessage.includes('API key') || errorMessage.includes('token')) {
+      if (err.name === 'AbortError') {
+        errorMessage = 'Generation cancelled.';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('token')) {
         errorMessage = 'The AI service is not configured correctly. Please contact support.';
       } else if (errorMessage.toLowerCase().includes('rate')) {
         errorMessage = 'Too many requests. Please wait a moment and try again.';
@@ -434,13 +653,14 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
       } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
         errorMessage = 'Network error. Please check your internet connection.';
       }
-      
+
       showToast(`Error: ${errorMessage}`, 'error', 5000);
       resultsLoading.style.display = 'none';
     } finally {
       isGenerating = false;
       generateBtn.disabled = false;
       generateBtn.innerHTML = originalBtnHtml;
+      aiAbortController = null;
       validateForm();
     }
   });
@@ -450,14 +670,13 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
     previewTopic.textContent = topicInput.value.trim();
     previewCourse.textContent = courseInput.value.trim();
     previewDate.textContent = new Date().toLocaleString();
-    
-    // Show outline badge if outline was used
+
     if (hasOutlineCheckbox.checked && outlineInput.value.trim()) {
       previewOutlineBadge.style.display = 'block';
     } else {
       previewOutlineBadge.style.display = 'none';
     }
-    
+
     previewModal.style.display = 'flex';
     previewModal.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -467,21 +686,16 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
     previewModal.style.display = 'none';
     previewModal.classList.remove('active');
     document.body.style.overflow = '';
-    
-    // Scroll to results
-    setTimeout(() => {
-      resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
   }
 
   if (previewClose) {
     previewClose.addEventListener('click', closePreviewModal);
   }
-  
+
   if (previewCloseBtn) {
     previewCloseBtn.addEventListener('click', closePreviewModal);
   }
-  
+
   const previewOverlay = document.querySelector('.preview-overlay');
   if (previewOverlay) {
     previewOverlay.addEventListener('click', closePreviewModal);
@@ -495,25 +709,8 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
 
   if (viewFullAssignmentBtn) {
     viewFullAssignmentBtn.addEventListener('click', () => {
-      // Save the current assignment to localStorage for answer.html to read
-      const assignmentData = {
-        topic: topicInput.value.trim(),
-        course: courseInput.value.trim(),
-        type: assignmentType.options[assignmentType.selectedIndex].text,
-        tone: toneSelect.options[toneSelect.selectedIndex].text,
-        volume: volumeCount.value,
-        volumeUnit: volumeType.value,
-        hasOutline: hasOutlineCheckbox.checked,
-        outline: hasOutlineCheckbox.checked ? outlineInput.value.trim() : '',
-        html: resultEditor.innerHTML,
-        historyId: currentHistoryId,
-        generatedAt: new Date().toISOString()
-      };
-      localStorage.setItem('rehab_assignment_current', JSON.stringify(assignmentData));
-      
       closePreviewModal();
-      
-      // Open answer.html
+
       if (currentHistoryId) {
         window.open(`answer.html?id=${currentHistoryId}`, '_blank');
       } else {
@@ -523,9 +720,9 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
   }
 
   // ===== Save to History =====
-  async function saveToHistory(html) {
+  async function saveToHistory(html, markdown) {
     if (!currentUser) return null;
-    
+
     try {
       const ref = await database.ref(`history/${currentUser.uid}/assignments`).push({
         topic: topicInput.value.trim(),
@@ -540,7 +737,8 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
         outline: hasOutlineCheckbox.checked ? outlineInput.value.trim() : '',
         instructions: instructionsInput.value.trim(),
         html: html,
-        plainPreview: resultEditor.innerText.substring(0, 200),
+        markdown: markdown,
+        plainPreview: html.replace(/<[^>]*>/g, '').substring(0, 200),
         timestamp: firebase.database.ServerValue.TIMESTAMP,
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString()
@@ -552,119 +750,18 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
     }
   }
 
-  // ===== Toolbar Actions =====
-  if (copyResultBtn) {
-    copyResultBtn.addEventListener('click', () => {
-      const text = resultEditor.innerText;
-      navigator.clipboard.writeText(text)
-        .then(() => {
-          showToast('Copied to clipboard', 'success');
-          // Visual feedback
-          const icon = copyResultBtn.querySelector('i');
-          if (icon) {
-            const originalClass = icon.className;
-            icon.className = 'fas fa-check';
-            setTimeout(() => { icon.className = originalClass; }, 2000);
-          }
-        })
-        .catch(() => showToast('Failed to copy', 'error'));
-    });
-  }
-
-  if (downloadWordBtn) {
-    downloadWordBtn.addEventListener('click', () => {
-      const fullHtml = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Assignment - ${escapeHtml(topicInput.value || 'Untitled')}</title>
-  <style>
-    body {
-      font-family: 'Georgia', 'Times New Roman', serif;
-      line-height: 1.7;
-      max-width: 800px;
-      margin: 2rem auto;
-      padding: 0 1.5rem;
-      color: #222;
-    }
-    h1, h2, h3 { color: #00695c; margin-top: 1.5em; }
-    p { margin: 0.8em 0; }
-    ul, ol { padding-left: 1.5rem; margin: 0.5em 0; }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background: #f5f5f5; }
-    blockquote { border-left: 4px solid #00695c; padding-left: 1rem; margin-left: 0; color: #555; }
-    hr { border: none; border-top: 1px solid #ddd; margin: 2rem 0; }
-    @media print { body { padding: 0.5in; } }
-  </style>
-</head>
-<body>
-  ${resultEditor.innerHTML}
-  <hr>
-  <p style="font-size: 0.8rem; color: #999; text-align: center;">
-    Generated by rehablix Assignment Maker — ${new Date().toLocaleString()}
-  </p>
-</body>
-</html>`;
-      
-      const blob = new Blob([fullHtml], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const safeName = (topicInput.value || 'Assignment').slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
-      a.download = `${safeName}_${new Date().toISOString().slice(0, 10)}.doc`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Downloaded as Word document', 'success');
-    });
-  }
-
-  if (downloadPdfBtn) {
-    downloadPdfBtn.addEventListener('click', () => {
-      window.print();
-    });
-  }
-
-  if (regenerateBtn) {
-    regenerateBtn.addEventListener('click', () => {
-      if (isGenerating) {
-        showToast('Please wait for the current generation to finish', 'error');
-        return;
-      }
-      resultsContainer.style.display = 'none';
-      generateBtn.click();
-    });
-  }
-
-  // Auto-save on edit
-  let autoSaveTimeout;
-  resultEditor.addEventListener('input', () => {
-    if (currentUser && currentHistoryId) {
-      clearTimeout(autoSaveTimeout);
-      autoSaveTimeout = setTimeout(() => {
-        database.ref(`history/${currentUser.uid}/assignments/${currentHistoryId}`).update({
-          html: resultEditor.innerHTML,
-          plainPreview: resultEditor.innerText.substring(0, 200)
-        });
-        console.log('Assignment auto-saved');
-      }, 2000);
-    }
-  });
-
   // ===== History Functions =====
   function loadHistoryList() {
     if (!currentUser) return;
-    
+
     database.ref(`history/${currentUser.uid}/assignments`)
       .orderByChild('timestamp')
       .on('value', snap => {
         const data = snap.val();
         if (!historyList) return;
-        
+
         historyList.innerHTML = '';
-        
+
         if (!data) {
           historyList.innerHTML = `
             <div class="empty-state">
@@ -698,10 +795,10 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
         filtered.forEach(([id, item]) => {
           const div = document.createElement('div');
           div.className = 'history-item';
-          
-          const outlineIndicator = item.hasOutline ? 
+
+          const outlineIndicator = item.hasOutline ?
             '<span style="font-size: 0.65rem; background: #e0f2f1; color: #00695c; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">outline</span>' : '';
-          
+
           div.innerHTML = `
             <button class="delete-btn" data-id="${id}" title="Delete assignment">
               <i class="fas fa-trash-alt"></i>
@@ -719,7 +816,7 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
               </button>
             </div>`;
 
-          // Click on the whole item (except delete and retrieve buttons)
+          // Click on the whole item (except buttons) opens answer.html
           div.addEventListener('click', (e) => {
             if (e.target.closest('.delete-btn') || e.target.closest('.retrieve-btn')) return;
             localStorage.setItem('rehab_assignment_current_id', id);
@@ -758,69 +855,13 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
       });
   }
 
-  async function loadAssignment(id) {
-    if (!currentUser) return;
-    
-    try {
-      const snap = await database.ref(`history/${currentUser.uid}/assignments/${id}`).once('value');
-      const item = snap.val();
-      
-      if (item) {
-        // Restore form fields
-        topicInput.value = item.topic || '';
-        courseInput.value = item.course || '';
-        assignmentType.value = item.type || 'classwork';
-        toneSelect.value = item.tone || 'professional';
-        volumeCount.value = item.volume || 3;
-        volumeType.value = item.volumeUnit || 'pages';
-        instructionsInput.value = item.instructions || '';
-        
-        // Restore outline
-        if (item.hasOutline) {
-          hasOutlineCheckbox.checked = true;
-          outlineInput.value = item.outline || '';
-          outlineInput.style.display = 'block';
-          outlineHint.style.display = 'flex';
-        } else {
-          hasOutlineCheckbox.checked = false;
-          outlineInput.value = '';
-          outlineInput.style.display = 'none';
-          outlineHint.style.display = 'none';
-        }
-
-        // Restore result
-        resultEditor.innerHTML = item.html || '';
-        generatedHtml = item.html || '';
-        currentHistoryId = id;
-        resultDate.textContent = `${item.date || ''} ${item.time || ''}`;
-        
-        resultsContainer.style.display = 'block';
-        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        historyDrawer.classList.remove('active');
-        document.body.style.overflow = '';
-        
-        showToast('Assignment loaded', 'success');
-        validateForm();
-      }
-    } catch (error) {
-      console.error('Load error:', error);
-      showToast('Failed to load assignment', 'error');
-    }
-  }
-
   async function deleteAssignment(id) {
     if (!currentUser) return;
     if (!confirm('Permanently delete this assignment?')) return;
-    
+
     try {
       await database.ref(`history/${currentUser.uid}/assignments/${id}`).remove();
-      
-      if (currentHistoryId === id) {
-        currentHistoryId = null;
-        resultsContainer.style.display = 'none';
-        resultEditor.innerHTML = '';
-      }
-      
+      try { await database.ref(`publicAssignments/${id}`).remove(); } catch (e) { /* ignore */ }
       showToast('Assignment deleted', 'success');
     } catch (error) {
       console.error('Delete error:', error);
@@ -899,10 +940,10 @@ CRITICAL WRITING STYLE INSTRUCTIONS:
 
   // ===== Initialize =====
   async function initialize() {
-    console.log('[INIT] Starting Assignment Maker...');
+    console.log('[INIT] Starting Assignment Maker v2.0...');
     await fetchTokens();
     validateForm();
-    console.log('[INIT] Assignment Maker ready');
+    console.log('[INIT] Assignment Maker ready with multi-pass humanization engine');
   }
 
   initialize();
