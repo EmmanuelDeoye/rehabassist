@@ -1,5 +1,5 @@
-// js/project.js – Academic Project Maker v2.0.1
-// FIXED: Project title now included in AI prompts and context memory.
+// js/project.js – Academic Project Maker v2.1.0
+// ENHANCED: Word count control, reference style selection, multi-scope export (section/chapter/project)
 // Humanized AI, Multi-pass Generation, Student Profiles, Context Memory,
 // AI Detection Scoring, Version History, Streaming Support, Professional Export
 
@@ -57,6 +57,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const scorePredictabilityEl = document.getElementById('scorePredictability');
   const scoreAILikelyEl = document.getElementById('scoreAILikely');
   const toastContainer = document.getElementById('toast-container');
+  
+  // NEW: Generation options elements
+  const wordCountSelect = document.getElementById('wordCountSelect');
+  const customWordCountInput = document.getElementById('customWordCount');
+  const referenceStyleSelect = document.getElementById('referenceStyleSelect');
+  const exportScopeSelect = document.getElementById('exportScopeSelect');
 
   // Rich text formatting buttons
   const formatBtns = document.querySelectorAll('.format-btn');
@@ -683,6 +689,65 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
   }
 
   // =========================================================================
+  // GENERATION OPTIONS: Word Count + Reference Style
+  // =========================================================================
+  if (wordCountSelect) {
+    wordCountSelect.addEventListener('change', () => {
+      if (wordCountSelect.value === 'custom') {
+        customWordCountInput.style.display = 'inline-block';
+        customWordCountInput.focus();
+      } else {
+        customWordCountInput.style.display = 'none';
+      }
+      // Save preferences
+      if (currentProject) {
+        currentProject.wordCountPref = wordCountSelect.value;
+        if (wordCountSelect.value === 'custom') {
+          currentProject.customWordCount = parseInt(customWordCountInput.value) || 500;
+        }
+        saveToFirebase();
+      }
+    });
+  }
+
+  if (customWordCountInput) {
+    customWordCountInput.addEventListener('change', () => {
+      if (currentProject) {
+        currentProject.customWordCount = parseInt(customWordCountInput.value) || 500;
+        saveToFirebase();
+      }
+    });
+  }
+
+  if (referenceStyleSelect) {
+    referenceStyleSelect.addEventListener('change', () => {
+      if (currentProject) {
+        currentProject.referenceStyle = referenceStyleSelect.value;
+        saveToFirebase();
+      }
+    });
+  }
+
+  function getTargetWordCount() {
+    let targetWordCount = 500; // default
+    if (wordCountSelect) {
+      if (wordCountSelect.value === 'custom') {
+        const custom = parseInt(customWordCountInput?.value, 10);
+        if (custom && custom >= 100 && custom <= 5000) {
+          targetWordCount = custom;
+        }
+      } else {
+        targetWordCount = parseInt(wordCountSelect.value, 10);
+      }
+    }
+    return targetWordCount;
+  }
+
+  function getReferenceStyle() {
+    return referenceStyleSelect ? referenceStyleSelect.value : 'APA 7th';
+  }
+
+  // =========================================================================
   // PROJECT MANAGEMENT
   // =========================================================================
   async function loadProjects() {
@@ -833,6 +898,20 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
     currentChapter = 'chapter1';
     currentSection = 0;
 
+    // Restore generation preferences
+    if (currentProject.wordCountPref && wordCountSelect) {
+      wordCountSelect.value = currentProject.wordCountPref;
+      if (currentProject.wordCountPref === 'custom') {
+        customWordCountInput.style.display = 'inline-block';
+        customWordCountInput.value = currentProject.customWordCount || 500;
+      } else {
+        customWordCountInput.style.display = 'none';
+      }
+    }
+    if (currentProject.referenceStyle && referenceStyleSelect) {
+      referenceStyleSelect.value = currentProject.referenceStyle;
+    }
+
     renderChapters();
     loadSectionContent();
     updateProjectSelector();
@@ -865,6 +944,9 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       department: projectDeptSelect ? projectDeptSelect.value : 'Occupational Therapy',
       approach: projectApproachSelect ? projectApproachSelect.value : 'quantitative',
       writingProfile: 'undergraduate',
+      wordCountPref: '500',
+      customWordCount: 500,
+      referenceStyle: 'APA 7th',
       chapters: {},
       _versions: {},
       createdAt: firebase.database.ServerValue.TIMESTAMP,
@@ -1021,6 +1103,9 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
         chapters: currentProject.chapters,
         _versions: currentProject._versions || {},
         writingProfile: currentProject.writingProfile || 'undergraduate',
+        wordCountPref: currentProject.wordCountPref || '500',
+        customWordCount: currentProject.customWordCount || 500,
+        referenceStyle: currentProject.referenceStyle || 'APA 7th',
         updatedAt: firebase.database.ServerValue.TIMESTAMP
       });
       projects[currentProjectId] = { ...currentProject };
@@ -1048,7 +1133,7 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
   });
 
   // =========================================================================
-  // AI MULTI-PASS GENERATION (FIXED: project title now anchors all prompts)
+  // AI MULTI-PASS GENERATION (ENHANCED: word count + reference style)
   // =========================================================================
   function updateProgressStage(message) {
     if (progressStage) progressStage.textContent = message;
@@ -1122,6 +1207,10 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
     const contextSummary = buildContextSummary();  // now includes project title as first line
     const profileGuidance = getProfileGuidance(profile);
     const humanizationRules = buildHumanizationPrompt();
+    
+    // NEW: Get word count and reference style
+    const targetWordCount = getTargetWordCount();
+    const referenceStyle = getReferenceStyle();
 
     // Show progress modal
     aiProgressModal.classList.add('active');
@@ -1132,13 +1221,15 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       // ===== PASS 1: Academic Draft =====
       updateProgressStage('Pass 1/3: Generating academic draft...');
       const pass1Response = await callAIWithCancel(
-        'You are a knowledgeable academic writer. Write comprehensive, well-structured academic content with proper HTML formatting. Stay strictly on the provided project topic.',
+        `You are a knowledgeable academic writer. Write comprehensive, well-structured academic content with proper HTML formatting and ${referenceStyle} citations. Stay strictly on the provided project topic.`,
         `Write the "${sectionName}" section for the academic project titled "${currentProject.title}" in the ${currentProject.department} department.
 
 PROJECT DETAILS:
 ${contextSummary}
 
 RESEARCH APPROACH: ${approach}
+TARGET WORD COUNT: approximately ${targetWordCount} words.
+CITATION STYLE: ${referenceStyle}. Use proper in-text citations and include a brief reference list at the end if applicable.
 ${modification ? 'SPECIAL MODIFICATION INSTRUCTIONS: ' + modification : ''}
 
 Write comprehensive academic content that is specifically about "${currentProject.title}".
@@ -1158,6 +1249,8 @@ WRITING PROFILE:
 ${profileGuidance}
 
 WRITING TONE: ${tone}
+TARGET WORD COUNT: Maintain approximately ${targetWordCount} words.
+CITATION STYLE: Keep all ${referenceStyle} citations intact.
 
 ${humanizationRules}
 
@@ -1182,6 +1275,8 @@ Return ONLY the rewritten HTML. No markdown fences.`,
 - Do NOT make it sound more formal or AI-like
 - Preserve personal reflections and natural phrasing
 - Ensure the content remains focused on "${currentProject.title}"
+- Final text should be close to ${targetWordCount} words
+- Maintain all ${referenceStyle} citations properly
 
 ORIGINAL:
 ${content}
@@ -1298,6 +1393,7 @@ Return ONLY the polished HTML. No markdown fences.`,
 - Approach: ${currentProject?.approach === 'qualitative' ? 'Qualitative (Case Study)' : 'Quantitative'}
 - Current Chapter: ${ch ? ch.title : 'N/A'}
 - Current Section: ${sectionName}
+- Reference Style: ${currentProject?.referenceStyle || 'APA 7th'}
 
 **Your Role:**
 1. Provide constructive academic guidance specific to this project topic
@@ -1351,39 +1447,88 @@ Respond as a supportive university supervisor would.`;
   }
 
   // =========================================================================
-  // PROFESSIONAL EXPORT
+  // PROFESSIONAL EXPORT (ENHANCED: section/chapter/project scope)
   // =========================================================================
-  saveSectionBtn.addEventListener('click', async () => {
-    saveCurrentSection();
-    await saveToFirebase();
-    showToast('Saved successfully', 'success');
-  });
+  
+  // Helper function to get section content
+  function getSectionContent(chKey, secIndex) {
+    const chStruct = getChaptersStructure();
+    if (chStruct[chKey]?.sections?.length) {
+      return currentProject?.chapters?.[chKey]?.sections?.[secIndex] || '';
+    } else {
+      return currentProject?.chapters?.[chKey]?.content || '';
+    }
+  }
 
-  exportWordBtn.addEventListener('click', async () => {
-    saveCurrentSection();
-    await saveToFirebase();
-
+  // Helper function to build export HTML based on scope
+  function buildExportHtml(scope) {
     const title = currentProject?.title || 'Academic Project';
     const department = currentProject?.department || '';
     const type = currentProject?.type || '';
     const approach = currentProject?.approach === 'qualitative' ? 'Qualitative Study' : 'Quantitative Study';
-
     const chStruct = getChaptersStructure();
-    let tocHtml = '<h2>Table of Contents</h2><ol>';
-    for (const [key, ch] of Object.entries(chStruct)) {
-      tocHtml += `<li><strong>${ch.title}</strong>`;
-      if (ch.sections && ch.sections.length > 0) {
-        tocHtml += '<ul>';
-        ch.sections.forEach(sec => {
-          tocHtml += `<li>${sec}</li>`;
+    
+    let bodyHtml = '';
+    let chapterTitle = '';
+    let tocHtml = '';
+
+    if (scope === 'section') {
+      const ch = chStruct[currentChapter];
+      const secName = ch.sections?.[currentSection] || ch.title;
+      chapterTitle = ch.title;
+      bodyHtml = `<h2>${escapeHtml(secName)}</h2>\n${getSectionContent(currentChapter, currentSection)}`;
+    } else if (scope === 'chapter') {
+      const ch = chStruct[currentChapter];
+      chapterTitle = ch.title;
+      bodyHtml = `<h2>${escapeHtml(ch.title)}</h2>\n`;
+      if (ch.sections?.length) {
+        ch.sections.forEach((sec, i) => {
+          bodyHtml += `<h3>${escapeHtml(sec)}</h3>\n${getSectionContent(currentChapter, i)}\n`;
         });
+      } else {
+        bodyHtml += getSectionContent(currentChapter, 0);
+      }
+      
+      // Build TOC for chapter
+      tocHtml = '<h2>Table of Contents</h2><ol>';
+      tocHtml += `<li><strong>${escapeHtml(ch.title)}</strong></li>`;
+      if (ch.sections?.length) {
+        tocHtml += '<ul>';
+        ch.sections.forEach(sec => { tocHtml += `<li>${escapeHtml(sec)}</li>`; });
         tocHtml += '</ul>';
       }
-      tocHtml += '</li>';
+      tocHtml += '</ol>';
+    } else if (scope === 'project') {
+      // Build full project with all chapters
+      for (const [key, ch] of Object.entries(chStruct)) {
+        if (!ch.sections?.length) {
+          // standalone sections like abstract, references
+          bodyHtml += `<h2>${escapeHtml(ch.title)}</h2>\n${getSectionContent(key, 0)}\n`;
+        } else {
+          bodyHtml += `<h2>${escapeHtml(ch.title)}</h2>\n`;
+          ch.sections.forEach((sec, i) => {
+            bodyHtml += `<h3>${escapeHtml(sec)}</h3>\n${getSectionContent(key, i)}\n`;
+          });
+        }
+      }
+      
+      // Build full TOC
+      tocHtml = '<h2>Table of Contents</h2><ol>';
+      for (const [key, ch] of Object.entries(chStruct)) {
+        tocHtml += `<li><strong>${escapeHtml(ch.title)}</strong>`;
+        if (ch.sections?.length) {
+          tocHtml += '<ul>';
+          ch.sections.forEach(sec => { tocHtml += `<li>${escapeHtml(sec)}</li>`; });
+          tocHtml += '</ul>';
+        }
+        tocHtml += '</li>';
+      }
+      tocHtml += '</ol>';
     }
-    tocHtml += '</ol>';
 
-    const fullHtml = `<!DOCTYPE html>
+    const referenceStyle = currentProject?.referenceStyle || 'APA 7th';
+
+    return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
@@ -1415,12 +1560,20 @@ Respond as a supportive university supervisor would.`;
     .cover-page .meta { font-size: 11pt; color: #777; line-height: 2; }
     .toc-page { page-break-after: always; }
     .toc-page h2 { color: #00695c; border-bottom: 2px solid #00695c; padding-bottom: 0.3rem; }
-    .content-page { page-break-before: always; }
+    .content-page { page-break-before: ${scope === 'section' ? 'auto' : 'always'}; }
     h1, h2, h3 { color: #00695c; }
     h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; margin-top: 2rem; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { border: 1px solid #666; padding: 8px; text-align: left; }
     th { background: #f0f0f0; }
+    .reference-note { 
+      font-size: 10pt; 
+      color: #666; 
+      font-style: italic; 
+      margin-top: 0.5rem;
+      border-top: 1px solid #ddd;
+      padding-top: 0.5rem;
+    }
     @media print {
       body { margin: 0; }
       .no-print { display: none; }
@@ -1428,6 +1581,7 @@ Respond as a supportive university supervisor would.`;
   </style>
 </head>
 <body>
+  ${scope === 'project' ? `
   <div class="cover-page">
     <h1>${escapeHtml(title)}</h1>
     <p class="subtitle">${escapeHtml(approach)}</p>
@@ -1435,33 +1589,79 @@ Respond as a supportive university supervisor would.`;
       <p><strong>Department:</strong> ${escapeHtml(department)}</p>
       <p><strong>Type:</strong> ${escapeHtml(type)}</p>
       <p><strong>Date:</strong> ${new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <p><strong>Reference Style:</strong> ${escapeHtml(referenceStyle)}</p>
       <p style="margin-top: 3rem;"><em>Generated by rehablix Academic Project Maker</em></p>
     </div>
   </div>
-  <div class="toc-page">
-    ${tocHtml}
-  </div>
+  <div class="toc-page">${tocHtml}</div>
+  ` : (scope === 'chapter' ? `<div class="toc-page">${tocHtml}</div>` : '')}
   <div class="content-page">
-    ${sectionEditor.innerHTML}
+    ${scope === 'chapter' ? `<h1>${escapeHtml(chapterTitle)}</h1>` : ''}
+    ${bodyHtml}
+    ${scope === 'section' ? `<p class="reference-note">Reference Style: ${escapeHtml(referenceStyle)}</p>` : ''}
   </div>
 </body>
 </html>`;
+  }
+
+  // Save button
+  saveSectionBtn.addEventListener('click', async () => {
+    saveCurrentSection();
+    await saveToFirebase();
+    showToast('Saved successfully', 'success');
+  });
+
+  // Word export with scope support
+  exportWordBtn.addEventListener('click', async () => {
+    saveCurrentSection();
+    await saveToFirebase();
+
+    const scope = exportScopeSelect ? exportScopeSelect.value : 'section';
+    const title = currentProject?.title || 'Academic Project';
+
+    const fullHtml = buildExportHtml(scope);
 
     const blob = new Blob([fullHtml], { type: 'application/msword' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     const safeName = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 50);
-    a.download = `${safeName}.doc`;
+    a.download = `${safeName}_${scope}.doc`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Professional document downloaded', 'success');
+    
+    const scopeLabel = scope === 'section' ? 'Section' : scope === 'chapter' ? 'Chapter' : 'Project';
+    showToast(`${scopeLabel} exported as Word`, 'success');
   });
 
+  // PDF export with scope support
   exportPdfBtn.addEventListener('click', () => {
-    window.print();
+    saveCurrentSection();
+    saveToFirebase();
+    
+    const scope = exportScopeSelect ? exportScopeSelect.value : 'section';
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    printWindow.document.write(buildExportHtml(scope));
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Wait for content to load then print
+    printWindow.onload = function() {
+      printWindow.print();
+      printWindow.onafterprint = function() {
+        printWindow.close();
+      };
+    };
+    
+    // Fallback if onload doesn't fire
+    setTimeout(() => {
+      printWindow.print();
+      printWindow.onafterprint = function() {
+        printWindow.close();
+      };
+    }, 500);
   });
 
   // =========================================================================
@@ -1547,5 +1747,5 @@ Respond as a supportive university supervisor would.`;
     }
   });
 
-  console.log('[INIT] Academic Project Maker v2.0.1 ready – Fixed project title anchoring in all AI prompts');
+  console.log('[INIT] Academic Project Maker v2.1.0 ready – Enhanced with word count control, reference styles, and multi-scope export');
 });
