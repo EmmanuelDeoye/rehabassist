@@ -1660,3 +1660,182 @@
     gap: 0.2rem;
   }
 }
+
+
+/* ===== AI Controls Row (Profile + Word Count + Reference Style) ===== */
+.ai-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+/* Make existing profile selector, gen-option, and tone selector consistent */
+.ai-profile-selector,
+.ai-tone-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.ai-profile-selector label,
+.ai-tone-selector label,
+.gen-option label {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.ai-profile-selector select,
+.ai-tone-selector select,
+.gen-option select,
+.gen-option input {
+  flex: 1;
+  min-width: 160px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid var(--border-light);
+  border-radius: 0.55rem;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.ai-profile-selector select:focus,
+.ai-tone-selector select:focus,
+.gen-option select:focus,
+.gen-option input:focus {
+  border-color: var(--project-accent);
+  box-shadow: 0 0 0 3px var(--project-accent-soft);
+}
+
+/* Gen option wrapper */
+.gen-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 180px;
+}
+
+.gen-option select {
+  flex: 1;
+  min-width: 140px;
+}
+
+.custom-word-count {
+  width: 90px !important;
+  min-width: 90px !important;
+  flex: 0 0 auto;
+  margin-left: 0.25rem;
+}
+
+/* AI controls container spacing */
+.ai-controls {
+  padding: 0.75rem 2rem;
+  border-top: 1px solid var(--border-light);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* Tone selector (row 2) */
+.ai-tone-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Export scope selector */
+.export-scope-select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  height: 36px;
+  line-height: 1;
+}
+
+.export-scope-select:hover {
+  border-color: var(--project-accent);
+  background: var(--project-accent-soft);
+}
+
+.export-scope-select:focus {
+  border-color: var(--project-accent);
+  box-shadow: 0 0 0 3px var(--project-accent-soft);
+}
+
+/* Responsive for AI controls */
+@media (max-width: 768px) {
+  .ai-controls {
+    padding: 0.6rem 1rem;
+  }
+  
+  .ai-controls-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .ai-profile-selector,
+  .ai-tone-selector,
+  .gen-option {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+  
+  .ai-profile-selector select,
+  .ai-tone-selector select,
+  .gen-option select,
+  .gen-option input {
+    width: 100%;
+  }
+  
+  .custom-word-count {
+    width: 100% !important;
+  }
+}
+
+
+/* ===== Export scope selector ===== */
+.export-scope-select {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border-light);
+  border-radius: 1.5rem;   /* match .action-btn rounding */
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  height: 36px;            /* align with buttons */
+  line-height: 1;
+}
+
+.export-scope-select:hover {
+  border-color: var(--project-accent);
+  background: var(--project-accent-soft);
+}
+
+.export-scope-select:focus {
+  border-color: var(--project-accent);
+  box-shadow: 0 0 0 3px var(--project-accent-soft);
+}
