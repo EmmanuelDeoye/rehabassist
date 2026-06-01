@@ -1,5 +1,5 @@
 // js/presentation.js – Multi‑mode (Presentation/Report/Documentation), Multi‑file, Camera, DOCX, OCR
-// Updated with Content Fidelity control (Strict vs Flexible) and Humanized AI output
+// Updated with Content Fidelity control (Strict vs Flexible)
 
 // Marked configuration
 if (typeof marked !== 'undefined') {
@@ -857,7 +857,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     professionSelect?.addEventListener('change', validateForm);
 
     // =========================================================================
-    // AI Generation – Mode‑adaptive prompts with HUMANIZED output
+    // AI Generation – Mode‑adaptive prompts with Content Fidelity control
     // =========================================================================
     async function generatePresentation() {
         if (!aiConfig.token) {
@@ -921,61 +921,45 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Build the fidelity rule
         const fidelityRule = isStrict
-            ? `**FIDELITY RULE (STRICT):** You MUST NOT invent, assume, or add ANY clinical information, history, examination findings, or patient details that are not explicitly stated in the provided clinical notes. If a section lacks data, state clearly that the information is "not provided" or "not documented". Do NOT fabricate plausible details. Only organise and format what is given.`
-            : `**FIDELITY RULE (FLEXIBLE):** You may expand the provided information with plausible, clinically appropriate details where necessary to create a coherent document, but clearly indicate any inferred or typical findings as "likely" or "based on typical presentation". However, do not invent specific patient history events.`;
+            ? `0. **FIDELITY RULE (STRICT):** You MUST NOT invent, assume, or add ANY clinical information, history, examination findings, or patient details that are not explicitly stated in the provided clinical notes. If a section lacks data, state clearly that the information is "not provided" or "not documented". Do NOT fabricate plausible details. Only organise and format what is given.`
+            : `0. **FIDELITY RULE (FLEXIBLE):** You may expand the provided information with plausible, clinically appropriate details where necessary to create a coherent document, but clearly indicate any inferred or typical findings as "likely" or "based on typical presentation". However, do not invent specific patient history events.`;
 
-        // HUMANIZED system prompt
         const systemPrompt = `You are an expert clinical assistant helping a ${profession} prepare a comprehensive **${modeText}**.
 
-Your task is to create a thorough, detailed, and professional ${modeText.toLowerCase()} that sounds like it was dictated naturally by a busy but thoughtful clinician.
+Your task is to create a **thorough, detailed, and professional** ${modeText.toLowerCase()} that demonstrates deep clinical reasoning and provides actionable insights, appropriate for ${contextText}.
 
-### CRITICAL – WRITE LIKE A REAL HUMAN (HIGHEST PRIORITY)
-You must make the text **undetectable as AI-generated**. Do **not** write in a robotic, bullet‑point‑heavy style. Instead, follow these human‑writing rules:
-
-1. **Vary your sentence length and rhythm.**  
-   Mix very short sentences (5‑8 words) with longer, more nuanced ones.  
-   Do **not** use the same sentence pattern over and over.
-
-2. **Use natural, spoken‑like transitions.**  
-   Humans rarely say "Furthermore" or "Moreover". Prefer "Also", "On top of that", "What's more", "That said", "Now", "So", "Basically", "In practice", "Keep in mind that".  
-   Sometimes start a sentence with "And" or "But" – it sounds more natural.
-
-3. **Write as if you are dictating your thoughts.**  
-   Include phrases like: "I'd highlight…", "The key point here is…", "From my perspective…", "It's worth noting…", "Honestly, the most striking finding is…"  
-   This makes the text feel personal and unrehearsed.
-
-4. **Allow minor, human‑like imperfections** – but **never** at the expense of clarity or factual correctness.  
-   This can include: occasional sentence fragments for emphasis (e.g., "Significant improvement. Especially in mobility."), a slightly informal tone in places (e.g., "This patient is making real progress"), or a brief aside in parentheses.  
-   **Do NOT introduce factual errors.** The clinical content must remain accurate and appropriate for ${contextText}.
-
-5. **Avoid overused AI phrases.**  
-   Never use: "It is imperative to note that…", "In conclusion…", "As previously mentioned…", "It is crucial to highlight that…".  
-   Just say what needs to be said without wrapping it in robotic sign‑posting.
-
-6. **Formatting – subtle, not mechanical.**  
-   Use markdown headings and occasional bullet lists, but **do not** turn every section into a sterile checklist.  
-   Prefer narrative text that flows, with bullets only where they genuinely help scannability.  
-   Do NOT use tables.
-
-7. **Readability over rigid structure.**  
-   If a section can be expressed more naturally in a short paragraph instead of a list, do so.  
-   The final document should read like a colleague's well‑organised notes, not a computer‑generated template.
-
-### CONTENT RULES (do not break)
+**CRITICAL INSTRUCTIONS:**
 
 ${fidelityRule}
 
-**Follow this outline structure:** ${outline}  
-(interpret it flexibly to allow natural flow, not as a rigid recipe)
+1. **Follow this outline structure exactly:** ${outline}
 
-**Be comprehensive and detailed:**  
-- Each section must contain substantial, specific clinical information.
-- Provide clear clinical reasoning and actionable recommendations.
-- The total output should feel complete, not shallow.
+2. **Be comprehensive and detailed:**
+   - Each section should contain **substantial content** (not just 1-2 lines)
+   - Include **specific clinical details**, measurements, observations, and findings
+   - Provide **clear clinical reasoning** for assessments and decisions
+   - Give **actionable, specific recommendations** with rationale
+   - The total output should be appropriate for the token limit provided
 
-**Tone:** Professional, objective, and patient‑centred, but **conversational enough** to sound like a real person wrote it.
+3. **Format requirements:**
+   - Use markdown headings: ## for main sections, ### for subsections
+   - Use bullet points (-) for lists
+   - Use **bold** for emphasis on key findings or critical items
+   - Use professional clinical language appropriate for ${currentMode === 'documentation' ? 'medical records' : currentMode === 'report' ? 'formal reports' : 'multidisciplinary presentations'}
+   - Do NOT use tables
+   - Maintain clear section separation
 
-Make this ${modeText} read as if it were typed by a senior clinician after a long day – accurate, insightful, but unmistakably human.`;
+4. **Quality standards:**
+   - Write at the level expected for ${contextText}
+   - Include relevant functional assessments (mobility, ADLs, cognition, communication, etc.)
+   - Consider holistic patient needs (physical, psychological, social)
+   - Reference evidence-based practice where appropriate
+   - Highlight risks, precautions, and safety considerations
+   - Include measurable goals and outcome measures where possible
+
+5. **Tone:** Professional, objective, and patient-centered. Be specific rather than vague.
+
+Make this **${modeText}** worthy of a senior clinician's review.`;
 
         let userContent = `**TASK:** Create a ${modeText.toLowerCase()} for the following patient.
 
@@ -997,7 +981,7 @@ ${combinedText || 'No clinical notes provided.'}
 
 ---
 
-Please create a detailed ${modeText.toLowerCase()} based on the above information. Remember to write in a natural, human style as instructed – varied sentences, natural transitions, and conversational clinical tone. Ensure each section contains thorough clinical detail and actionable recommendations.`;
+Please create a detailed ${modeText.toLowerCase()} based on the above information. Ensure each section contains thorough clinical detail and actionable recommendations.`;
 
         const messages = [
             { role: 'system', content: systemPrompt },
@@ -1018,8 +1002,8 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                 model: aiConfig.model,
                 messages,
                 max_tokens: maxTokens,
-                temperature: 0.55,  // Slightly increased for more natural variation
-                top_p: 0.92
+                temperature: 0.3,
+                top_p: 0.9
             })
         });
 
@@ -1427,7 +1411,6 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         
         console.log('[INIT] Multi‑mode assistant ready (Presentation, Report, Documentation)');
         console.log('[INIT] Content Fidelity default:', getContentFidelity());
-        console.log('[INIT] AI output humanization: ENABLED');
     }
 
     initialize();
