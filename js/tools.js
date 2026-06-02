@@ -25,6 +25,8 @@
       { name: 'ROM Analyzer', url: 'rom.html', icon: '🦵' },
       { name: 'Gait Monitor', url: 'gait.html', icon: '🎥' },
       { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' },
+      { name: 'Assignment Maker', url: 'assignment.html', icon: '📝' },
+      { name: 'Project Maker', url: 'project.html', icon: '📚' },
       { name: 'Ask Me', url: 'ask.html', icon: '💬' }
     ];
 
