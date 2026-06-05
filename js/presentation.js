@@ -1,5 +1,5 @@
 // js/presentation.js – Multi‑mode (Presentation/Report/Documentation), Multi‑file, Camera, DOCX, OCR
-// Updated with Content Fidelity control (Strict vs Flexible)
+// Updated with Tiered Plan Access: Free (basic), Student (advanced), Pro (full)
 
 // Marked configuration
 if (typeof marked !== 'undefined') {
@@ -90,13 +90,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     let currentUser = null;
     let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
-    let attachments = [];   // { type, name, textContent?, dataURL?, ocrText?, ocrProcessing?, processing? }
+    let attachments = [];
     let isRestoring = false;
     let saveTimeout = null;
-    let currentMode = 'presentation'; // 'presentation' | 'report' | 'documentation'
-    const STORAGE_KEY = 'rehab_presentation_state_v4';
+    let currentMode = 'presentation';
+    let currentPlan = 'free';  // 'free' | 'student' | 'pro'
+    let generationCount = 0;  // Track generations for free plan
+    let generationResetDate = null;  // 30-day reset date
+    const STORAGE_KEY = 'rehab_presentation_state_v5';
+    const PLAN_STORAGE_KEY = 'rehab_plan_generation_data';
 
     const database = firebase.database();
+
+    // Plan-based limits
+    const FREE_MONTHLY_LIMIT = 5;
+    const FREE_LIMIT_DAYS = 30;
 
     function showToast(message, type = 'success', duration = 3500) {
         const toast = document.createElement('div');
@@ -140,33 +148,542 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // =========================================================================
+    // Generation Tracking (Free Plan Limit)
+    // =========================================================================
+    function loadGenerationData() {
+        try {
+            const data = JSON.parse(localStorage.getItem(PLAN_STORAGE_KEY) || '{}');
+            generationCount = data.count || 0;
+            generationResetDate = data.resetDate ? new Date(data.resetDate) : null;
+            
+            // Check if 30 days have passed since last reset
+            const now = new Date();
+            if (!generationResetDate || (now - generationResetDate) >= (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+                // Reset counter
+                generationCount = 0;
+                generationResetDate = now;
+                saveGenerationData();
+            }
+        } catch (e) {
+            generationCount = 0;
+            generationResetDate = new Date();
+            saveGenerationData();
+        }
+    }
+
+    function saveGenerationData() {
+        const data = {
+            count: generationCount,
+            resetDate: generationResetDate ? generationResetDate.toISOString() : new Date().toISOString()
+        };
+        localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function incrementGenerationCount() {
+        generationCount++;
+        saveGenerationData();
+        updateGenerationCounterUI();
+    }
+
+    function canGenerateMore() {
+        if (currentPlan === 'student' || currentPlan === 'pro') return true;
+        
+        const now = new Date();
+        if (!generationResetDate || (now - generationResetDate) >= (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+            generationCount = 0;
+            generationResetDate = now;
+            saveGenerationData();
+            return true;
+        }
+        
+        return generationCount < FREE_MONTHLY_LIMIT;
+    }
+
+    function getRemainingGenerations() {
+        if (currentPlan === 'student' || currentPlan === 'pro') return Infinity;
+        return Math.max(0, FREE_MONTHLY_LIMIT - generationCount);
+    }
+
+    function getDaysUntilReset() {
+        if (!generationResetDate) return 0;
+        const now = new Date();
+        const diffTime = (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000) - (now - generationResetDate);
+        return Math.max(0, Math.ceil(diffTime / (24 * 60 * 60 * 1000)));
+    }
+
+    // =========================================================================
+    // Feature Access Control
+    // =========================================================================
+    function canAccessPresentationMode() {
+        return currentPlan === 'student' || currentPlan === 'pro';
+    }
+
+    function canUseCustomOutlines() {
+        return currentPlan === 'student' || currentPlan === 'pro';
+    }
+
+    function canUseFidelityFlexible() {
+        return currentPlan === 'pro';
+    }
+
+    function getAvailableOutputSizes() {
+        switch (currentPlan) {
+            case 'free': return ['2000'];  // Minimal only
+            case 'student': return ['2000', '3500'];  // Minimal & Moderate
+            case 'pro': return ['2000', '3500', '5000'];  // All
+            default: return ['2000'];
+        }
+    }
+
+    function getDefaultOutputSize() {
+        switch (currentPlan) {
+            case 'free': return '2000';
+            case 'student': return '3500';
+            case 'pro': return '5000';
+            default: return '2000';
+        }
+    }
+
+    function updatePlanUI() {
+        updateModeTabsUI();
+        updateCustomOutlineAccess();
+        updateUpgradeNotice();
+        updateFidelityOptions();
+        updateOutputSizeOptions();
+        updateGenerationCounterUI();
+        validateForm();
+    }
+
+    function updateModeTabsUI() {
+        modeTabs.forEach(tab => {
+            const mode = tab.dataset.mode;
+            if (mode === 'presentation' && !canAccessPresentationMode()) {
+                tab.classList.add('locked');
+                tab.title = 'Student plan or above required for Presentation mode';
+            } else {
+                tab.classList.remove('locked');
+                tab.title = '';
+            }
+        });
+    }
+
+    function updateCustomOutlineAccess() {
+        // Handle custom outline options in Report and Documentation modes
+        const reportCustomOption = document.querySelector('input[name="outlineReport"][value="custom"]');
+        const docCustomOption = document.querySelector('input[name="outlineDocumentation"][value="custom"]');
+        const presentationCustomOption = document.querySelector('input[name="outlinePresentation"][value="custom"]');
+
+        [reportCustomOption, docCustomOption, presentationCustomOption].forEach(option => {
+            if (!option) return;
+            
+            if (!canUseCustomOutlines()) {
+                option.disabled = true;
+                option.parentElement.style.opacity = '0.5';
+                option.parentElement.style.cursor = 'not-allowed';
+                option.parentElement.title = 'Student plan or above required for custom outlines';
+                
+                // Add student badge
+                const badge = option.parentElement.querySelector('.plan-badge');
+                if (!badge) {
+                    const planBadge = document.createElement('span');
+                    planBadge.className = 'plan-badge';
+                    planBadge.textContent = 'STUDENT+';
+                    planBadge.style.cssText = `
+                        background: linear-gradient(135deg, #0ea5e9, #0284c7);
+                        color: white;
+                        padding: 2px 6px;
+                        border-radius: 4px;
+                        font-size: 0.6rem;
+                        font-weight: 700;
+                        margin-left: 6px;
+                        vertical-align: middle;
+                    `;
+                    option.parentElement.appendChild(planBadge);
+                }
+                
+                // If custom was selected, switch to default
+                if (option.checked) {
+                    const defaultOption = option.closest('.outline-selector').querySelector('input[type="radio"]:not([value="custom"])');
+                    if (defaultOption) defaultOption.checked = true;
+                    // Hide custom textarea
+                    if (option.name === 'outlineReport' && customOutlineReport) {
+                        customOutlineReport.style.display = 'none';
+                        if (customOutlineHintReport) customOutlineHintReport.style.display = 'none';
+                    } else if (option.name === 'outlineDocumentation' && customOutlineDocumentation) {
+                        customOutlineDocumentation.style.display = 'none';
+                        if (customOutlineHintDocumentation) customOutlineHintDocumentation.style.display = 'none';
+                    } else if (option.name === 'outlinePresentation' && customOutlinePresentation) {
+                        customOutlinePresentation.style.display = 'none';
+                        if (customOutlineHintPresentation) customOutlineHintPresentation.style.display = 'none';
+                    }
+                }
+            } else {
+                option.disabled = false;
+                option.parentElement.style.opacity = '1';
+                option.parentElement.style.cursor = 'pointer';
+                option.parentElement.title = '';
+                
+                // Remove badge
+                const badge = option.parentElement.querySelector('.plan-badge');
+                if (badge) badge.remove();
+            }
+        });
+    }
+
+    function updateGenerationCounterUI() {
+        let counterEl = document.getElementById('generationCounter');
+        
+        if (currentPlan === 'student' || currentPlan === 'pro') {
+            if (counterEl) counterEl.remove();
+            return;
+        }
+
+        if (!counterEl) {
+            counterEl = document.createElement('div');
+            counterEl.id = 'generationCounter';
+            generateBtn.parentNode.insertBefore(counterEl, generateBtn.nextSibling);
+        }
+
+        const remaining = getRemainingGenerations();
+        const used = generationCount;
+        const total = FREE_MONTHLY_LIMIT;
+        const daysLeft = getDaysUntilReset();
+
+        let statusColor = '#059669';
+        let statusBg = '#f0fdf4';
+        let statusBorder = '#86efac';
+        
+        if (remaining <= 1) {
+            statusColor = '#dc2626';
+            statusBg = '#fef2f2';
+            statusBorder = '#fca5a5';
+        } else if (remaining <= 3) {
+            statusColor = '#d97706';
+            statusBg = '#fffbeb';
+            statusBorder = '#fcd34d';
+        }
+
+        counterEl.style.cssText = `
+            background: ${statusBg};
+            border: 1px solid ${statusBorder};
+            border-radius: 1rem;
+            padding: 0.8rem 1.2rem;
+            margin: 1rem 0;
+            color: ${statusColor};
+            font-size: 0.85rem;
+            text-align: center;
+            animation: fadeSlideDown 0.4s ease;
+        `;
+
+        counterEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <span style="font-size: 1.2rem;">📊</span>
+                <strong>Free Plan Limit</strong>
+            </div>
+            <div style="margin-bottom: 0.3rem;">
+                <strong>${used}/${total}</strong> generations used
+            </div>
+            <div style="font-size: 0.8rem; opacity: 0.8;">
+                ${remaining > 0 
+                    ? `<strong>${remaining}</strong> remaining · Resets in <strong>${daysLeft}</strong> days` 
+                    : `<strong style="color: #dc2626;">Limit reached!</strong> Resets in <strong>${daysLeft}</strong> days`}
+            </div>
+            <div style="margin-top: 0.4rem; font-size: 0.75rem;">
+                <a href="index.html#subscriptionPlans" style="color: #d97706; font-weight: 600; text-decoration: underline;">
+                    Upgrade for unlimited generations →
+                </a>
+            </div>
+        `;
+    }
+
+    function updateUpgradeNotice() {
+        let notice = document.getElementById('upgradeNotice');
+        
+        if (currentPlan === 'pro') {
+            if (notice) notice.remove();
+            return;
+        }
+
+        if (!notice) {
+            notice = document.createElement('div');
+            notice.id = 'upgradeNotice';
+            generateBtn.parentNode.insertBefore(notice, generateBtn.nextSibling);
+        }
+
+        if (currentPlan === 'free') {
+            notice.style.cssText = `
+                background: linear-gradient(135deg, #fef3c7, #fffbeb);
+                border: 2px solid #fbbf24;
+                border-radius: 1.2rem;
+                padding: 1.2rem;
+                margin: 1rem 0;
+                color: #92400e;
+                font-size: 0.85rem;
+                text-align: center;
+                box-shadow: 0 4px 12px rgba(251, 191, 36, 0.2);
+                position: relative;
+                overflow: hidden;
+            `;
+            notice.innerHTML = `
+                <div style="position: absolute; top: -8px; right: -8px; background: #fbbf24; color: white; padding: 3px 10px; border-radius: 1rem; font-size: 0.7rem; font-weight: 600; transform: rotate(3deg);">
+                    FREE PLAN
+                </div>
+                <div style="font-size: 1.8rem; margin-bottom: 0.3rem;">⭐</div>
+                <strong style="font-size: 1rem; display: block; margin-bottom: 0.5rem;">
+                    Unlock More Features
+                </strong>
+                <div style="color: #a16207; margin-bottom: 0.6rem; line-height: 1.6; font-size: 0.82rem;">
+                    <div style="margin-bottom: 0.3rem;">
+                        <span style="color: #dc2626;">✗</span> Presentation Mode &nbsp;
+                        <span style="color: #dc2626;">✗</span> Custom Outlines &nbsp;
+                        <span style="color: #dc2626;">✗</span> Moderate/Detailed Output
+                    </div>
+                    <div style="margin-bottom: 0.3rem;">
+                        <span style="color: #d97706;">⚠</span> Limited to <strong>5 generations/month</strong>
+                    </div>
+                    <div>
+                        <span style="color: #059669;">✓</span> Report Mode &nbsp;
+                        <span style="color: #059669;">✓</span> Documentation Mode &nbsp;
+                        <span style="color: #059669;">✓</span> File Upload & OCR
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                    <a href="index.html#subscriptionPlans" 
+                       style="display: inline-block; padding: 0.5rem 1.2rem; 
+                              background: linear-gradient(135deg, #0ea5e9, #0284c7); 
+                              color: white; border-radius: 2rem; text-decoration: none; 
+                              font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease;"
+                       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(14,165,233,0.4)';"
+                       onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+                        🎓 Get Student
+                    </a>
+                    <a href="index.html#subscriptionPlans" 
+                       style="display: inline-block; padding: 0.5rem 1.2rem; 
+                              background: linear-gradient(135deg, #f59e0b, #d97706); 
+                              color: white; border-radius: 2rem; text-decoration: none; 
+                              font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease;"
+                       onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(245,158,11,0.4)';"
+                       onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+                        💎 Get Pro
+                    </a>
+                </div>
+            `;
+        } else if (currentPlan === 'student') {
+            notice.style.cssText = `
+                background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
+                border: 2px solid #38bdf8;
+                border-radius: 1.2rem;
+                padding: 1.2rem;
+                margin: 1rem 0;
+                color: #075985;
+                font-size: 0.85rem;
+                text-align: center;
+                box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2);
+                position: relative;
+                overflow: hidden;
+            `;
+            notice.innerHTML = `
+                <div style="position: absolute; top: -8px; right: -8px; background: #38bdf8; color: white; padding: 3px 10px; border-radius: 1rem; font-size: 0.7rem; font-weight: 600; transform: rotate(3deg);">
+                    STUDENT PLAN
+                </div>
+                <div style="font-size: 1.8rem; margin-bottom: 0.3rem;">🎓</div>
+                <strong style="font-size: 1rem; display: block; margin-bottom: 0.5rem;">
+                    Upgrade to Pro for Full Power
+                </strong>
+                <div style="color: #075985; margin-bottom: 0.6rem; line-height: 1.6; font-size: 0.82rem;">
+                    <div style="margin-bottom: 0.3rem;">
+                        <span style="color: #059669;">✓</span> Presentation Mode &nbsp;
+                        <span style="color: #059669;">✓</span> Custom Outlines &nbsp;
+                        <span style="color: #059669;">✓</span> Moderate Output &nbsp;
+                        <span style="color: #059669;">✓</span> Unlimited Generations
+                    </div>
+                    <div>
+                        <span style="color: #dc2626;">✗</span> Detailed Output (5000 tokens) &nbsp;
+                        <span style="color: #dc2626;">✗</span> Flexible AI Mode
+                    </div>
+                </div>
+                <a href="index.html#subscriptionPlans" 
+                   style="display: inline-block; padding: 0.5rem 1.5rem; 
+                          background: linear-gradient(135deg, #f59e0b, #d97706); 
+                          color: white; border-radius: 2rem; text-decoration: none; 
+                          font-weight: 600; font-size: 0.85rem; transition: all 0.2s ease;"
+                   onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(245,158,11,0.4)';"
+                   onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+                    💎 Upgrade to Pro
+                </a>
+            `;
+        }
+    }
+
+    function updateFidelityOptions() {
+        const flexibleOption = document.querySelector('input[name="contentFidelity"][value="flexible"]');
+        const strictOption = document.querySelector('input[name="contentFidelity"][value="strict"]');
+        
+        if (!flexibleOption || !strictOption) return;
+        
+        if (!canUseFidelityFlexible()) {
+            flexibleOption.disabled = true;
+            flexibleOption.parentElement.style.opacity = '0.5';
+            flexibleOption.parentElement.style.cursor = 'not-allowed';
+            flexibleOption.parentElement.title = 'Pro plan required for Flexible mode';
+            
+            const badge = flexibleOption.parentElement.querySelector('.pro-badge');
+            if (!badge) {
+                const proBadge = document.createElement('span');
+                proBadge.className = 'pro-badge';
+                proBadge.textContent = 'PRO';
+                proBadge.style.cssText = `
+                    background: linear-gradient(135deg, #f59e0b, #d97706);
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.6rem;
+                    font-weight: 700;
+                    margin-left: 6px;
+                    vertical-align: middle;
+                `;
+                flexibleOption.parentElement.appendChild(proBadge);
+            }
+            
+            if (flexibleOption.checked) {
+                strictOption.checked = true;
+            }
+        } else {
+            flexibleOption.disabled = false;
+            flexibleOption.parentElement.style.opacity = '1';
+            flexibleOption.parentElement.style.cursor = 'pointer';
+            flexibleOption.parentElement.title = '';
+            
+            const badge = flexibleOption.parentElement.querySelector('.pro-badge');
+            if (badge) badge.remove();
+        }
+    }
+
+    function updateOutputSizeOptions() {
+        const available = getAvailableOutputSizes();
+        
+        outputSizeRadios.forEach(radio => {
+            const value = radio.value;
+            const label = radio.parentElement;
+            
+            if (!available.includes(value)) {
+                radio.disabled = true;
+                label.style.opacity = '0.5';
+                label.style.cursor = 'not-allowed';
+                
+                let badgeText = '';
+                if (value === '3500') badgeText = 'STUDENT+';
+                if (value === '5000') badgeText = 'PRO';
+                
+                if (badgeText) {
+                    let badge = label.querySelector('.plan-badge');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'plan-badge';
+                        badge.style.cssText = `
+                            background: linear-gradient(135deg, #f59e0b, #d97706);
+                            color: white;
+                            padding: 2px 6px;
+                            border-radius: 4px;
+                            font-size: 0.6rem;
+                            font-weight: 700;
+                            margin-left: 6px;
+                            vertical-align: middle;
+                        `;
+                        label.appendChild(badge);
+                    }
+                    badge.textContent = badgeText;
+                }
+                
+                if (radio.checked) {
+                    // Select the highest available option
+                    const defaultOption = document.querySelector(`input[name="outputSize"][value="${getDefaultOutputSize()}"]`);
+                    if (defaultOption && !defaultOption.disabled) {
+                        defaultOption.checked = true;
+                    }
+                }
+            } else {
+                radio.disabled = false;
+                label.style.opacity = '1';
+                label.style.cursor = 'pointer';
+                
+                const badge = label.querySelector('.plan-badge');
+                if (badge) badge.remove();
+            }
+        });
+        
+        // Ensure a valid option is selected
+        const selected = document.querySelector('input[name="outputSize"]:checked');
+        if (!selected || selected.disabled) {
+            const defaultOption = document.querySelector(`input[name="outputSize"][value="${getDefaultOutputSize()}"]`);
+            if (defaultOption) defaultOption.checked = true;
+        }
+    }
+
     function validateForm() {
         const hasText = textInput.value.trim() !== '';
         const hasFiles = attachments.length > 0;
         const hasProfession = professionSelect.value !== '';
         const hasPatientName = patientName.value.trim() !== '';
+        
         generateBtn.disabled = !((hasText || hasFiles) && hasProfession && hasPatientName);
+    }
+
+    // =========================================================================
+    // Plan Management
+    // =========================================================================
+    document.addEventListener('planUpdated', (e) => {
+        const newPlan = e.detail?.plan || 'free';
+        if (newPlan !== currentPlan) {
+            currentPlan = newPlan;
+            console.log('[PLAN] Updated to:', currentPlan);
+            loadGenerationData();  // Reload generation data
+            updatePlanUI();
+            
+            // If on Presentation mode and can't access, switch to Report
+            if (currentMode === 'presentation' && !canAccessPresentationMode()) {
+                switchMode('report');
+            }
+        }
+    });
+
+    // Check initial plan
+    if (window.rehabPlans) {
+        currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+        loadGenerationData();
+        updatePlanUI();
     }
 
     // =========================================================================
     // Mode Switching
     // =========================================================================
     function switchMode(mode) {
+        if (mode === 'presentation' && !canAccessPresentationMode()) {
+            showToast('🎓 Presentation Mode requires Student plan or above. You can still use Report and Documentation modes.', 'info', 5000);
+            
+            const notice = document.getElementById('upgradeNotice');
+            if (notice) {
+                notice.style.animation = 'none';
+                notice.offsetHeight;
+                notice.style.animation = 'pulse 0.5s ease 2';
+                notice.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+        
         if (mode === currentMode) return;
         
         currentMode = mode;
         
-        // Update active tab styling
         modeTabs.forEach(t => {
             t.classList.toggle('active', t.dataset.mode === mode);
         });
         
-        // Show/hide config sections
         configSections.forEach(section => {
             section.style.display = section.dataset.mode === mode ? 'block' : 'none';
         });
         
-        // Update generate button text
         const buttonLabels = {
             presentation: 'Generate Presentation',
             report: 'Generate Report',
@@ -176,20 +693,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             generateBtnText.textContent = buttonLabels[mode] || 'Generate';
         }
         
-        // Reset custom outline visibility for the new mode
+        // Reset custom outline visibility
         if (mode === 'presentation') {
             const checked = document.querySelector('input[name="outlinePresentation"]:checked');
-            const isCustom = checked?.value === 'custom';
+            const isCustom = checked?.value === 'custom' && canUseCustomOutlines();
             if (customOutlinePresentation) customOutlinePresentation.style.display = isCustom ? 'block' : 'none';
             if (customOutlineHintPresentation) customOutlineHintPresentation.style.display = isCustom ? 'flex' : 'none';
         } else if (mode === 'report') {
             const checked = document.querySelector('input[name="outlineReport"]:checked');
-            const isCustom = checked?.value === 'custom';
+            const isCustom = checked?.value === 'custom' && canUseCustomOutlines();
             if (customOutlineReport) customOutlineReport.style.display = isCustom ? 'block' : 'none';
             if (customOutlineHintReport) customOutlineHintReport.style.display = isCustom ? 'flex' : 'none';
         } else if (mode === 'documentation') {
             const checked = document.querySelector('input[name="outlineDocumentation"]:checked');
-            const isCustom = checked?.value === 'custom';
+            const isCustom = checked?.value === 'custom' && canUseCustomOutlines();
             if (customOutlineDocumentation) customOutlineDocumentation.style.display = isCustom ? 'block' : 'none';
             if (customOutlineHintDocumentation) customOutlineHintDocumentation.style.display = isCustom ? 'flex' : 'none';
         }
@@ -253,7 +770,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // =========================================================================
-    // Suggestion chips click handler
+    // Suggestion chips
     // =========================================================================
     if (suggestionChips) {
         suggestionChips.addEventListener('click', (e) => {
@@ -261,7 +778,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!chip) return;
             const text = chip.dataset.text;
             if (text && additionalInstructions) {
-                // Toggle active state on chips
                 const wasActive = chip.classList.contains('active');
                 suggestionChips.querySelectorAll('.suggestion-chip').forEach(c => c.classList.remove('active'));
                 
@@ -284,7 +800,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     function getSelectedOutputSize() {
         const selected = document.querySelector('input[name="outputSize"]:checked');
-        return selected ? parseInt(selected.value, 10) : 5000; // default Detailed
+        const value = selected ? parseInt(selected.value, 10) : parseInt(getDefaultOutputSize(), 10);
+        
+        const available = getAvailableOutputSizes();
+        if (!available.includes(String(value))) {
+            return parseInt(getDefaultOutputSize(), 10);
+        }
+        
+        return value;
     }
 
     // =========================================================================
@@ -292,16 +815,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     // =========================================================================
     function getContentFidelity() {
         const selected = document.querySelector('input[name="contentFidelity"]:checked');
-        return selected ? selected.value : 'strict'; // default Strict
+        const value = selected ? selected.value : 'strict';
+        
+        if (!canUseFidelityFlexible()) {
+            return 'strict';
+        }
+        
+        return value;
     }
 
     // =========================================================================
-    // Outline helper functions
+    // Outline helpers
     // =========================================================================
     function setupOutlineToggle(radios, customTextarea, customHint) {
         radios.forEach(radio => {
             radio.addEventListener('change', () => {
-                const isCustom = radio.value === 'custom';
+                const isCustom = radio.value === 'custom' && canUseCustomOutlines();
                 if (customTextarea) customTextarea.style.display = isCustom ? 'block' : 'none';
                 if (customHint) customHint.style.display = isCustom ? 'flex' : 'none';
                 saveProgress();
@@ -309,7 +838,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Setup outline toggles for all three modes
     setupOutlineToggle(outlineRadiosPresentation, customOutlinePresentation, customOutlineHintPresentation);
     setupOutlineToggle(outlineRadiosReport, customOutlineReport, customOutlineHintReport);
     setupOutlineToggle(outlineRadiosDocumentation, customOutlineDocumentation, customOutlineHintDocumentation);
@@ -320,21 +848,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (currentMode === 'presentation') {
             selectedRadio = document.querySelector('input[name="outlinePresentation"]:checked');
-            customText = customOutlinePresentation?.value.trim() || '';
+            customText = canUseCustomOutlines() ? (customOutlinePresentation?.value.trim() || '') : '';
         } else if (currentMode === 'report') {
             selectedRadio = document.querySelector('input[name="outlineReport"]:checked');
-            customText = customOutlineReport?.value.trim() || '';
+            customText = canUseCustomOutlines() ? (customOutlineReport?.value.trim() || '') : '';
         } else if (currentMode === 'documentation') {
             selectedRadio = document.querySelector('input[name="outlineDocumentation"]:checked');
-            customText = customOutlineDocumentation?.value.trim() || '';
+            customText = canUseCustomOutlines() ? (customOutlineDocumentation?.value.trim() || '') : '';
         }
 
         if (!selectedRadio) return 'SOAP format';
 
         const value = selectedRadio.value;
-        if (value === 'custom') return customText || 'Custom outline';
+        if (value === 'custom' && canUseCustomOutlines()) return customText || 'Custom outline';
+        if (value === 'custom') {
+            // Fallback if custom not available but somehow selected
+            return 'SOAP format';
+        }
 
-        // Define template outlines per mode
         const outlines = {
             presentation: {
                 soap: 'SOAP format: Subjective (patient report), Objective (findings), Assessment, Plan',
@@ -357,7 +888,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // =========================================================================
-    // Attachment rendering and file processing (DOCX, OCR)
+    // Attachments (same as before)
     // =========================================================================
     function renderAttachments() {
         if (attachments.length === 0) {
@@ -389,7 +920,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             nameSpan.title = att.name;
             chip.appendChild(nameSpan);
 
-            // Show processing indicator for documents
             if (att.processing) {
                 const spinner = document.createElement('span');
                 spinner.className = 'attachment-processing';
@@ -400,7 +930,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chip.appendChild(spinner);
             }
 
-            // Show OCR processing indicator for images
             if (att.ocrProcessing) {
                 const spinner = document.createElement('span');
                 spinner.className = 'attachment-processing';
@@ -411,7 +940,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chip.appendChild(spinner);
             }
 
-            // Show OCR completed indicator
             if (att.type === 'image' && !att.ocrProcessing && att.ocrText !== undefined) {
                 const checkIcon = document.createElement('span');
                 checkIcon.className = 'attachment-ocr-done';
@@ -439,31 +967,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Load mammoth for DOCX
     async function loadMammoth() {
         if (window.mammoth) return window.mammoth;
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js';
             script.onload = () => resolve(window.mammoth);
-            script.onerror = () => reject(new Error('Failed to load the document converter. Please check your internet connection.'));
+            script.onerror = () => reject(new Error('Failed to load document converter.'));
             document.head.appendChild(script);
         });
     }
 
-    // Load Tesseract.js for OCR
     async function loadTesseract() {
         if (window.Tesseract) return window.Tesseract;
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/tesseract.js@v5.0.0/dist/tesseract.min.js';
             script.onload = () => resolve(window.Tesseract);
-            script.onerror = () => reject(new Error('Failed to load image text extractor. Please check your internet connection.'));
+            script.onerror = () => reject(new Error('Failed to load image text extractor.'));
             document.head.appendChild(script);
         });
     }
 
-    // OCR on a data URL image
     async function runOCR(dataURL) {
         try {
             const Tesseract = await loadTesseract();
@@ -488,7 +1013,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const reader = new FileReader();
             return new Promise((resolve, reject) => {
                 reader.onload = e => resolve(e.target.result);
-                reader.onerror = () => reject(new Error('Could not read the text file. It might be corrupted.'));
+                reader.onerror = () => reject(new Error('Could not read text file.'));
                 reader.readAsText(file);
             });
         }
@@ -507,11 +1032,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     fullText += content.items.map(item => item.str).join(' ') + '\n';
                 }
                 if (pdf.numPages > maxPages) {
-                    fullText += `\n[Note: Document has ${pdf.numPages} pages, only first ${maxPages} processed.]`;
+                    fullText += `\n[Note: Only first ${maxPages} of ${pdf.numPages} pages processed.]`;
                 }
                 return fullText;
             } catch (err) {
-                throw new Error('Could not read this PDF. It may be encrypted or damaged.');
+                throw new Error('Could not read PDF. It may be encrypted or damaged.');
             }
         }
 
@@ -522,18 +1047,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const result = await mammoth.extractRawText({ arrayBuffer });
                 return result.value;
             } catch (err) {
-                throw new Error('Could not read this Word document (.docx). Please make sure the file is not corrupted.');
+                throw new Error('Could not read Word document.');
             }
         }
 
         if (ext === 'doc') {
-            throw new Error('Old .doc files are not supported. Please save the file as .docx (Word 2007 or newer) or convert to PDF.');
+            throw new Error('Old .doc files not supported. Please convert to .docx or PDF.');
         }
 
-        throw new Error('This file type is not supported. Please upload a PDF, Word (.docx), or plain text file.');
+        throw new Error('File type not supported. Use PDF, DOCX, or TXT.');
     }
 
-    // Compress image and return data URL
     async function compressImageIfNeeded(dataURL) {
         if (!dataURL || dataURL.length < 500 * 1024) return dataURL;
         return new Promise(resolve => {
@@ -579,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 attachments[idx].textContent = text.substring(0, 15000);
                 attachments[idx].processing = false;
                 renderAttachments();
-                showToast('Document added successfully', 'success');
+                showToast('Document added', 'success');
             } catch (err) {
                 attachments.splice(idx, 1);
                 renderAttachments();
@@ -610,11 +1134,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     attachments[idx].ocrText = ocrResult || '';
                     attachments[idx].ocrProcessing = false;
                     renderAttachments();
-                    if (ocrResult) {
-                        showToast('Text extracted from image', 'success', 2000);
-                    } else {
-                        showToast('No text found in image, it will be included as a note.', 'info', 2500);
-                    }
+                    if (ocrResult) showToast('Text extracted from image', 'success', 2000);
+                    else showToast('No text found in image', 'info', 2500);
                     saveProgress();
                 })
                 .catch(err => {
@@ -637,7 +1158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!files || files.length === 0) return;
         const maxFiles = 10 - attachments.length;
         if (files.length > maxFiles) {
-            showToast(`You can add up to ${maxFiles} more file${maxFiles !== 1 ? 's' : ''} (max 10 total)`, 'warning');
+            showToast(`Max ${maxFiles} more file${maxFiles !== 1 ? 's' : ''} (10 total)`, 'warning');
             return;
         }
         Array.from(files).forEach(f => processFile(f));
@@ -712,21 +1233,19 @@ document.addEventListener('DOMContentLoaded', async () => {
                 outlinePresentation: document.querySelector('input[name="outlinePresentation"]:checked')?.value || 'soap',
                 outlineReport: document.querySelector('input[name="outlineReport"]:checked')?.value || 'progress',
                 outlineDocumentation: document.querySelector('input[name="outlineDocumentation"]:checked')?.value || 'soap',
-                customOutlinePresentation: customOutlinePresentation?.value || '',
-                customOutlineReport: customOutlineReport?.value || '',
-                customOutlineDocumentation: customOutlineDocumentation?.value || '',
+                customOutlinePresentation: canUseCustomOutlines() ? (customOutlinePresentation?.value || '') : '',
+                customOutlineReport: canUseCustomOutlines() ? (customOutlineReport?.value || '') : '',
+                customOutlineDocumentation: canUseCustomOutlines() ? (customOutlineDocumentation?.value || '') : '',
                 additionalInstructions: additionalInstructions.value,
-                outputSize: document.querySelector('input[name="outputSize"]:checked')?.value || '5000',
+                outputSize: document.querySelector('input[name="outputSize"]:checked')?.value || getDefaultOutputSize(),
                 contentFidelity: getContentFidelity(),
                 timestamp: Date.now()
             };
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-                console.log('Progress saved');
             } catch (e) {
-                // If storage is full, try without attachment data
                 const { attachmentMeta, ...rest } = state;
-                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rest)); } catch (e2) { /* ignore */ }
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(rest)); } catch (e2) {}
             }
         }, 300);
     }
@@ -738,9 +1257,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             isRestoring = true;
             const state = JSON.parse(saved);
             
-            // Restore mode first
             if (state.mode && state.mode !== currentMode) {
-                switchMode(state.mode);
+                if (state.mode === 'presentation' && !canAccessPresentationMode()) {
+                    // Skip presentation if no access
+                } else {
+                    switchMode(state.mode);
+                }
             }
             
             if (state.textContent) {
@@ -757,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     dataURL: null
                 }));
                 renderAttachments();
-                showToast('Previously attached files shown below. Some may need re‑upload.', 'warning', 4000);
+                showToast('Previously attached files shown. Some may need re‑upload.', 'warning', 4000);
             }
             if (state.patientName) patientName.value = state.patientName;
             if (state.patientAge) patientAge.value = state.patientAge;
@@ -766,56 +1288,46 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (state.patientDiagnosis) patientDiagnosis.value = state.patientDiagnosis;
             if (state.profession) professionSelect.value = state.profession;
             
-            // Restore presentation outline
             if (state.outlinePresentation) {
                 const radio = document.querySelector(`input[name="outlinePresentation"][value="${state.outlinePresentation}"]`);
-                if (radio) {
+                if (radio && !radio.disabled) {
                     radio.checked = true;
-                    if (state.outlinePresentation === 'custom') {
-                        if (customOutlinePresentation) customOutlinePresentation.style.display = 'block';
-                        if (customOutlineHintPresentation) customOutlineHintPresentation.style.display = 'flex';
-                    }
                 }
             }
-            
-            // Restore report outline
             if (state.outlineReport) {
                 const radio = document.querySelector(`input[name="outlineReport"][value="${state.outlineReport}"]`);
-                if (radio) {
+                if (radio && !radio.disabled) {
                     radio.checked = true;
-                    if (state.outlineReport === 'custom') {
-                        if (customOutlineReport) customOutlineReport.style.display = 'block';
-                        if (customOutlineHintReport) customOutlineHintReport.style.display = 'flex';
-                    }
                 }
             }
-            
-            // Restore documentation outline
             if (state.outlineDocumentation) {
                 const radio = document.querySelector(`input[name="outlineDocumentation"][value="${state.outlineDocumentation}"]`);
-                if (radio) {
+                if (radio && !radio.disabled) {
                     radio.checked = true;
-                    if (state.outlineDocumentation === 'custom') {
-                        if (customOutlineDocumentation) customOutlineDocumentation.style.display = 'block';
-                        if (customOutlineHintDocumentation) customOutlineHintDocumentation.style.display = 'flex';
-                    }
                 }
             }
             
-            if (state.customOutlinePresentation) customOutlinePresentation.value = state.customOutlinePresentation;
-            if (state.customOutlineReport) customOutlineReport.value = state.customOutlineReport;
-            if (state.customOutlineDocumentation) customOutlineDocumentation.value = state.customOutlineDocumentation;
+            if (canUseCustomOutlines()) {
+                if (state.customOutlinePresentation) customOutlinePresentation.value = state.customOutlinePresentation;
+                if (state.customOutlineReport) customOutlineReport.value = state.customOutlineReport;
+                if (state.customOutlineDocumentation) customOutlineDocumentation.value = state.customOutlineDocumentation;
+            }
+            
             if (state.additionalInstructions) additionalInstructions.value = state.additionalInstructions;
             
             if (state.outputSize) {
-                const sizeRadio = document.querySelector(`input[name="outputSize"][value="${state.outputSize}"]`);
-                if (sizeRadio) sizeRadio.checked = true;
+                const available = getAvailableOutputSizes();
+                if (available.includes(state.outputSize)) {
+                    const sizeRadio = document.querySelector(`input[name="outputSize"][value="${state.outputSize}"]`);
+                    if (sizeRadio) sizeRadio.checked = true;
+                }
             }
 
-            // Restore content fidelity
             if (state.contentFidelity) {
-                const fidelityRadio = document.querySelector(`input[name="contentFidelity"][value="${state.contentFidelity}"]`);
-                if (fidelityRadio) fidelityRadio.checked = true;
+                if (canUseFidelityFlexible() || state.contentFidelity === 'strict') {
+                    const fidelityRadio = document.querySelector(`input[name="contentFidelity"][value="${state.contentFidelity}"]`);
+                    if (fidelityRadio) fidelityRadio.checked = true;
+                }
             }
             
             validateForm();
@@ -828,36 +1340,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Attach save triggers to form elements
-    [textInput, patientName, patientAge, patientMRN, patientDiagnosis, additionalInstructions,
-     customOutlinePresentation, customOutlineReport, customOutlineDocumentation]
+    [textInput, patientName, patientAge, patientMRN, patientDiagnosis, additionalInstructions]
         .forEach(el => el?.addEventListener('input', saveProgress));
     
     patientGender?.addEventListener('change', saveProgress);
     professionSelect?.addEventListener('change', saveProgress);
     
-    // Save on outline radio changes for all modes
     [outlineRadiosPresentation, outlineRadiosReport, outlineRadiosDocumentation].forEach(group => {
         group.forEach(r => r.addEventListener('change', saveProgress));
     });
     
-    // Save output size selection
     if (outputSizeRadios.length) {
         outputSizeRadios.forEach(r => r.addEventListener('change', saveProgress));
     }
 
-    // Save content fidelity selection
     if (contentFidelityRadios.length) {
         contentFidelityRadios.forEach(r => r.addEventListener('change', saveProgress));
     }
 
-    // Additional form validation triggers
     [patientName, patientAge, patientDiagnosis].forEach(el => el?.addEventListener('input', validateForm));
     patientGender?.addEventListener('change', validateForm);
     professionSelect?.addEventListener('change', validateForm);
 
     // =========================================================================
-    // AI Generation – Mode‑adaptive prompts with Content Fidelity control
+    // AI Generation
     // =========================================================================
     async function generatePresentation() {
         if (!aiConfig.token) {
@@ -865,10 +1371,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!ok) throw new Error('The AI service is not set up. Please contact support.');
         }
 
-        // Gather text from the editor
         let combinedText = textInput.value.trim();
 
-        // Append text from documents
         const docTexts = attachments
             .filter(a => a.type === 'document' && a.textContent)
             .map(a => a.textContent)
@@ -877,13 +1381,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             combinedText += (combinedText ? '\n\n--- Document Content ---\n\n' : '') + docTexts;
         }
 
-        // Append OCR text from images
         const imageOcrTexts = attachments
             .filter(a => a.type === 'image' && a.ocrText)
             .map(a => a.ocrText)
             .join('\n\n');
         if (imageOcrTexts) {
-            combinedText += (combinedText ? '\n\n--- Text Extracted from Images ---\n\n' : '') + imageOcrTexts;
+            combinedText += (combinedText ? '\n\n--- Text from Images ---\n\n' : '') + imageOcrTexts;
         }
 
         if (!combinedText && attachments.length === 0) {
@@ -899,97 +1402,67 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         const profession = professionSelect.options[professionSelect.selectedIndex]?.text || 'Healthcare Professional';
         const outline = getSelectedOutline();
-        const instructions = additionalInstructions.value.trim() || 'None provided';
+        const instructions = additionalInstructions.value.trim() || 'None';
         const maxTokens = getSelectedOutputSize();
         const fidelityMode = getContentFidelity();
         const isStrict = fidelityMode === 'strict';
 
-        // Mode-specific labels and descriptions
         const modeLabels = {
-            presentation: 'Ward Round Case Presentation',
+            presentation: 'Case Presentation',
             report: 'Clinical Report',
             documentation: 'Clinical Documentation'
         };
         const modeText = modeLabels[currentMode] || 'Clinical Document';
         
         const modeContext = {
-            presentation: 'a multidisciplinary team ward round meeting',
-            report: 'a formal clinical report for the medical record',
-            documentation: 'clinical documentation for the patient chart'
+            presentation: 'a multidisciplinary ward round',
+            report: 'a formal clinical report',
+            documentation: 'clinical documentation'
         };
         const contextText = modeContext[currentMode] || 'clinical review';
 
-        // Build the fidelity rule
         const fidelityRule = isStrict
-            ? `0. **FIDELITY RULE (STRICT):** You MUST NOT invent, assume, or add ANY clinical information, history, examination findings, or patient details that are not explicitly stated in the provided clinical notes. If a section lacks data, state clearly that the information is "not provided" or "not documented". Do NOT fabricate plausible details. Only organise and format what is given.`
-            : `0. **FIDELITY RULE (FLEXIBLE):** You may expand the provided information with plausible, clinically appropriate details where necessary to create a coherent document, but clearly indicate any inferred or typical findings as "likely" or "based on typical presentation". However, do not invent specific patient history events.`;
+            ? `0. **FIDELITY RULE (STRICT):** Do NOT invent or assume ANY clinical information not explicitly provided. If data is missing, state "not provided" or "not documented".`
+            : `0. **FIDELITY RULE (FLEXIBLE):** You may add plausible clinical details where needed, but clearly indicate inferred findings as "likely" or "based on typical presentation".`;
 
-        const systemPrompt = `You are an expert clinical assistant helping a ${profession} prepare a comprehensive **${modeText}**.
-
-Your task is to create a **thorough, detailed, and professional** ${modeText.toLowerCase()} that demonstrates deep clinical reasoning and provides actionable insights, appropriate for ${contextText}.
+        const systemPrompt = `You are an expert clinical assistant helping a ${profession} prepare a **${modeText}** for ${contextText}.
 
 **CRITICAL INSTRUCTIONS:**
 
 ${fidelityRule}
 
-1. **Follow this outline structure exactly:** ${outline}
+1. **Follow this outline:** ${outline}
 
-2. **Be comprehensive and detailed:**
-   - Each section should contain **substantial content** (not just 1-2 lines)
-   - Include **specific clinical details**, measurements, observations, and findings
-   - Provide **clear clinical reasoning** for assessments and decisions
-   - Give **actionable, specific recommendations** with rationale
-   - The total output should be appropriate for the token limit provided
+2. **Be comprehensive:**
+   - Substantial content in each section
+   - Specific clinical details and measurements
+   - Clear clinical reasoning
+   - Actionable recommendations
 
-3. **Format requirements:**
-   - Use markdown headings: ## for main sections, ### for subsections
-   - Use bullet points (-) for lists
-   - Use **bold** for emphasis on key findings or critical items
-   - Use professional clinical language appropriate for ${currentMode === 'documentation' ? 'medical records' : currentMode === 'report' ? 'formal reports' : 'multidisciplinary presentations'}
-   - Do NOT use tables
-   - Maintain clear section separation
+3. **Format:** Markdown headings (##), bullet points (-), **bold** for emphasis. No tables.
 
-4. **Quality standards:**
-   - Write at the level expected for ${contextText}
-   - Include relevant functional assessments (mobility, ADLs, cognition, communication, etc.)
-   - Consider holistic patient needs (physical, psychological, social)
-   - Reference evidence-based practice where appropriate
-   - Highlight risks, precautions, and safety considerations
-   - Include measurable goals and outcome measures where possible
+4. **Tone:** Professional, objective, patient-centered.`;
 
-5. **Tone:** Professional, objective, and patient-centered. Be specific rather than vague.
+        let userContent = `**TASK:** Create a ${modeText.toLowerCase()} for:
 
-Make this **${modeText}** worthy of a senior clinician's review.`;
-
-        let userContent = `**TASK:** Create a ${modeText.toLowerCase()} for the following patient.
-
-**PATIENT INFORMATION:**
-- Name: ${patientInfo.name}
-- Age: ${patientInfo.age}
-- Gender: ${patientInfo.gender}
+**PATIENT:**
+- Name: ${patientInfo.name}, Age: ${patientInfo.age}, Gender: ${patientInfo.gender}
 - MRN: ${patientInfo.mrn}
-- Primary Diagnosis: ${patientInfo.diagnosis}
+- Diagnosis: ${patientInfo.diagnosis}
 
-**CLINICIAN ROLE:** ${profession}
+**CLINICIAN:** ${profession}
+**INSTRUCTIONS:** ${instructions}
+**FIDELITY:** ${isStrict ? 'STRICT' : 'FLEXIBLE'}
 
-**ADDITIONAL INSTRUCTIONS:** ${instructions}
-
-**FIDELITY MODE:** ${isStrict ? 'STRICT – Use only provided information. Do NOT fabricate or assume ANY details.' : 'FLEXIBLE – You may add plausible clinical details where needed, but indicate inferred findings.'}
-
-**CLINICAL NOTES & EXTRACTED TEXT:**
-${combinedText || 'No clinical notes provided.'}
-
----
-
-Please create a detailed ${modeText.toLowerCase()} based on the above information. Ensure each section contains thorough clinical detail and actionable recommendations.`;
+**CLINICAL NOTES:**
+${combinedText || 'No notes provided.'}`;
 
         const messages = [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userContent }
         ];
 
-        console.log('[AI] Sending request to DeepSeek API...');
-        console.log('[AI] Mode:', currentMode, '| Fidelity:', fidelityMode, '| Text length:', combinedText.length, 'chars | Max tokens:', maxTokens);
+        console.log('[AI] Generating... Mode:', currentMode, '| Fidelity:', fidelityMode);
 
         const url = `${aiConfig.endpoint}/chat/completions`;
         const response = await fetch(url, {
@@ -1009,23 +1482,13 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            console.error('[AI] API error:', errData);
-            
-            if (response.status === 401) {
-                throw new Error('Authentication failed. Please check your API key.');
-            } else if (response.status === 429) {
-                throw new Error('Too many requests. Please wait a moment and try again.');
-            } else if (response.status === 503) {
-                throw new Error('The AI service is temporarily busy. Please try again in a few minutes.');
-            } else {
-                const msg = errData?.error?.message || `Service error (${response.status})`;
-                throw new Error(msg);
-            }
+            if (response.status === 401) throw new Error('Authentication failed.');
+            if (response.status === 429) throw new Error('Too many requests. Wait a moment.');
+            if (response.status === 503) throw new Error('Service temporarily busy.');
+            throw new Error(errData?.error?.message || `Error ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('[AI] Response received, tokens used:', data.usage?.total_tokens || 'N/A');
-        
         return data.choices[0].message.content;
     }
 
@@ -1062,7 +1525,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             });
             return ref.key;
         } catch (error) {
-            showToast('Could not save to history. Check your connection.', 'error');
+            showToast('Could not save to history.', 'error');
             return null;
         }
     }
@@ -1085,10 +1548,6 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         };
         const modeLabel = modeLabels[currentMode] || 'Document';
 
-        const fidelityLabel = getContentFidelity() === 'strict' 
-            ? '🔒 Strict (no fabricated content)' 
-            : '⚠️ Flexible (may include inferred details)';
-
         const modalHtml = `
             <div class="preview-modal">
                 <div class="preview-overlay"></div>
@@ -1100,17 +1559,13 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                     </div>
                     <div class="preview-card-body">
                         <div class="preview-info">
-                            <span class="preview-badge">✅ Generated Successfully</span>
+                            <span class="preview-badge">✅ Generated</span>
                             <span class="preview-date">${dateStr}</span>
                         </div>
                         <p class="preview-description">
                             ${modeLabel} for <strong>${escapeHtml(patient)}</strong> 
-                            ${professionText ? `(${escapeHtml(professionText)})` : ''} 
-                            has been generated and saved to your history.
+                            ${professionText ? `(${escapeHtml(professionText)})` : ''}
                         </p>
-                        <div style="margin-bottom: 16px; padding: 8px 12px; background: ${getContentFidelity() === 'strict' ? '#f0fdf4' : '#fefce8'}; border-radius: 8px; font-size: 0.8rem; color: ${getContentFidelity() === 'strict' ? '#15803d' : '#854d0e'};">
-                            ${fidelityLabel}
-                        </div>
                         <div class="preview-actions">
                             <button class="preview-btn primary" id="viewFullPresentationBtn">
                                 📖 View Full ${modeLabel}
@@ -1118,9 +1573,6 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                             <button class="preview-btn secondary" id="closePreviewBtn">
                                 ✕ Close
                             </button>
-                        </div>
-                        <div class="preview-note">
-                            <small>The full ${modeLabel.toLowerCase()} will open in a new tab with editing and export options.</small>
                         </div>
                     </div>
                 </div>
@@ -1144,16 +1596,11 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             if (historyId) {
                 window.open(`caseresult.html?id=${historyId}`, '_blank');
                 close();
-            } else {
-                showToast('Document ID missing', 'error');
             }
         });
         
         document.addEventListener('keydown', function escHandler(e) {
-            if (e.key === 'Escape') { 
-                close(); 
-                document.removeEventListener('keydown', escHandler); 
-            }
+            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
         });
     }
 
@@ -1164,6 +1611,16 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
         if (!currentUser) {
             showToast('Please log in first', 'error');
             document.getElementById('loginBtn')?.click();
+            return;
+        }
+        
+        // Check generation limit for free plan
+        if (!canGenerateMore()) {
+            const daysLeft = getDaysUntilReset();
+            showToast(`⚠️ You've reached your ${FREE_MONTHLY_LIMIT} generation limit. Upgrade to Student or Pro for unlimited access. Resets in ${daysLeft} days.`, 'error', 6000);
+            
+            const notice = document.getElementById('upgradeNotice');
+            if (notice) notice.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
         }
         
@@ -1187,7 +1644,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
 
         const ocrPending = attachments.some(a => a.type === 'image' && a.ocrProcessing);
         if (ocrPending) {
-            showToast('Still extracting text from images. Please wait a moment.', 'info', 3000);
+            showToast('Still extracting text from images. Wait a moment.', 'info', 3000);
             return;
         }
 
@@ -1208,23 +1665,16 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             const historyId = await saveToHistory(rawMarkdown, htmlContent);
             currentHistoryIdInput.value = historyId || '';
             localStorage.removeItem(STORAGE_KEY);
+            
+            // Increment generation count for free plan
+            incrementGenerationCount();
+            
             showPreviewModal(htmlContent, historyId);
             const secs = ((Date.now() - start) / 1000).toFixed(1);
             showToast(`Generated in ${secs}s`, 'success');
         } catch (err) {
             console.error('[GENERATE] Error:', err);
-            
-            let msg = err.message;
-            if (msg.includes('API key') || msg.includes('token') || msg.includes('not set up'))
-                msg = 'The AI service is not configured correctly. Please contact support.';
-            else if (msg.toLowerCase().includes('rate'))
-                msg = 'Too many requests. Please wait a moment and try again.';
-            else if (msg.includes('busy') || msg.includes('503'))
-                msg = 'The service is temporarily busy. Please try again in a few minutes.';
-            else if (msg.includes('network') || msg.includes('fetch'))
-                msg = 'Network error. Please check your internet connection.';
-            
-            showToast(`Error: ${msg}`, 'error', 5000);
+            showToast(`Error: ${err.message}`, 'error', 5000);
         } finally {
             generateBtn.disabled = false;
             generateBtn.innerHTML = origHTML;
@@ -1233,21 +1683,21 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
     });
 
     // =========================================================================
-    // History drawer
+    // History drawer (same as before)
     // =========================================================================
     let allHistoryEntries = [];
 
     async function deleteHistoryItem(key, event) {
         event.stopPropagation();
         if (!currentUser) return showToast('Log in to manage history', 'error');
-        if (!confirm('Permanently delete this document?')) return;
+        if (!confirm('Delete this document?')) return;
         try {
             await database.ref(`history/${currentUser.uid}/caseHistory/${key}`).remove();
-            try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) { }
+            try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) {}
             showToast('Deleted', 'success');
             loadHistory();
         } catch (error) {
-            showToast('Failed to delete. Try again.', 'error');
+            showToast('Failed to delete.', 'error');
         }
     }
 
@@ -1258,8 +1708,8 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             historyList.innerHTML = `
                 <div class="empty-state">
                     <i class="bx bx-folder-open"></i>
-                    <p>No document history found</p>
-                    <small>Generate your first document to see it here</small>
+                    <p>No document history</p>
+                    <small>Generate your first document</small>
                 </div>
             `;
             return;
@@ -1271,31 +1721,23 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             const modeLabel = item.mode === 'report' ? 'Report' : 
                              item.mode === 'documentation' ? 'Documentation' : 'Presentation';
             
-            const fidelityTag = item.contentFidelity === 'flexible' 
-                ? '<span style="font-size: 0.7rem; background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">Flexible</span>' 
-                : '';
-            
             div.innerHTML = `
                 <div class="history-info" style="flex:1;">
-                    <span class="history-name">${escapeHtml(item.patientName || 'Unknown Patient')}${fidelityTag}</span>
+                    <span class="history-name">${escapeHtml(item.patientName || 'Unknown')}</span>
                     <span style="font-size: 0.85rem; color: var(--text-secondary);">${escapeHtml(modeLabel)}</span>
                     <div class="history-meta">
                         <span><i class="far fa-calendar-alt"></i> ${escapeHtml(item.date || '')}</span>
                         <span><i class="far fa-clock"></i> ${escapeHtml(item.time || '')}</span>
-                        ${item.profession ? `<span><i class="fas fa-user-md"></i> ${escapeHtml(item.profession)}</span>` : ''}
                     </div>
                 </div>
                 <div class="history-actions">
-                    <button class="delete-btn" data-key="${key}" title="Delete Document" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.1rem; padding: 6px; border-radius: 50%; transition: all 0.2s;">
+                    <button class="delete-btn" data-key="${key}" title="Delete">
                         <i class="fas fa-trash-alt"></i>
                     </button>
                 </div>
             `;
             
-            const deleteBtn = div.querySelector('.delete-btn');
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => deleteHistoryItem(key, e));
-            }
+            div.querySelector('.delete-btn')?.addEventListener('click', (e) => deleteHistoryItem(key, e));
             
             div.addEventListener('click', (e) => {
                 if (!e.target.closest('button')) window.open(`caseresult.html?id=${key}`, '_blank');
@@ -1312,9 +1754,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
             const filtered = allHistoryEntries.filter(([_, item]) =>
                 (item.patientName || '').toLowerCase().includes(s) ||
                 (item.profession || '').toLowerCase().includes(s) ||
-                (item.diagnosis || '').toLowerCase().includes(s) ||
-                (item.documentType || '').toLowerCase().includes(s) ||
-                (item.mode || '').toLowerCase().includes(s)
+                (item.diagnosis || '').toLowerCase().includes(s)
             );
             renderHistory(filtered);
         }
@@ -1332,21 +1772,15 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
                     .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
                 filterHistory(historySearchInput?.value || '');
             }, error => {
-                console.error('History load error:', error);
+                console.error('History error:', error);
                 allHistoryEntries = [];
                 renderHistory([]);
             });
     }
 
-    // History drawer controls
     if (historyNavBtn) {
         historyNavBtn.addEventListener('click', () => {
-            if (!currentUser) { 
-                showToast('Please log in to view history', 'error'); 
-                const loginBtn = document.getElementById('loginBtn');
-                if (loginBtn) loginBtn.click();
-                return; 
-            }
+            if (!currentUser) { showToast('Log in first', 'error'); return; }
             historyDrawer.classList.add('active');
             loadHistory();
         });
@@ -1357,10 +1791,7 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
     }
     
     document.addEventListener('click', e => {
-        if (historyDrawer?.classList.contains('active') && 
-            !historyDrawer.contains(e.target) &&
-            e.target !== historyNavBtn && 
-            !historyNavBtn?.contains(e.target)) {
+        if (historyDrawer?.classList.contains('active') && !historyDrawer.contains(e.target) && e.target !== historyNavBtn) {
             historyDrawer.classList.remove('active');
         }
     });
@@ -1376,41 +1807,38 @@ Please create a detailed ${modeText.toLowerCase()} based on the above informatio
     }
 
     // =========================================================================
-    // Auth & initialization
+    // Auth & init
     // =========================================================================
     firebase.auth().onAuthStateChanged(user => {
         currentUser = user;
-        if (user) { 
-            console.log('[AUTH] User logged in:', user.email);
-            historyNavBtn.style.display = 'block'; 
-            loadHistory(); 
-        } else { 
-            console.log('[AUTH] User logged out');
-            historyNavBtn.style.display = 'none'; 
+        if (user) {
+            console.log('[AUTH] Logged in:', user.email);
+            if (historyNavBtn) historyNavBtn.style.display = 'block';
+            loadHistory();
+        } else {
+            console.log('[AUTH] Logged out');
+            if (historyNavBtn) historyNavBtn.style.display = 'none';
         }
         validateForm();
     });
 
-    // Initialize app
     async function initialize() {
-        console.log('[INIT] Starting Multi‑mode Clinical Assistant...');
+        console.log('[INIT] Starting...');
         
         await fetchTokens();
+        loadGenerationData();
         updateWordCount();
+        updatePlanUI();
         validateForm();
         
-        setTimeout(async () => { 
-            const restored = await loadProgress();
-            if (!restored) console.log('[INIT] Fresh session started');
-            
-            // Ensure correct mode section visibility after restore
+        setTimeout(async () => {
+            await loadProgress();
             configSections.forEach(section => {
                 section.style.display = section.dataset.mode === currentMode ? 'block' : 'none';
             });
         }, 100);
         
-        console.log('[INIT] Multi‑mode assistant ready (Presentation, Report, Documentation)');
-        console.log('[INIT] Content Fidelity default:', getContentFidelity());
+        console.log('[INIT] Ready - Plan:', currentPlan, '| Gen count:', generationCount);
     }
 
     initialize();

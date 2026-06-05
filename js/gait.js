@@ -1,4 +1,4 @@
-// js/gait.js - Complete with patient name, search, modal, brightness check, auto-scroll
+// js/gait.js – Complete with patient name, search, modal, brightness check, auto-scroll, and subscription gating
 document.addEventListener('DOMContentLoaded', async () => {
   // =========================================================================
   // 1. DOM ELEMENTS
@@ -62,12 +62,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   let videoBlob = null;
   let allHistoryEntries = [];
   
+  // Plan gating state
+  let currentPlan = 'free';  // 'free' | 'student' | 'pro'
+  let generationCount = 0;
+  let generationResetDate = null;
+  
   const database = firebase.database();
   
   // IndexedDB setup
   const DB_NAME = 'GaitMonitorDB';
   const STORE_NAME = 'videos';
   let db = null;
+  
+  // Plan limits
+  const FREE_MONTHLY_LIMIT = 3;
+  const STUDENT_MONTHLY_LIMIT = 10;
+  const LIMIT_DAYS = 30;
   
   // =========================================================================
   // 3. UTILITY FUNCTIONS
@@ -87,7 +97,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     toast.className = `toast ${type}`;
     toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i><span>${message}</span>`;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), duration);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(20px)';
+      toast.style.transition = 'all 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
   }
   
   async function fetchTokens() {
@@ -118,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 4. INDEXEDDB FOR VIDEO PERSISTENCE
+  // 4. INDEXEDDB FOR VIDEO PERSISTENCE (only for Student/Pro plans)
   // =========================================================================
   function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -138,6 +153,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   async function saveVideoToStorage(blob) {
+    // Free users do not persist videos
+    if (currentPlan === 'free') return;
+    
     try {
       if (!db) await openDatabase();
       return new Promise((resolve, reject) => {
@@ -156,6 +174,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   async function loadVideoFromStorage() {
+    // Free users never restore videos
+    if (currentPlan === 'free') return null;
+    
     try {
       if (!db) await openDatabase();
       return new Promise((resolve, reject) => {
@@ -327,7 +348,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       showToast('Camera ready - Record patient walking (max 30s)', 'success');
       
-      // Auto-scroll to camera view
       setTimeout(() => {
         cameraPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
@@ -389,7 +409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       proceedBtn.disabled = false;
       stopCamera();
       
-      await saveVideoToStorage(videoBlob);
+      // Only persist video for Student and Pro plans
+      if (currentPlan !== 'free') {
+        await saveVideoToStorage(videoBlob);
+      } else {
+        await clearVideoFromStorage();
+      }
       
       showToast('Recording complete! Ready for analysis.', 'success');
       
@@ -467,9 +492,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 9. RESTORE SAVED VIDEO ON PAGE LOAD
+  // 9. RESTORE SAVED VIDEO ON PAGE LOAD (Student/Pro only)
   // =========================================================================
   async function restoreSavedVideo() {
+    if (currentPlan === 'free') return;
+    
     try {
       const savedBlob = await loadVideoFromStorage();
       if (savedBlob) {
@@ -692,99 +719,193 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   }
   
   // =========================================================================
-  // 12. HISTORY DRAWER WITH SEARCH
+  // 12. PLAN GATING - Generation Limits & UI
   // =========================================================================
-  function renderHistory(entries) {
-    historyList.innerHTML = '';
+  function loadGenerationData() {
+    try {
+      const data = JSON.parse(localStorage.getItem('rehab_gait_gen_data') || '{}');
+      generationCount = data.count || 0;
+      generationResetDate = data.resetDate ? new Date(data.resetDate) : null;
+      
+      const now = new Date();
+      if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+        generationCount = 0;
+        generationResetDate = now;
+        saveGenerationData();
+      }
+    } catch (e) {
+      generationCount = 0;
+      generationResetDate = new Date();
+      saveGenerationData();
+    }
+  }
+
+  function saveGenerationData() {
+    const data = {
+      count: generationCount,
+      resetDate: generationResetDate ? generationResetDate.toISOString() : new Date().toISOString()
+    };
+    localStorage.setItem('rehab_gait_gen_data', JSON.stringify(data));
+  }
+
+  function getMonthlyLimit() {
+    if (currentPlan === 'pro') return Infinity;
+    if (currentPlan === 'student') return STUDENT_MONTHLY_LIMIT;
+    return FREE_MONTHLY_LIMIT;
+  }
+
+  function canGenerateMore() {
+    if (currentPlan === 'pro') return true;
     
-    if (entries.length === 0) {
-      historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No matching history found</p></div>';
-      return;
+    const limit = getMonthlyLimit();
+    const now = new Date();
+    
+    if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+      generationCount = 0;
+      generationResetDate = now;
+      saveGenerationData();
+      return true;
     }
     
-    entries.forEach(([key, item]) => {
-      const div = document.createElement('div');
-      div.className = 'history-item';
-      div.innerHTML = `
-        <div class="history-info">
-          <span class="history-name">${escapeHtml(item.patientName || item.fileName || 'Gait Analysis')}</span>
-          <div class="history-meta">
-            <span class="meta-tag"><i class="bx bx-walk"></i> Gait</span>
-            <span>${escapeHtml(item.date)}</span>
-            ${item.view ? `<span>${escapeHtml(item.view)}</span>` : ''}
-          </div>
-        </div>
-        <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
-      `;
-      
-      div.querySelector('.view-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.open(`gaitresult.html?id=${key}`, '_blank');
-      });
-      
-      div.addEventListener('click', () => {
-        window.open(`gaitresult.html?id=${key}`, '_blank');
-      });
-      
-      historyList.appendChild(div);
-    });
+    return generationCount < limit;
   }
-  
-  function filterHistory(searchTerm) {
-    const term = searchTerm.toLowerCase().trim();
+
+  function getRemainingGenerations() {
+    if (currentPlan === 'pro') return Infinity;
+    return Math.max(0, getMonthlyLimit() - generationCount);
+  }
+
+  function getDaysUntilReset() {
+    if (!generationResetDate) return 0;
+    const now = new Date();
+    const diffTime = (LIMIT_DAYS * 24 * 60 * 60 * 1000) - (now - generationResetDate);
+    return Math.max(0, Math.ceil(diffTime / (24 * 60 * 60 * 1000)));
+  }
+
+  function incrementGenerationCount() {
+    if (currentPlan === 'pro') return;
+    generationCount++;
+    saveGenerationData();
+    updatePlanUI();
+  }
+
+  function goToSubscription() {
+    window.location.href = 'sub.html';
+  }
+
+  // =========================================================================
+  // 13. PLAN UI - Upgrade Notice & Counter
+  // =========================================================================
+  function updatePlanUI() {
+    const existingNotice = document.getElementById('planNotice');
+    if (existingNotice) existingNotice.remove();
+
+    if (currentPlan === 'pro') return;
+
+    const notice = document.createElement('div');
+    notice.id = 'planNotice';
     
-    if (!term) {
-      renderHistory(allHistoryEntries);
-      return;
+    const remaining = getRemainingGenerations();
+    const limit = getMonthlyLimit();
+    const daysLeft = getDaysUntilReset();
+    const isFree = currentPlan === 'free';
+    
+    notice.style.cssText = `
+      background: ${isFree ? '#fef3c7' : '#e0f2fe'};
+      border: 2px solid ${isFree ? '#fbbf24' : '#38bdf8'};
+      border-radius: 1rem;
+      padding: 0.9rem 1.1rem;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      text-align: center;
+      color: ${isFree ? '#92400e' : '#075985'};
+      animation: fadeSlideDown 0.4s ease;
+    `;
+
+    const planLabel = isFree ? 'Free Plan' : 'Student Plan';
+    const persistenceNote = isFree ? '<div style="font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.3rem;">⚠️ Video will not be saved</div>' : '<div style="font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.3rem;">✅ Video auto-saved</div>';
+    
+    let remainingHTML = '';
+    if (remaining === Infinity) {
+      remainingHTML = '<strong>Unlimited</strong>';
+    } else if (remaining <= 0) {
+      remainingHTML = `<strong style="color: #dc2626;">Limit reached!</strong>`;
+    } else {
+      remainingHTML = `<strong>${remaining}</strong> remaining`;
     }
-    
-    const filtered = allHistoryEntries.filter(([_, item]) => {
-      const name = (item.patientName || item.fileName || '').toLowerCase();
-      const view = (item.view || '').toLowerCase();
-      return name.includes(term) || view.includes(term);
-    });
-    
-    renderHistory(filtered);
+
+    notice.innerHTML = `
+      <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem;">${planLabel}</div>
+      ${persistenceNote}
+      <div style="margin-bottom: 0.3rem;">
+        ${remainingHTML} · <strong>${limit}</strong> analyses/month
+      </div>
+      ${remaining <= 0 ? `<div style="color: #dc2626; font-size: 0.8rem; margin-bottom: 0.4rem;">Resets in <strong>${daysLeft}</strong> days</div>` : 
+        daysLeft > 0 ? `<div style="font-size: 0.75rem; opacity: 0.7;">Resets in ${daysLeft} days</div>` : ''}
+      <button id="upgradeGaitBtn" style="
+        margin-top: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 2rem;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(245,158,11,0.4)';"
+         onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+        ⚡ Upgrade Now
+      </button>
+    `;
+
+    const controlsColumn = document.querySelector('.controls-column');
+    if (controlsColumn) {
+      const recordControls = controlsColumn.querySelector('.record-controls');
+      if (recordControls) {
+        controlsColumn.insertBefore(notice, recordControls);
+      } else {
+        controlsColumn.appendChild(notice);
+      }
+    }
+
+    const upgradeBtn = document.getElementById('upgradeGaitBtn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', goToSubscription);
+    }
   }
-  
-  function loadGaitHistory() {
-    if (!currentUser) return;
-    
-    database.ref(`history/${currentUser.uid}/gaitHistory`)
-      .orderByChild('timestamp')
-      .on('value', (snapshot) => {
-        const data = snapshot.val();
-        
-        if (!data) {
-          allHistoryEntries = [];
-          renderHistory([]);
-          return;
+
+  // =========================================================================
+  // 14. PLAN UPDATE LISTENER
+  // =========================================================================
+  document.addEventListener('planUpdated', (e) => {
+    const newPlan = e.detail?.plan || 'free';
+    if (newPlan !== currentPlan) {
+      currentPlan = newPlan;
+      console.log('[GAIT] Plan updated to:', currentPlan);
+      
+      loadGenerationData();
+      updatePlanUI();
+      
+      if (currentPlan === 'free') {
+        clearVideoFromStorage();
+        if (videoPreview.style.display === 'block') {
+          resetRecording();
         }
-        
-        const entries = Object.entries(data)
-          .filter(([_, item]) => item.contentType === 'gait')
-          .sort((a, b) => b[1].timestamp - a[1].timestamp);
-        
-        allHistoryEntries = entries;
-        
-        const searchTerm = historySearchInput ? historySearchInput.value : '';
-        filterHistory(searchTerm);
-      });
-  }
-  
-  function toggleHistoryDrawer() {
-    if (!currentUser) {
-      showToast('Please login to view history', 'error');
-      const loginBtn = document.getElementById('loginBtn');
-      if (loginBtn) loginBtn.click();
-      return;
+      } else {
+        restoreSavedVideo();
+      }
     }
-    loadGaitHistory();
-    historyDrawer.classList.add('active');
+  });
+
+  if (window.rehabPlans) {
+    currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+    console.log('[GAIT] Initial plan:', currentPlan);
   }
-  
+
   // =========================================================================
-  // 13. EVENT LISTENERS
+  // 15. EVENT LISTENERS
   // =========================================================================
   startCameraBtn.addEventListener('click', startCamera);
   
@@ -814,7 +935,14 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       return;
     }
     
-    // Validate video quality (brightness)
+    if (!canGenerateMore()) {
+      const daysLeft = getDaysUntilReset();
+      const limit = getMonthlyLimit();
+      showToast(`⚠️ You've reached your ${limit} analysis limit. Upgrade to continue. Resets in ${daysLeft} days.`, 'error', 6000);
+      goToSubscription();
+      return;
+    }
+    
     const quality = await validateVideoQuality(videoBlob);
     if (!quality.valid) {
       showToast(quality.reason, 'error', 5000);
@@ -839,13 +967,12 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       
       const historyKey = await saveToHistory(result);
       
-      // Clear saved video after successful analysis
+      incrementGenerationCount();
+      
       await clearVideoFromStorage();
       
-      // Show preview modal
       showPreviewModal(result, historyKey);
       
-      // Reset to record stage
       setStage(1);
       await resetRecording();
       
@@ -978,7 +1105,98 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     }
   });
   
-  // History drawer events
+  // =========================================================================
+  // 16. HISTORY DRAWER WITH SEARCH
+  // =========================================================================
+  function renderHistory(entries) {
+    historyList.innerHTML = '';
+    
+    if (entries.length === 0) {
+      historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No matching history found</p></div>';
+      return;
+    }
+    
+    entries.forEach(([key, item]) => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `
+        <div class="history-info">
+          <span class="history-name">${escapeHtml(item.patientName || item.fileName || 'Gait Analysis')}</span>
+          <div class="history-meta">
+            <span class="meta-tag"><i class="bx bx-walk"></i> Gait</span>
+            <span>${escapeHtml(item.date)}</span>
+            ${item.view ? `<span>${escapeHtml(item.view)}</span>` : ''}
+          </div>
+        </div>
+        <button class="view-btn" data-key="${key}"><i class="bx bx-chevron-right"></i></button>
+      `;
+      
+      div.querySelector('.view-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.open(`gaitresult.html?id=${key}`, '_blank');
+      });
+      
+      div.addEventListener('click', () => {
+        window.open(`gaitresult.html?id=${key}`, '_blank');
+      });
+      
+      historyList.appendChild(div);
+    });
+  }
+  
+  function filterHistory(searchTerm) {
+    const term = searchTerm.toLowerCase().trim();
+    
+    if (!term) {
+      renderHistory(allHistoryEntries);
+      return;
+    }
+    
+    const filtered = allHistoryEntries.filter(([_, item]) => {
+      const name = (item.patientName || item.fileName || '').toLowerCase();
+      const view = (item.view || '').toLowerCase();
+      return name.includes(term) || view.includes(term);
+    });
+    
+    renderHistory(filtered);
+  }
+  
+  function loadGaitHistory() {
+    if (!currentUser) return;
+    
+    database.ref(`history/${currentUser.uid}/gaitHistory`)
+      .orderByChild('timestamp')
+      .on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        if (!data) {
+          allHistoryEntries = [];
+          renderHistory([]);
+          return;
+        }
+        
+        const entries = Object.entries(data)
+          .filter(([_, item]) => item.contentType === 'gait')
+          .sort((a, b) => b[1].timestamp - a[1].timestamp);
+        
+        allHistoryEntries = entries;
+        
+        const searchTerm = historySearchInput ? historySearchInput.value : '';
+        filterHistory(searchTerm);
+      });
+  }
+  
+  function toggleHistoryDrawer() {
+    if (!currentUser) {
+      showToast('Please login to view history', 'error');
+      const loginBtn = document.getElementById('loginBtn');
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+    loadGaitHistory();
+    historyDrawer.classList.add('active');
+  }
+  
   if (historyNavBtn) {
     historyNavBtn.addEventListener('click', toggleHistoryDrawer);
   }
@@ -1010,16 +1228,14 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     }
   });
   
-  // Enable start camera when patient name is entered (optional)
   if (patientNameInput) {
     patientNameInput.addEventListener('input', () => {
-      // Camera can start regardless of name, but we can enable/disable if desired
       startCameraBtn.disabled = false;
     });
   }
   
   // =========================================================================
-  // 14. THEME & INITIALIZATION
+  // 17. THEME & INITIALIZATION
   // =========================================================================
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
@@ -1036,7 +1252,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   document.documentElement.setAttribute('data-theme', savedTheme);
   
   // =========================================================================
-  // 15. AUTH STATE LISTENER
+  // 18. AUTH STATE LISTENER
   // =========================================================================
   firebase.auth().onAuthStateChanged((user) => {
     currentUser = user;
@@ -1051,15 +1267,23 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   });
   
   // =========================================================================
-  // 16. INITIAL SETUP
+  // 19. INITIAL SETUP
   // =========================================================================
   async function initialize() {
     ensureToastContainer();
     await openDatabase();
-    await restoreSavedVideo();
+    
+    loadGenerationData();
+    
+    if (currentPlan !== 'free') {
+      await restoreSavedVideo();
+    }
+    
     fetchTokens();
     setStage(1);
     startCameraBtn.disabled = false;
+    
+    updatePlanUI();
     
     const scanOverlay = document.querySelector('.scan-overlay');
     if (scanOverlay) {
@@ -1071,7 +1295,6 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   
   initialize();
   
-  // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
@@ -1087,5 +1310,5 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     }
   });
   
-  console.log('Gait Monitor initialized with patient name, search, modal, brightness check, and auto-scroll');
+  console.log('Gait Monitor initialized with subscription gating');
 });

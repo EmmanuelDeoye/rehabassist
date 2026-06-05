@@ -1,5 +1,5 @@
-// js/assign.js – Modern Assignment Maker v2.0
-// Humanized AI, Multi-pass Generation, AI Detection Scoring, Cancel Support
+// js/assign.js – Assignment Maker with Subscription Gating
+// Free: 5 assignments/30 days | Student & Pro: Unlimited
 
 if (typeof marked !== 'undefined') {
   marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
@@ -64,92 +64,214 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isGenerating = false;
   let aiAbortController = null;
 
+  // Plan gating
+  let currentPlan = 'free';
+  let generationCount = 0;
+  let generationResetDate = null;
+  const FREE_LIMIT = 5;
+  const LIMIT_DAYS = 30;
+
   const database = firebase.database();
 
   // =========================================================================
-  // HUMANIZATION ENGINE
+  // PLAN GATING FUNCTIONS
   // =========================================================================
-  const HUMANIZATION_PATTERNS = {
-    bannedPhrases: [
-      'moreover', 'furthermore', 'notably', 'consequently', 'thus', 'hence',
-      'therein', 'hereby', 'whereby', 'aforementioned', 'heretofore',
-      'in conclusion', 'it is imperative to note', 'it is worth mentioning',
-      'it should be noted that', 'as previously stated', 'in summary',
-      'the findings revealed that', 'the results indicated that',
-      'it can be argued that', 'it is evident that', 'needless to say',
-      'it is important to highlight', 'it must be emphasized',
-      'it is crucial to understand', 'without a doubt', 'undoubtedly'
-    ],
-    sentenceStarters: [
-      'What this means in practice is',
-      'Interestingly,',
-      'From what I have seen,',
-      'In real-world settings,',
-      'A key thing to understand is',
-      'This is where it gets interesting:',
-      'To put it simply,',
-      'Looking at this practically,',
-      'One thing that stands out is',
-      'What matters most here is',
-      'The real question is',
-      'This brings up an important point:',
-      'It is worth asking whether',
-      'A practical example would be'
-    ],
-    reflections: [
-      'I found this particularly relevant because in my clinical experience,',
-      'During my placement, I noticed that',
-      'This reminded me of a case where',
-      'From observing patients, I have come to believe that',
-      'Personally, I think this matters because',
-      'In my view, what makes this important is',
-      'I have always found it interesting that',
-      'What struck me most about this topic is'
-    ]
-  };
+  function loadGenerationData() {
+    try {
+      const data = JSON.parse(localStorage.getItem('rehab_assign_gen_data') || '{}');
+      generationCount = data.count || 0;
+      generationResetDate = data.resetDate ? new Date(data.resetDate) : null;
+      
+      const now = new Date();
+      if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+        generationCount = 0;
+        generationResetDate = now;
+        saveGenerationData();
+      }
+    } catch (e) {
+      generationCount = 0;
+      generationResetDate = new Date();
+      saveGenerationData();
+    }
+  }
 
-  function buildHumanizationPrompt() {
+  function saveGenerationData() {
+    localStorage.setItem('rehab_assign_gen_data', JSON.stringify({
+      count: generationCount,
+      resetDate: generationResetDate ? generationResetDate.toISOString() : new Date().toISOString()
+    }));
+  }
+
+  function canGenerateMore() {
+    if (currentPlan === 'student' || currentPlan === 'pro') return true;
+    
+    const now = new Date();
+    if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+      generationCount = 0;
+      generationResetDate = now;
+      saveGenerationData();
+      return true;
+    }
+    
+    return generationCount < FREE_LIMIT;
+  }
+
+  function getRemaining() {
+    if (currentPlan === 'student' || currentPlan === 'pro') return Infinity;
+    return Math.max(0, FREE_LIMIT - generationCount);
+  }
+
+  function getDaysUntilReset() {
+    if (!generationResetDate) return 0;
+    const now = new Date();
+    const diffTime = (LIMIT_DAYS * 24 * 60 * 60 * 1000) - (now - generationResetDate);
+    return Math.max(0, Math.ceil(diffTime / (24 * 60 * 60 * 1000)));
+  }
+
+  function incrementGenerationCount() {
+    if (currentPlan === 'student' || currentPlan === 'pro') return;
+    generationCount++;
+    saveGenerationData();
+    updatePlanUI();
+  }
+
+  function goToSubscription() {
+    window.location.href = 'sub.html';
+  }
+
+  // =========================================================================
+  // PLAN UI
+  // =========================================================================
+  function updatePlanUI() {
+    const existingNotice = document.getElementById('planNoticeAssign');
+    if (existingNotice) existingNotice.remove();
+
+    if (currentPlan === 'student' || currentPlan === 'pro') return;
+
+    const notice = document.createElement('div');
+    notice.id = 'planNoticeAssign';
+    
+    const remaining = getRemaining();
+    const daysLeft = getDaysUntilReset();
+    
+    notice.style.cssText = `
+      background: #fef3c7;
+      border: 2px solid #fbbf24;
+      border-radius: 1rem;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      text-align: center;
+      color: #92400e;
+      animation: fadeSlideDown 0.4s ease;
+    `;
+
+    let remainingHTML = '';
+    if (remaining <= 0) {
+      remainingHTML = `<strong style="color: #dc2626;">Limit reached!</strong>`;
+    } else {
+      remainingHTML = `<strong>${remaining}</strong> remaining`;
+    }
+
+    notice.innerHTML = `
+      <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem;">Free Plan</div>
+      <div style="margin-bottom: 0.3rem;">
+        ${remainingHTML} · <strong>${FREE_LIMIT}</strong> assignments/month
+      </div>
+      ${remaining <= 0 ? `<div style="color: #dc2626; font-size: 0.8rem; margin-bottom: 0.4rem;">Resets in <strong>${daysLeft}</strong> days</div>` : 
+        daysLeft > 0 ? `<div style="font-size: 0.75rem; opacity: 0.7;">Resets in ${daysLeft} days</div>` : ''}
+      <button id="upgradeAssignBtn" style="
+        margin-top: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 2rem;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(245,158,11,0.4)';"
+         onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+        ⚡ Upgrade for Unlimited
+      </button>
+    `;
+
+    // Insert after the generate button
+    generateBtn.insertAdjacentElement('afterend', notice);
+
+    const upgradeBtn = document.getElementById('upgradeAssignBtn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', goToSubscription);
+    }
+  }
+
+  // =========================================================================
+  // HUMANIZATION ENGINE v2 — no hardcoded repetitive templates
+  // =========================================================================
+
+  const BANNED_AI_PHRASES = [
+    'moreover', 'furthermore', 'notably', 'consequently', 'thus', 'hence',
+    'therein', 'hereby', 'whereby', 'aforementioned', 'heretofore',
+    'in conclusion', 'it is imperative to note', 'it is worth mentioning',
+    'it should be noted that', 'as previously stated', 'in summary',
+    'the findings revealed that', 'the results indicated that',
+    'it can be argued that', 'it is evident that', 'needless to say',
+    'it is important to highlight', 'it must be emphasized',
+    'it is crucial to understand', 'without a doubt', 'undoubtedly',
+    'but there is more to it than that',
+    'this is where it gets interesting',
+    'i found this particularly relevant',
+    'during my placement, i noticed',
+    'what this means in practice is',
+    'looking at this practically'
+  ];
+
+  function buildHumanizationPrompt(topic, course, outline) {
+    const outlineReminder = outline
+      ? `\n⚠️ OUTLINE PRESERVATION: The assignment MUST follow this exact structure throughout:\n${outline}\nDo not add, remove, or reorder sections.`
+      : '';
+
     return `
-HUMANIZATION REQUIREMENTS (FOLLOW ALL):
+HUMANIZATION REQUIREMENTS — APPLY ALL:
 
-1. SENTENCE STRUCTURE:
-   - Vary sentence length dramatically: mix short sentences (5-10 words) with medium (15-25 words) and occasional long ones (30+ words).
-   - Start some sentences with "And" or "But" naturally for conversational flow.
-   - Use fragments occasionally for emphasis. Like this.
-   - Ask rhetorical questions sparingly to engage the reader.
+1. SENTENCE VARIETY (the single biggest signal of human writing):
+   - Mix lengths naturally: some short (under 10 words), most medium (15-25 words), a few long (30+).
+   - Never start two consecutive sentences with the same word.
+   - Vary paragraph size: some 2 sentences, some 5-6. Not all the same length.
+   - Use a question to transition between ideas occasionally — but no more than twice per assignment.
 
-2. VOCABULARY:
-   - NEVER use these words/phrases: ${HUMANIZATION_PATTERNS.bannedPhrases.slice(0, 12).join(', ')}
-   - Replace overly formal words with natural alternatives where appropriate.
-   - Use everyday clinical language, not textbook jargon.
-   - Choose Anglo-Saxon words over Latin-derived ones when possible (e.g., "help" not "facilitate", "use" not "utilize").
+2. VOCABULARY — PLAIN AND DIRECT:
+   - Use natural everyday academic language. How a smart student talks to their lecturer, not how a textbook reads.
+   - NEVER use any of these phrases: ${BANNED_AI_PHRASES.slice(0, 14).join(', ')}.
+   - Prefer simple direct verbs: "shows" not "demonstrates", "uses" not "utilizes",
+     "helps" not "facilitates", "about" not "pertaining to", "end" not "culminate".
+   - Contractions are fine: don't, it's, that's, I've, there's, wouldn't, couldn't.
 
-3. NATURAL FLOW:
-   - Write as if explaining to a colleague over coffee, not lecturing from a podium.
-   - Use contractions naturally (don't, it's, that's, I've, there's, wouldn't).
-   - Include 1-2 minor digressions that feel authentic, then return to the point.
-   - Occasionally acknowledge uncertainty: "It is hard to say for sure, but..."
-   - Vary paragraph length — some short (2 sentences), some longer (5-6 sentences).
+3. PERSONAL VOICE — SPECIFIC, NOT GENERIC:
+   - Include 1-2 personal observations or reflections.
+   - Each reflection must be SPECIFIC and DIFFERENT in phrasing — reference a real clinical situation,
+     a specific patient type, a particular setting, or something the student observed.
+   - NEVER use identical opener phrases across reflections. Vary them completely.
 
-4. PERSONAL VOICE:
-   - Include 2-3 genuine personal reflections using phrases like:
-     ${HUMANIZATION_PATTERNS.reflections.slice(0, 3).join(' | ')}
-   - Refer to personal clinical or academic experience where relevant.
-   - Use "I" and "we" naturally where a real student would.
+4. CRITICAL — ZERO REPETITIVE TEMPLATES:
+   - No transitional phrase may appear more than once in the entire assignment.
+   - No two paragraph openers may be the same or near-identical.
+   - Do not end every paragraph with a summary sentence that restates what was just said.
+   - Do not open multiple paragraphs with "So," or "What this means is."
 
-5. IMPERFECTIONS (CRITICAL FOR PASSING AI DETECTION):
-   - Occasionally restate an idea in slightly different words (mild redundancy).
-   - Let one or two sentences run slightly longer than ideal.
-   - Use informal connectors naturally: "What this means is...", "Basically,", "So, what does this look like in practice?"
-   - End one paragraph with a slightly informal transition like "But there is more to it than that."
-   - Include one very short paragraph (1-2 sentences) for rhythm variation.
+5. NATURAL IMPERFECTION — SUBTLE, NOT MECHANICAL:
+   - One slightly informal sentence per 4-5 paragraphs is authentic. More than that is a pattern.
+   - One genuine side-thought that comes back to the main point adds credibility.
+   - A slightly longer-than-ideal sentence once or twice is fine — do not force imperfections artificially.
 
-6. NIGERIAN HEALTHCARE CONTEXT (when applicable):
-   - Reference local healthcare settings naturally where relevant.
-   - Mention Nigerian health institutions, practices, or challenges where appropriate.
-   - Use examples from Nigerian clinical or academic contexts.
+6. NIGERIAN CONTEXT (only where genuinely relevant to the topic):
+   - Reference local healthcare settings or academic context where it adds real meaning.
+   - Do not force Nigerian references into topics where they don't naturally fit.
+${outlineReminder}
 
-The final text MUST read like a thoughtful, slightly imperfect student wrote it — not a professor, not a textbook, not an AI. The text should pass AI detection tools with flying colors.`;
+The final text must read like a specific, thoughtful student wrote it for this specific course — not a generic AI template.`;
   }
 
   // =========================================================================
@@ -169,18 +291,16 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
     const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 5);
     if (sentences.length < 5) return null;
 
-    // 1. Sentence variation score (0-100)
     const lengths = sentences.map(s => s.trim().split(/\s+/).length);
     const avgLength = lengths.reduce((a, b) => a + b, 0) / lengths.length;
     const variance = lengths.reduce((sum, len) => sum + Math.pow(len - avgLength, 2), 0) / lengths.length;
     const stdDev = Math.sqrt(variance);
     const variationScore = Math.min(100, Math.round((stdDev / (avgLength || 1)) * 100));
 
-    // 2. Predictability score (0-100, lower is better)
     let predictablePatterns = 0;
     const totalSentences = sentences.length;
 
-    HUMANIZATION_PATTERNS.bannedPhrases.forEach(phrase => {
+    BANNED_AI_PHRASES.forEach(phrase => {
       const regex = new RegExp(phrase, 'gi');
       const matches = text.match(regex);
       if (matches) predictablePatterns += matches.length;
@@ -194,7 +314,6 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       (predictablePatterns / totalSentences) * 50 + (1 - startVariety) * 50
     ));
 
-    // 3. AI likelihood score (0-100, lower is better)
     const aiIndicators = [
       /it is (important|essential|crucial|necessary) to/gi,
       /(moreover|furthermore|consequently|thus|hence)/gi,
@@ -203,7 +322,10 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       /it (can|could|should|must) be (noted|argued|stated|mentioned)/gi,
       /(significant|substantial|considerable) (impact|effect|influence|role)/gi,
       /plays? a (vital|crucial|critical|key|important|significant) role/gi,
-      /has (revolutionized|transformed|changed) the (way|field|landscape)/gi
+      /has (revolutionized|transformed|changed) the (way|field|landscape)/gi,
+      /but there is more to it than that/gi,
+      /i found this particularly relevant/gi,
+      /this is where it gets interesting/gi
     ];
 
     let aiIndicatorCount = 0;
@@ -218,7 +340,6 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       (1 - startVariety) * 30
     ));
 
-    // 4. Overall humanization score (0-100, higher is better)
     const overallScore = Math.round(
       (variationScore * 0.3) +
       ((100 - predictabilityScore) * 0.35) +
@@ -232,6 +353,18 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
       aiLikelihood: aiLikelihoodScore,
       sentenceCount: totalSentences
     };
+  }
+
+  function checkForAITells(htmlContent) {
+    const text = extractPlainText(htmlContent).toLowerCase();
+    const found = BANNED_AI_PHRASES.filter(phrase => text.includes(phrase.toLowerCase()));
+    if (found.length > 0) {
+      showToast(
+        `⚠️ AI-sounding phrases detected (${found.slice(0, 3).join(', ')}…). Consider regenerating or editing manually.`,
+        'warning',
+        7000
+      );
+    }
   }
 
   // =========================================================================
@@ -332,25 +465,19 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
   });
 
   fileInput.addEventListener('change', () => {
-    if (fileInput.files.length) {
-      handleFileUpload(fileInput.files[0]);
-    }
+    if (fileInput.files.length) handleFileUpload(fileInput.files[0]);
     fileInput.value = '';
   });
 
   cameraInput.addEventListener('change', () => {
-    if (cameraInput.files.length) {
-      handleFileUpload(cameraInput.files[0]);
-    }
+    if (cameraInput.files.length) handleFileUpload(cameraInput.files[0]);
     cameraInput.value = '';
   });
 
   async function handleFileUpload(file) {
     if (!file) return;
-
     attachBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     attachBtn.disabled = true;
-
     try {
       const text = await extractText(file);
       uploadedFileText = text.substring(0, 15000);
@@ -446,7 +573,7 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
   }
 
   // =========================================================================
-  // MULTI-PASS AI GENERATION
+  // MULTI-PASS AI GENERATION v2.1
   // =========================================================================
   async function callAIWithCancel(systemPrompt, userPrompt, maxTokens, temp, topP, freqPenalty, presPenalty) {
     const response = await fetch(`${aiConfig.endpoint}/chat/completions`, {
@@ -486,11 +613,18 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
     return cleaned;
   }
 
-  // ===== Generate Assignment (Multi-pass with Humanization) =====
+  // ===== Generate Assignment =====
   generateBtn.addEventListener('click', async () => {
     if (isGenerating) return;
 
-    // Validate outline if checkbox is checked
+    // Check generation limit
+    if (!canGenerateMore()) {
+      const daysLeft = getDaysUntilReset();
+      showToast(`⚠️ You've reached your ${FREE_LIMIT} assignment limit. Upgrade to Student or Pro for unlimited access. Resets in ${daysLeft} days.`, 'error', 6000);
+      goToSubscription();
+      return;
+    }
+
     if (hasOutlineCheckbox.checked && !outlineInput.value.trim()) {
       showToast('Please paste your outline or uncheck the outline option', 'error');
       outlineInput.focus();
@@ -513,114 +647,116 @@ The final text MUST read like a thoughtful, slightly imperfect student wrote it 
     resultsLoading.style.display = 'block';
     resultsLoading.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-    const topic = topicInput.value.trim();
-    const course = courseInput.value.trim();
-    const type = assignmentType.options[assignmentType.selectedIndex].text;
-    const volume = volumeCount.value;
-    const unit = volumeType.value === 'pages' ? 'pages' : 'words';
-    const tone = toneSelect.options[toneSelect.selectedIndex].text;
+    const topic        = topicInput.value.trim();
+    const course       = courseInput.value.trim();
+    const type         = assignmentType.options[assignmentType.selectedIndex].text;
+    const volume       = volumeCount.value;
+    const unit         = volumeType.value === 'pages' ? 'pages' : 'words';
+    const tone         = toneSelect.options[toneSelect.selectedIndex].text;
     const instructions = instructionsInput.value.trim();
-    const fileContent = uploadedFileText ? `\n\nReference material:\n${uploadedFileText}` : '';
+    const fileContent  = uploadedFileText ? `\n\nReference material:\n${uploadedFileText}` : '';
+    const outline      = hasOutlineCheckbox.checked ? outlineInput.value.trim() : '';
+    const humanRules   = buildHumanizationPrompt(topic, course, outline);
 
-    const humanizationRules = buildHumanizationPrompt();
     aiAbortController = new AbortController();
 
     try {
       const startTime = Date.now();
 
       // ===== PASS 1: Academic Draft =====
-      const pass1Prompt = `Write a well-structured student assignment on the topic "${topic}" for a ${course} course. This is a ${type} assignment.
+      const pass1System = `You are a knowledgeable academic writer. Write comprehensive, well-structured academic content with proper HTML formatting. Stay strictly on the provided topic and follow the outline exactly if one is provided.`;
 
-REQUIREMENTS:
-- Length: approximately ${volume} ${unit}.
-- Tone: ${tone}.
-${instructions ? `- Additional instructions: ${instructions}` : ''}
-${hasOutlineCheckbox.checked && outlineInput.value.trim() ? `- CRITICAL: You MUST follow this exact outline structure:\n${outlineInput.value.trim()}` : ''}
-${fileContent ? `- Reference material (use for background understanding only, do NOT copy directly):\n${fileContent}` : ''}
+      const pass1User = `Write a well-structured student assignment on: "${topic}"
+Course: ${course}
+Type: ${type}
+Length: approximately ${volume} ${unit}
+Tone: ${tone}
+${instructions ? `Additional instructions: ${instructions}` : ''}
+${outline ? `⚠️ CRITICAL — Follow this EXACT outline. Do not add, skip, or reorder any section:\n${outline}` : ''}
+${fileContent ? `Reference material (background only — do NOT copy directly):\n${fileContent}` : ''}
 
-FORMATTING INSTRUCTIONS:
-1. Start with a clear title as a level-1 heading.
-2. Use proper HTML headings (h2 for main sections, h3 for subsections).
-3. Use bullet points and numbered lists where appropriate.
-4. Use <strong> tags for emphasis on key terms.
-5. Use proper paragraph breaks between sections.
-6. Each major section should have meaningful content.
+FORMATTING:
+- Title as a level-1 heading.
+- Main sections as h2 headings, subsections as h3.
+- Use bullet points and numbered lists where appropriate.
+- Use <strong> for key terms.
+- Proper paragraph breaks throughout.
 
-Return ONLY the HTML content. No markdown code fences, no explanations.`;
+Return ONLY the HTML. No markdown fences. No preamble.`;
 
-      const pass1Response = await callAIWithCancel(
-        'You are a knowledgeable academic writer. Write comprehensive, well-structured academic content with proper HTML formatting. Stay strictly on the provided topic.',
-        pass1Prompt,
-        3000, 0.6, 0.9, 0.1, 0.1
-      );
-      let content = cleanAIResponse(pass1Response.choices[0].message.content);
+      const pass1Res = await callAIWithCancel(pass1System, pass1User, 3000, 0.6, 0.9, 0.1, 0.1);
+      let content = cleanAIResponse(pass1Res.choices[0].message.content);
 
       // ===== PASS 2: Humanization =====
-      const pass2Prompt = `REWRITE the following assignment to sound like a real healthcare student wrote it. The assignment is about "${topic}" for a ${course} course.
+      const pass2System = `You are an expert at rewriting academic text to sound naturally human-written.
+Your job is to change STYLE and VOICE only.
+Never change the factual content, the assignment structure, or any statistics.
+${outline ? `The assignment MUST maintain this exact section structure:\n${outline}` : ''}`;
 
-TONE: ${tone}
+      const pass2User = `REWRITE the assignment below to sound like a real student wrote it.
+Topic: "${topic}" | Course: ${course} | Tone: ${tone}
 
-${humanizationRules}
+⚠️ STRICT RULES:
+- Change ONLY the writing style, sentence structure, and phrasing.
+- Do NOT change any facts, claims, or the order of sections.
+- Do NOT remove or add any sections.
+- Preserve all headings and their hierarchy (h1/h2/h3).
+${outline ? `- CRITICAL: The section structure must exactly match the outline provided. Do not deviate.` : ''}
 
-ORIGINAL TEXT:
-${content.substring(0, 3000)}
+${humanRules}
 
-Rewrite this completely. Keep all the key information and academic quality, but make it sound genuinely human-written. The content MUST stay on the topic of "${topic}".
+ASSIGNMENT TO REWRITE:
+${content.substring(0, 3500)}
+
 Return ONLY the rewritten HTML. No markdown fences.`;
 
-      const pass2Response = await callAIWithCancel(
-        'You are an expert at making academic text sound naturally human-written. You rewrite text to sound like a real student wrote it, while staying true to the original topic.',
-        pass2Prompt,
-        3500, 0.9, 0.95, 0.4, 0.4
-      );
-      content = cleanAIResponse(pass2Response.choices[0].message.content);
+      const pass2Res = await callAIWithCancel(pass2System, pass2User, 3500, 0.75, 0.92, 0.25, 0.2);
+      content = cleanAIResponse(pass2Res.choices[0].message.content);
 
-      // ===== PASS 3: Polish & Format =====
-      const pass3Prompt = `POLISH the following assignment about "${topic}". 
+      // ===== PASS 3: Polish =====
+      const pass3System = `You are a careful academic editor. Polish text for quality while preserving all facts and the natural human voice.`;
 
-- Fix any grammar issues
-- Improve formatting and readability
-- PRESERVE the natural human voice — do NOT make it sound more formal or AI-like
-- Keep personal reflections and natural phrasing intact
-- Ensure proper HTML structure
+      const pass3User = `POLISH the assignment below about "${topic}".
 
-ORIGINAL:
+RULES:
+- Fix grammar and awkward phrasing.
+- Ensure proper HTML heading structure (h1 title, h2 sections, h3 subsections).
+- Preserve the natural student voice — do NOT increase formality.
+- If ANY transitional phrase appears more than once, remove the duplicates and replace with a different natural transition.
+- If ANY paragraph opener is used twice, vary one of them.
+- Do NOT change facts, statistics, or section order.
+${outline ? `- Confirm the section structure still matches this outline:\n${outline}` : ''}
+
+ASSIGNMENT:
 ${content}
 
 Return ONLY the polished HTML. No markdown fences.`;
 
-      const pass3Response = await callAIWithCancel(
-        'You are a careful editor who polishes text while preserving its natural human quality.',
-        pass3Prompt,
-        2000, 0.4, 0.9, 0.1, 0.1
-      );
-      content = cleanAIResponse(pass3Response.choices[0].message.content);
+      const pass3Res = await callAIWithCancel(pass3System, pass3User, 2000, 0.4, 0.9, 0.1, 0.1);
+      content = cleanAIResponse(pass3Res.choices[0].message.content);
 
       generatedHtml = content;
 
-      // Calculate humanization score
+      // Score the output
       const score = calculateHumanizationScore(generatedHtml);
       console.log('[SCORE] Humanization score:', score?.overall + '%', score);
 
       resultsLoading.style.display = 'none';
+
+      // Increment generation count for free plan
+      incrementGenerationCount();
 
       // Save to history if logged in
       if (currentUser) {
         currentHistoryId = await saveToHistory(generatedHtml, '');
       }
 
-      // Store in localStorage as fallback
+      // Store in localStorage
       const assignmentData = {
-        topic: topic,
-        course: course,
-        type: type,
-        typeLabel: type,
-        tone: tone,
-        toneLabel: tone,
-        volume: volume,
-        volumeUnit: unit,
+        topic, course, type, typeLabel: type, tone, toneLabel: tone,
+        volume, volumeUnit: unit,
         hasOutline: hasOutlineCheckbox.checked,
-        outline: hasOutlineCheckbox.checked ? outlineInput.value.trim() : '',
+        outline: outline,
         html: generatedHtml,
         markdown: '',
         historyId: currentHistoryId,
@@ -631,12 +767,15 @@ Return ONLY the polished HTML. No markdown fences.`;
       };
       localStorage.setItem('rehab_assignment_current', JSON.stringify(assignmentData));
 
-      // Show preview modal
+      // Show preview
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       showPreviewModal();
-      
-      const scoreMsg = score ? ` (Human Score: ${score.overall}%)` : '';
-      showToast(`Assignment generated in ${elapsed}s${scoreMsg}`, 'success');
+
+      const scoreMsg = score ? ` | Human Score: ${score.overall}%` : '';
+      showToast(`Generated in ${elapsed}s${scoreMsg}`, 'success');
+
+      // Warn about any AI tells that slipped through
+      setTimeout(() => checkForAITells(generatedHtml), 600);
 
     } catch (err) {
       console.error('[GENERATE] Error:', err);
@@ -656,6 +795,7 @@ Return ONLY the polished HTML. No markdown fences.`;
 
       showToast(`Error: ${errorMessage}`, 'error', 5000);
       resultsLoading.style.display = 'none';
+
     } finally {
       isGenerating = false;
       generateBtn.disabled = false;
@@ -688,18 +828,11 @@ Return ONLY the polished HTML. No markdown fences.`;
     document.body.style.overflow = '';
   }
 
-  if (previewClose) {
-    previewClose.addEventListener('click', closePreviewModal);
-  }
-
-  if (previewCloseBtn) {
-    previewCloseBtn.addEventListener('click', closePreviewModal);
-  }
+  if (previewClose) previewClose.addEventListener('click', closePreviewModal);
+  if (previewCloseBtn) previewCloseBtn.addEventListener('click', closePreviewModal);
 
   const previewOverlay = document.querySelector('.preview-overlay');
-  if (previewOverlay) {
-    previewOverlay.addEventListener('click', closePreviewModal);
-  }
+  if (previewOverlay) previewOverlay.addEventListener('click', closePreviewModal);
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && previewModal.classList.contains('active')) {
@@ -710,7 +843,6 @@ Return ONLY the polished HTML. No markdown fences.`;
   if (viewFullAssignmentBtn) {
     viewFullAssignmentBtn.addEventListener('click', () => {
       closePreviewModal();
-
       if (currentHistoryId) {
         window.open(`answer.html?id=${currentHistoryId}`, '_blank');
       } else {
@@ -722,7 +854,6 @@ Return ONLY the polished HTML. No markdown fences.`;
   // ===== Save to History =====
   async function saveToHistory(html, markdown) {
     if (!currentUser) return null;
-
     try {
       const ref = await database.ref(`history/${currentUser.uid}/assignments`).push({
         topic: topicInput.value.trim(),
@@ -750,7 +881,7 @@ Return ONLY the polished HTML. No markdown fences.`;
     }
   }
 
-  // ===== History Functions =====
+  // ===== History =====
   function loadHistoryList() {
     if (!currentUser) return;
 
@@ -796,8 +927,9 @@ Return ONLY the polished HTML. No markdown fences.`;
           const div = document.createElement('div');
           div.className = 'history-item';
 
-          const outlineIndicator = item.hasOutline ?
-            '<span style="font-size: 0.65rem; background: #e0f2f1; color: #00695c; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">outline</span>' : '';
+          const outlineIndicator = item.hasOutline
+            ? '<span style="font-size:0.65rem;background:#e0f2f1;color:#00695c;padding:2px 6px;border-radius:4px;margin-left:6px;">outline</span>'
+            : '';
 
           div.innerHTML = `
             <button class="delete-btn" data-id="${id}" title="Delete assignment">
@@ -810,13 +942,10 @@ Return ONLY the polished HTML. No markdown fences.`;
               <span>${escapeHtml(item.course || '')}</span>
               <span>${escapeHtml(item.toneLabel || '')}</span>
             </div>
-            <div style="margin-top: 0.5rem;">
-              <button class="retrieve-btn" data-id="${id}">
-                📂 Open in Editor
-              </button>
+            <div style="margin-top:0.5rem;">
+              <button class="retrieve-btn" data-id="${id}">📂 Open in Editor</button>
             </div>`;
 
-          // Click on the whole item (except buttons) opens answer.html
           div.addEventListener('click', (e) => {
             if (e.target.closest('.delete-btn') || e.target.closest('.retrieve-btn')) return;
             localStorage.setItem('rehab_assignment_current_id', id);
@@ -825,14 +954,12 @@ Return ONLY the polished HTML. No markdown fences.`;
             document.body.style.overflow = '';
           });
 
-          // Delete button
           div.querySelector('.delete-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
             deleteAssignment(id);
           });
 
-          // Retrieve button
           div.querySelector('.retrieve-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             localStorage.setItem('rehab_assignment_current_id', id);
@@ -858,7 +985,6 @@ Return ONLY the polished HTML. No markdown fences.`;
   async function deleteAssignment(id) {
     if (!currentUser) return;
     if (!confirm('Permanently delete this assignment?')) return;
-
     try {
       await database.ref(`history/${currentUser.uid}/assignments/${id}`).remove();
       try { await database.ref(`publicAssignments/${id}`).remove(); } catch (e) { /* ignore */ }
@@ -891,7 +1017,6 @@ Return ONLY the polished HTML. No markdown fences.`;
     });
   }
 
-  // Close drawer when clicking outside
   document.addEventListener('click', (e) => {
     if (historyDrawer?.classList.contains('active') &&
         !historyDrawer.contains(e.target) &&
@@ -902,7 +1027,6 @@ Return ONLY the polished HTML. No markdown fences.`;
     }
   });
 
-  // Close drawer with Escape
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && historyDrawer?.classList.contains('active')) {
       historyDrawer.classList.remove('active');
@@ -910,21 +1034,37 @@ Return ONLY the polished HTML. No markdown fences.`;
     }
   });
 
-  // History search
   if (historySearchInput) {
     historySearchInput.addEventListener('input', () => {
       const term = historySearchInput.value.toLowerCase().trim();
       const items = document.querySelectorAll('.history-item');
       items.forEach(item => {
         const title = item.querySelector('.history-title')?.textContent.toLowerCase() || '';
-        const meta = item.querySelector('.history-meta')?.textContent.toLowerCase() || '';
-        const match = !term || title.includes(term) || meta.includes(term);
-        item.style.display = match ? '' : 'none';
+        const meta  = item.querySelector('.history-meta')?.textContent.toLowerCase() || '';
+        item.style.display = (!term || title.includes(term) || meta.includes(term)) ? '' : 'none';
       });
     });
   }
 
-  // ===== Auth State =====
+  // =========================================================================
+  // PLAN UPDATE LISTENER
+  // =========================================================================
+  document.addEventListener('planUpdated', (e) => {
+    const newPlan = e.detail?.plan || 'free';
+    if (newPlan !== currentPlan) {
+      currentPlan = newPlan;
+      console.log('[ASSIGN] Plan updated to:', currentPlan);
+      loadGenerationData();
+      updatePlanUI();
+    }
+  });
+
+  if (window.rehabPlans) {
+    currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+    console.log('[ASSIGN] Initial plan:', currentPlan);
+  }
+
+  // ===== Auth =====
   firebase.auth().onAuthStateChanged(user => {
     currentUser = user;
     if (user) {
@@ -938,12 +1078,14 @@ Return ONLY the polished HTML. No markdown fences.`;
     }
   });
 
-  // ===== Initialize =====
+  // ===== Init =====
   async function initialize() {
-    console.log('[INIT] Starting Assignment Maker v2.0...');
+    console.log('[INIT] Assignment Maker starting...');
+    loadGenerationData();
     await fetchTokens();
     validateForm();
-    console.log('[INIT] Assignment Maker ready with multi-pass humanization engine');
+    updatePlanUI();
+    console.log('[INIT] Ready - Plan:', currentPlan, '| Gen count:', generationCount);
   }
 
   initialize();

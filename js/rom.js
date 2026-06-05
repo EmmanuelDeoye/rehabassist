@@ -1,5 +1,6 @@
-// js/rom.js - Complete with preview modal + AI validation + brightness check
+// js/rom.js – Subscription‑gated ROM Analyzer with plan limits
 document.addEventListener('DOMContentLoaded', async () => {
+
   // =========================================================================
   // 1. DOM ELEMENTS
   // =========================================================================
@@ -396,24 +397,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   let promptIndex = 0;
   let isCameraActive = false;
   
-  let assessmentMode = 'isolate';
+  let assessmentMode = 'full';
   let movementQueue = [];
   let currentQueueIndex = 0;
   let allCapturedFrames = {};
+
+  // Plan gating state
+  let currentPlan = 'free';
+  let generationCount = 0;
+  let generationResetDate = null;
+  const FREE_LIMIT = 3;
+  const STUDENT_LIMIT = 10;
+  const LIMIT_DAYS = 30;
 
   // =========================================================================
   // 4. UTILITY FUNCTIONS
   // =========================================================================
   function showToast(message, type = 'success', duration = 3500) {
-    if (!toastContainer) {
-      console.warn('Toast container not found');
-      return;
-    }
+    if (!toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i><span>${message}</span>`;
     toastContainer.appendChild(toast);
-    setTimeout(() => toast.remove(), duration);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(20px)';
+      toast.style.transition = 'all 0.3s ease';
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
   }
   
   async function fetchTokens() {
@@ -555,7 +566,217 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================================================================
-  // 6. POPULATE DROPDOWN BASED ON MODE
+  // 6. GENERATION TRACKING & PLAN LIMITS
+  // =========================================================================
+  function loadGenerationData() {
+    try {
+      const data = JSON.parse(localStorage.getItem('rehab_rom_gen_data') || '{}');
+      generationCount = data.count || 0;
+      generationResetDate = data.resetDate ? new Date(data.resetDate) : null;
+      
+      const now = new Date();
+      if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+        generationCount = 0;
+        generationResetDate = now;
+        saveGenerationData();
+      }
+    } catch (e) {
+      generationCount = 0;
+      generationResetDate = new Date();
+      saveGenerationData();
+    }
+  }
+
+  function saveGenerationData() {
+    const data = {
+      count: generationCount,
+      resetDate: generationResetDate ? generationResetDate.toISOString() : new Date().toISOString()
+    };
+    localStorage.setItem('rehab_rom_gen_data', JSON.stringify(data));
+  }
+
+  function getMonthlyLimit() {
+    if (currentPlan === 'pro') return Infinity;
+    if (currentPlan === 'student') return STUDENT_LIMIT;
+    return FREE_LIMIT;
+  }
+
+  function canGenerateMore() {
+    if (currentPlan === 'pro') return true;
+    
+    const limit = getMonthlyLimit();
+    const now = new Date();
+    
+    if (!generationResetDate || (now - generationResetDate) >= (LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+      generationCount = 0;
+      generationResetDate = now;
+      saveGenerationData();
+      return true;
+    }
+    
+    return generationCount < limit;
+  }
+
+  function getRemaining() {
+    if (currentPlan === 'pro') return Infinity;
+    return Math.max(0, getMonthlyLimit() - generationCount);
+  }
+
+  function getDaysUntilReset() {
+    if (!generationResetDate) return 0;
+    const now = new Date();
+    const diffTime = (LIMIT_DAYS * 24 * 60 * 60 * 1000) - (now - generationResetDate);
+    return Math.max(0, Math.ceil(diffTime / (24 * 60 * 60 * 1000)));
+  }
+
+  function incrementGenerationCount() {
+    if (currentPlan === 'pro') return;
+    generationCount++;
+    saveGenerationData();
+    updatePlanUI();
+  }
+
+  // =========================================================================
+  // 7. PLAN FEATURE ACCESS
+  // =========================================================================
+  function canUseIsolateMode() {
+    return currentPlan === 'student' || currentPlan === 'pro';
+  }
+
+  function goToSubscription() {
+    window.location.href = 'sub.html';
+  }
+
+  // =========================================================================
+  // 8. PLAN UI - Upgrade Notice & Counter
+  // =========================================================================
+  function updatePlanUI() {
+    // Lock/unlock Isolate Joint radio
+    if (radioIsolate && radioFull) {
+      if (!canUseIsolateMode()) {
+        radioIsolate.disabled = true;
+        radioIsolate.parentElement.style.opacity = '0.5';
+        radioIsolate.parentElement.style.cursor = 'not-allowed';
+        radioIsolate.parentElement.title = 'Student plan or above required for Isolate Joint mode';
+        
+        let badge = radioIsolate.parentElement.querySelector('.plan-badge');
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'plan-badge';
+          badge.textContent = 'STUDENT+';
+          badge.style.cssText = `
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 700;
+            margin-left: 6px;
+            vertical-align: middle;
+          `;
+          radioIsolate.parentElement.appendChild(badge);
+        }
+        
+        // If isolate was selected, force full
+        if (radioIsolate.checked) {
+          radioFull.checked = true;
+          assessmentMode = 'full';
+          populateJointSelect('full');
+          jointSelect.value = '';
+          startCameraBtn.disabled = true;
+          movementPromptBox.style.display = 'none';
+        }
+      } else {
+        radioIsolate.disabled = false;
+        radioIsolate.parentElement.style.opacity = '1';
+        radioIsolate.parentElement.style.cursor = 'pointer';
+        radioIsolate.parentElement.title = '';
+        
+        const badge = radioIsolate.parentElement.querySelector('.plan-badge');
+        if (badge) badge.remove();
+      }
+    }
+
+    // Remove existing notice
+    const existingNotice = document.getElementById('planNoticeRom');
+    if (existingNotice) existingNotice.remove();
+
+    // Pro users don't need a notice
+    if (currentPlan === 'pro') return;
+
+    const notice = document.createElement('div');
+    notice.id = 'planNoticeRom';
+    
+    const remaining = getRemaining();
+    const limit = getMonthlyLimit();
+    const daysLeft = getDaysUntilReset();
+    const isFree = currentPlan === 'free';
+    
+    notice.style.cssText = `
+      background: ${isFree ? '#fef3c7' : '#e0f2fe'};
+      border: 2px solid ${isFree ? '#fbbf24' : '#38bdf8'};
+      border-radius: 1rem;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.85rem;
+      text-align: center;
+      color: ${isFree ? '#92400e' : '#075985'};
+      animation: fadeSlideDown 0.4s ease;
+    `;
+
+    const planLabel = isFree ? 'Free Plan' : 'Student Plan';
+    const isolateNote = isFree ? '<div style="font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.3rem;">⚠️ Isolate Joint mode locked</div>' : '<div style="font-size: 0.78rem; opacity: 0.8; margin-bottom: 0.3rem;">✅ Isolate Joint mode available</div>';
+    
+    let remainingHTML = '';
+    if (remaining === Infinity) {
+      remainingHTML = '<strong>Unlimited</strong>';
+    } else if (remaining <= 0) {
+      remainingHTML = `<strong style="color: #dc2626;">Limit reached!</strong>`;
+    } else {
+      remainingHTML = `<strong>${remaining}</strong> remaining`;
+    }
+
+    notice.innerHTML = `
+      <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem;">${planLabel}</div>
+      ${isolateNote}
+      <div style="margin-bottom: 0.3rem;">
+        ${remainingHTML} · <strong>${limit}</strong> analyses/month
+      </div>
+      ${remaining <= 0 ? `<div style="color: #dc2626; font-size: 0.8rem; margin-bottom: 0.4rem;">Resets in <strong>${daysLeft}</strong> days</div>` : 
+        daysLeft > 0 ? `<div style="font-size: 0.75rem; opacity: 0.7;">Resets in ${daysLeft} days</div>` : ''}
+      <button id="upgradeRomBtn" style="
+        margin-top: 0.5rem;
+        padding: 0.5rem 1.5rem;
+        border-radius: 2rem;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.85rem;
+        transition: all 0.2s ease;
+        font-family: inherit;
+      " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 12px rgba(245,158,11,0.4)';"
+         onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='none';">
+        ⚡ Upgrade Now
+      </button>
+    `;
+
+    // Insert after assessment mode section
+    const assessmentDiv = document.querySelector('.assessment-mode');
+    if (assessmentDiv) {
+      assessmentDiv.insertAdjacentElement('afterend', notice);
+    }
+
+    // Add click handler
+    const upgradeBtn = document.getElementById('upgradeRomBtn');
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', goToSubscription);
+    }
+  }
+
+  // =========================================================================
+  // 9. POPULATE DROPDOWN BASED ON MODE
   // =========================================================================
   function populateJointSelect(mode) {
     jointSelect.innerHTML = '<option value="">-- Choose ' + (mode === 'isolate' ? 'movement' : 'joint region') + ' --</option>';
@@ -605,10 +826,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // =========================================================================
-  // 7. HANDLE MODE CHANGE
+  // 10. HANDLE MODE CHANGE
   // =========================================================================
   function onModeChange() {
-    assessmentMode = document.querySelector('input[name="assessmentMode"]:checked').value;
+    const newMode = document.querySelector('input[name="assessmentMode"]:checked').value;
+    
+    // Check plan access for Isolate Joint mode
+    if (newMode === 'isolate' && !canUseIsolateMode()) {
+      showToast('🎓 Isolate Joint mode requires Student plan or above. Switching to Full Joint Assessment.', 'warning', 5000);
+      radioFull.checked = true;
+      return;
+    }
+    
+    assessmentMode = newMode;
     populateJointSelect(assessmentMode);
     jointSelect.value = '';
     startCameraBtn.disabled = true;
@@ -621,7 +851,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (radioFull) radioFull.addEventListener('change', onModeChange);
   
   // =========================================================================
-  // 8. JOINT SELECTION & QUEUE SETUP
+  // 11. JOINT SELECTION & QUEUE SETUP
   // =========================================================================
   function updateForJointSelection(value) {
     if (!value) {
@@ -669,7 +899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   jointSelect.addEventListener('change', (e) => updateForJointSelection(e.target.value));
   
   // =========================================================================
-  // 9. CAMERA & CAPTURE FUNCTIONS
+  // 12. CAMERA & CAPTURE FUNCTIONS
   // =========================================================================
   function createCaptureButton() {
     const existingContainer = document.querySelector('.capture-btn-container');
@@ -948,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // =========================================================================
-  // 10. AI ANALYSIS WITH VALIDATION
+  // 13. AI ANALYSIS WITH VALIDATION
   // =========================================================================
   async function analyzeROM() {
     if (!aiConfig.token) {
@@ -1050,7 +1280,7 @@ The images show the progression from start position through full range of motion
   }
   
   // =========================================================================
-  // 11. PREVIEW MODAL
+  // 14. PREVIEW MODAL
   // =========================================================================
   function showPreviewModal(result, historyKey) {
     const existingModal = document.querySelector('.preview-modal');
@@ -1112,7 +1342,7 @@ The images show the progression from start position through full range of motion
   }
 
   // =========================================================================
-  // 12. HISTORY DRAWER
+  // 15. HISTORY DRAWER
   // =========================================================================
   function loadRomHistory() {
     if (!currentUser) return;
@@ -1179,7 +1409,7 @@ The images show the progression from start position through full range of motion
   }
   
   // =========================================================================
-  // 13. EVENT LISTENERS
+  // 16. EVENT LISTENERS
   // =========================================================================
   startCameraBtn.addEventListener('click', startCamera);
   
@@ -1196,6 +1426,15 @@ The images show the progression from start position through full range of motion
       showToast('Please login to analyze', 'error');
       const loginBtn = document.getElementById('loginBtn');
       if (loginBtn) loginBtn.click();
+      return;
+    }
+    
+    // Check generation limit
+    if (!canGenerateMore()) {
+      const daysLeft = getDaysUntilReset();
+      const limit = getMonthlyLimit();
+      showToast(`⚠️ You've reached your ${limit} analysis limit. Upgrade to continue. Resets in ${daysLeft} days.`, 'error', 6000);
+      goToSubscription();
       return;
     }
     
@@ -1230,6 +1469,9 @@ The images show the progression from start position through full range of motion
       analysisResults = result;
       
       const historyKey = await saveToHistory(result);
+      
+      // Increment generation count for limited plans
+      incrementGenerationCount();
       
       showPreviewModal(result, historyKey);
       
@@ -1310,7 +1552,41 @@ The images show the progression from start position through full range of motion
   });
   
   // =========================================================================
-  // 14. THEME & INITIALIZATION
+  // 17. PLAN UPDATE LISTENER
+  // =========================================================================
+  document.addEventListener('planUpdated', (e) => {
+    const newPlan = e.detail?.plan || 'free';
+    if (newPlan !== currentPlan) {
+      currentPlan = newPlan;
+      console.log('[ROM] Plan updated to:', currentPlan);
+      
+      // Reload generation data for new plan
+      loadGenerationData();
+      
+      // Update UI
+      updatePlanUI();
+      
+      // If currently in isolate mode and no longer allowed, switch to full
+      if (assessmentMode === 'isolate' && !canUseIsolateMode()) {
+        assessmentMode = 'full';
+        radioFull.checked = true;
+        populateJointSelect('full');
+        jointSelect.value = '';
+        startCameraBtn.disabled = true;
+        movementPromptBox.style.display = 'none';
+        resetCapture();
+      }
+    }
+  });
+
+  // Initial plan check
+  if (window.rehabPlans) {
+    currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+    console.log('[ROM] Initial plan:', currentPlan);
+  }
+  
+  // =========================================================================
+  // 18. THEME & INITIALIZATION
   // =========================================================================
   const themeToggle = document.getElementById('themeToggle');
   if (themeToggle) {
@@ -1327,7 +1603,7 @@ The images show the progression from start position through full range of motion
   document.documentElement.setAttribute('data-theme', savedTheme);
   
   // =========================================================================
-  // 15. AUTH STATE LISTENER
+  // 19. AUTH STATE LISTENER
   // =========================================================================
   firebase.auth().onAuthStateChanged((user) => {
     currentUser = user;
@@ -1342,28 +1618,53 @@ The images show the progression from start position through full range of motion
   });
   
   // =========================================================================
-  // 16. INITIAL SETUP
+  // 20. INITIAL SETUP
   // =========================================================================
-  fetchTokens();
-  populateJointSelect('isolate');
-  setStage(1);
-  resetCapture();
-  createCaptureButton();
-  
-  startCameraBtn.style.display = 'block';
-  
-  const scanOverlay = document.querySelector('.scan-overlay');
-  if (scanOverlay) {
-    scanOverlay.style.display = 'none';
+  async function initialize() {
+    console.log('[ROM] Initializing...');
+    
+    // Load generation tracking
+    loadGenerationData();
+    
+    // Set initial assessment mode based on plan
+    if (!canUseIsolateMode()) {
+      assessmentMode = 'full';
+      if (radioFull) radioFull.checked = true;
+    } else {
+      assessmentMode = 'isolate';
+      if (radioIsolate) radioIsolate.checked = true;
+    }
+    
+    populateJointSelect(assessmentMode);
+    setStage(1);
+    resetCapture();
+    createCaptureButton();
+    
+    // Update plan UI
+    updatePlanUI();
+    
+    startCameraBtn.style.display = 'block';
+    
+    const scanOverlay = document.querySelector('.scan-overlay');
+    if (scanOverlay) {
+      scanOverlay.style.display = 'none';
+    }
+    
+    if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'none';
+    
+    fetchTokens();
+    
+    console.log('[ROM] Initialized - Plan:', currentPlan, '| Mode:', assessmentMode);
   }
   
-  if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'none';
+  initialize();
   
+  // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
     }
   });
   
-  console.log('ROM Analyzer initialized with preview modal + AI validation');
+  console.log('ROM Analyzer initialized with subscription gating');
 });
