@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    (function() {
+      var stored = localStorage.getItem('rehab-theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      } else if (stored === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+  <title>rehablix · Subscription Plans</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+  <!-- Payment Gateways -->
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <script src="https://pay.google.com/gp/p/js/pay.js"></script>
+  <!-- Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/sub.css">
+</head>
+<body>
+  <!-- ===== Navbar ===== -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-left">
+        <div class="logo-text">
+          <span class="logo-lop">rehablix</span>
+          <span class="logo-full">subscription</span>
+        </div>
+      </div>
+      <div class="nav-right">
+        <a href="index.html" class="icon-btn home-icon" aria-label="Home">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
+          </svg>
+        </a>
+        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===== Main Content ===== -->
+  <main class="sub-main">
+    <!-- Location Indicator -->
+    <div class="location-indicator" id="locationIndicator">
+      <span class="location-flag" id="locationFlag">🌍</span>
+      <span id="locationText">Detecting your location...</span>
+    </div>
+
+    <!-- Header -->
+    <div class="sub-header">
+      <h1>Choose Your Plan</h1>
+      <p class="sub-header-desc">Flexible pricing designed for healthcare students and professionals. All prices shown in your local currency.</p>
+    </div>
+
+    <!-- Currency Notice -->
+    <div class="currency-notice" id="currencyNotice" style="display:none;">
+      <i class="fas fa-info-circle"></i>
+      <span>Prices shown in <strong id="currencyCode">USD</strong>. Your card will be charged in your local currency at the current exchange rate.</span>
+    </div>
+
+    <!-- Billing Toggle -->
+    <div class="billing-toggle">
+      <span class="toggle-label active" data-billing="monthly">Monthly</span>
+      <label class="toggle-switch-wrapper">
+        <input type="checkbox" id="billingToggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="toggle-label" data-billing="yearly">Yearly</span>
+      <span class="save-badge">Save 20%</span>
+    </div>
+
+    <!-- Plans Grid -->
+    <div class="plans-grid" id="plansGrid">
+      <!-- Free Plan -->
+      <div class="plan-card" data-plan="free">
+        <div class="plan-header">
+          <div class="plan-icon">🚀</div>
+          <h3>Free</h3>
+          <p class="plan-desc">Get started with basic tools</p>
+        </div>
+        <div class="plan-price">
+          <span class="currency" id="freeCurrency">$</span>
+          <span class="amount">0</span>
+          <span class="period">/month</span>
+        </div>
+        <ul class="plan-features">
+          <li><i class="fas fa-check"></i> 5 Assignment generations/month</li>
+          <li><i class="fas fa-check"></i> 3 ROM analyses/month</li>
+          <li><i class="fas fa-check"></i> 3 Gait analyses/month</li>
+          <li><i class="fas fa-check"></i> Basic documentation tools</li>
+          <li><i class="fas fa-check"></i> Full Assessment mode (ROM)</li>
+          <li><i class="fas fa-times" style="color:#dc2626;"></i> No video persistence</li>
+          <li><i class="fas fa-times" style="color:#dc2626;"></i> No AI Supervisor</li>
+        </ul>
+        <button class="plan-btn current-plan" disabled>Current Plan</button>
+      </div>
+
+      <!-- Student Plan -->
+      <div class="plan-card popular" data-plan="student">
+        <div class="popular-badge">MOST POPULAR</div>
+        <div class="plan-header">
+          <div class="plan-icon">🎓</div>
+          <h3>Student</h3>
+          <p class="plan-desc">Perfect for healthcare students</p>
+        </div>
+        <div class="plan-price">
+          <span class="currency" id="studentCurrency">$</span>
+          <span class="amount" id="studentPrice">4.99</span>
+          <span class="period">/month</span>
+        </div>
+        <ul class="plan-features">
+          <li><i class="fas fa-check"></i> <strong>Unlimited</strong> Assignments</li>
+          <li><i class="fas fa-check"></i> 10 ROM analyses/month</li>
+          <li><i class="fas fa-check"></i> 10 Gait analyses/month</li>
+          <li><i class="fas fa-check"></i> Isolate Joint mode (ROM)</li>
+          <li><i class="fas fa-check"></i> Video auto-save</li>
+          <li><i class="fas fa-check"></i> AI Supervisor access</li>
+          <li><i class="fas fa-check"></i> All project chapters</li>
+          <li><i class="fas fa-check"></i> Custom outlines</li>
+        </ul>
+        <button class="plan-btn" data-plan="student">Get Started</button>
+      </div>
+
+      <!-- Pro Plan -->
+      <div class="plan-card" data-plan="pro">
+        <div class="plan-header">
+          <div class="plan-icon">💎</div>
+          <h3>Pro</h3>
+          <p class="plan-desc">For professionals who need it all</p>
+        </div>
+        <div class="plan-price">
+          <span class="currency" id="proCurrency">$</span>
+          <span class="amount" id="proPrice">14.99</span>
+          <span class="period">/month</span>
+        </div>
+        <ul class="plan-features">
+          <li><i class="fas fa-check"></i> <strong>Unlimited</strong> Everything</li>
+          <li><i class="fas fa-check"></i> All ROM features + Detailed output</li>
+          <li><i class="fas fa-check"></i> Unlimited Gait analyses</li>
+          <li><i class="fas fa-check"></i> Flexible AI mode</li>
+          <li><i class="fas fa-check"></i> Presentation Maker</li>
+          <li><i class="fas fa-check"></i> Priority AI processing</li>
+          <li><i class="fas fa-check"></i> Unlimited cloud storage</li>
+          <li><i class="fas fa-check"></i> Team collaboration</li>
+        </ul>
+        <button class="plan-btn pro-btn" data-plan="pro">Get Started</button>
+      </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div class="modal" id="paymentModal">
+      <div class="modal-content payment-modal-content">
+        <button class="modal-close" id="closePaymentModal">&times;</button>
+        <div class="payment-header">
+          <span class="payment-plan-badge" id="paymentPlanBadge">🎓 Student Plan</span>
+          <h3>Complete Your Subscription</h3>
+        </div>
+        <div class="payment-price-display">
+          <span class="payment-currency" id="paymentCurrency">$</span>
+          <span class="payment-amount" id="paymentAmount">4.99</span>
+          <span class="payment-period">/month</span>
+        </div>
+        <div class="payment-billing" id="paymentBilling">Billed monthly</div>
+
+        <div class="payment-divider"><span>Choose Payment Method</span></div>
+
+        <div class="payment-methods" id="paymentMethods">
+          <!-- Dynamically populated based on country -->
+        </div>
+
+        <div class="secure-badge">
+          <i class="fas fa-lock"></i>
+          <span>Secured with 256-bit encryption. Your data is safe.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ Section -->
+    <div class="sub-faq">
+      <h2>Frequently Asked Questions</h2>
+      <details class="faq-item">
+        <summary>Can I switch plans later?</summary>
+        <p>Yes! You can upgrade or downgrade your plan at any time. Changes take effect at the start of your next billing cycle.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What payment methods are accepted?</summary>
+        <p>We accept Paystack (Nigeria, Ghana, Kenya, South Africa), Flutterwave (multiple African countries), and Google Pay (international). The available options depend on your country.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I cancel anytime?</summary>
+        <p>Absolutely. You can cancel from your account settings anytime. You'll retain access until the end of your billing period.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Is there a free trial?</summary>
+        <p>Yes! The Free plan gives you access to basic features with monthly usage limits. No credit card required.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Will I be charged in my local currency?</summary>
+        <p>Yes. Prices are displayed and charged in your local currency. We use current exchange rates to ensure fair pricing.</p>
+      </details>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
+  </footer>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/plan.js"></script>
+  <script src="js/modal.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/upgrade.js"></script>
+</body>
+</html>

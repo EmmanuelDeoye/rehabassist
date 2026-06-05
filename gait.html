@@ -100,6 +100,21 @@
             <p>Position the patient walking naturally across the frame (sagittal or frontal view)</p>
           </div>
           
+          
+          <div class="controls-column">
+          <div class="patient-name-section">
+                <label for="patientName"><i class="fas fa-user"></i> Patient Name</label>
+                <input type="text" id="patientName" class="patient-name-input" placeholder="Enter patient name (optional)">
+              </div>
+              
+              <div class="record-controls">
+                <button id="startCameraBtn" class="btn-primary" disabled>
+                  <i class="fas fa-play"></i> Start Camera
+                </button>
+                
+              </div>
+              </div>
+          
           <div class="record-layout">
             <div class="camera-column">
               <div class="camera-view tall">
@@ -116,15 +131,18 @@
 
             <div class="controls-column">
               <!-- Patient Name Input (NEW) -->
-              <div class="patient-name-section">
-                <label for="patientName"><i class="fas fa-user"></i> Patient Name</label>
-                <input type="text" id="patientName" class="patient-name-input" placeholder="Enter patient name (optional)">
+              <div class="gait-params">
+                <label>View / Condition (optional)</label>
+                <select id="gaitViewSelect" class="joint-select">
+                  <option value="sagittal">Sagittal View (side)</option>
+                  <option value="frontal">Frontal View (front)</option>
+                  <option value="posterior">Posterior View (back)</option>
+                </select>
+                <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
               </div>
               
               <div class="record-controls">
-                <button id="startCameraBtn" class="btn-primary" disabled>
-                  <i class="fas fa-play"></i> Start Camera
-                </button>
+                
                 <button id="recordBtn" class="btn-record" disabled>
                   <i class="fas fa-circle"></i> Record
                 </button>
@@ -144,15 +162,7 @@
                 </div>
               </div>
 
-              <div class="gait-params">
-                <label>View / Condition (optional)</label>
-                <select id="gaitViewSelect" class="joint-select">
-                  <option value="sagittal">Sagittal View (side)</option>
-                  <option value="frontal">Frontal View (front)</option>
-                  <option value="posterior">Posterior View (back)</option>
-                </select>
-                <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
-              </div>
+              
             </div>
           </div>
         </div>
@@ -207,6 +217,7 @@
 
   <!-- Scripts -->
   <script src="js/config.js"></script>
+  <script src="js/plan.js"></script>
   <script src="js/modal.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/tools.js"></script>
