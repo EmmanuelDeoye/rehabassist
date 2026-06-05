@@ -1839,3 +1839,87 @@
   border-color: var(--project-accent);
   box-shadow: 0 0 0 3px var(--project-accent-soft);
 }
+
+
+/* ----- Sticky mobile toggles ----- */
+.mobile-toggles {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
+  padding: 0.5rem 0.8rem;
+  gap: 0.5rem;
+}
+
+/* ----- Floating Modify Button ----- */
+.floating-modify-btn {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--project-accent);
+  color: white;
+  padding: 0.7rem 1.5rem;
+  border-radius: 3rem;
+  border: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 150, 136, 0.35);
+  transition: transform 0.2s, opacity 0.3s;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.floating-modify-btn:hover {
+  transform: translateX(-50%) translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 150, 136, 0.45);
+}
+
+.floating-modify-btn .btn-text {
+  display: inline;
+}
+
+.floating-modify-btn .btn-icon {
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .floating-modify-btn .btn-text {
+    display: none;   /* only icon on mobile */
+  }
+  .floating-modify-btn {
+    padding: 0.6rem 0.8rem;
+  }
+}
+
+/* Suggested prompts inside AI chat */
+.suggested-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+}
+
+.suggested-prompt-chip {
+  background: var(--project-accent-soft);
+  border: 1px solid var(--project-accent);
+  color: var(--project-accent);
+  padding: 0.3rem 0.8rem;
+  border-radius: 2rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.suggested-prompt-chip:hover {
+  background: var(--project-accent);
+  color: white;
+}
