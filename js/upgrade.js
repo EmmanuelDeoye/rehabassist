@@ -200,23 +200,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // ===== Plan Selection =====
-  document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const plan = btn.dataset.plan;
-      if (!plan || plan === 'free') return;
-      
-      if (!currentUser) {
-        showToast('Please log in to subscribe', 'error');
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) loginBtn.click();
-        return;
-      }
-      
-      selectedPlan = plan;
-      openPaymentModal(plan);
+  // ===== Plan Selection (improved with robust auth handling) =====
+  function attachPlanButtonListeners() {
+    document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
+      // Remove existing listeners by cloning
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+
+      newBtn.addEventListener('click', () => {
+        const plan = newBtn.dataset.plan;
+        if (!plan || plan === 'free') return;
+
+        // Check if user is logged in
+        if (!currentUser) {
+          showToast('Please log in to subscribe', 'error', 4000);
+          
+          // Try multiple methods to open the auth modal
+          const loginBtn = document.getElementById('loginBtn');
+          const authModal = document.getElementById('authModal');
+          
+          if (loginBtn && loginBtn.style.display !== 'none' && loginBtn.offsetParent !== null) {
+            // Login button is visible and in the DOM
+            loginBtn.click();
+          } else if (authModal) {
+            // Auth modal exists, open it directly
+            authModal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            
+            // Ensure login tab is active
+            const loginTab = document.getElementById('loginTab');
+            const registerTab = document.getElementById('registerTab');
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            if (loginTab && registerTab && loginForm && registerForm) {
+              loginTab.classList.add('active');
+              registerTab.classList.remove('active');
+              loginForm.classList.add('active');
+              registerForm.classList.remove('active');
+            }
+          } else {
+            // Last resort: redirect to index which has auth handling
+            showToast('Redirecting to login page...', 'info', 2000);
+            setTimeout(() => {
+              window.location.href = 'index.html';
+            }, 1500);
+          }
+          return;
+        }
+
+        // User is logged in, proceed with payment
+        selectedPlan = plan;
+        openPaymentModal(plan);
+      });
     });
-  });
+  }
+
+  // Attach immediately
+  attachPlanButtonListeners();
 
   // ===== Payment Modal =====
   function openPaymentModal(plan) {
@@ -492,11 +533,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.classList.add('current-plan');
         btn.disabled = true;
       } else {
-        btn.textContent = cardPlan === 'pro' ? 'Get Started' : 'Get Started';
+        btn.textContent = 'Get Started';
         btn.classList.remove('current-plan');
         btn.disabled = false;
       }
     });
+    
+    // Re-attach listeners after UI update
+    attachPlanButtonListeners();
   }
 
   // ===== Load User's Current Subscription =====
@@ -522,6 +566,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (user) {
       await loadCurrentSubscription();
     }
+    // Re-attach listeners after auth state changes
+    attachPlanButtonListeners();
   });
 
   // ===== Theme Toggle =====
