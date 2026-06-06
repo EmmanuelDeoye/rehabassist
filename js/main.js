@@ -299,5 +299,131 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // =========================================================================
+  // CURRENT PLAN CARD
+  // =========================================================================
+  function updatePlanCard() {
+    const card = document.getElementById('planGlassCard');
+    const section = document.getElementById('currentPlanSection');
+    if (!card || !section) return;
+
+    // Show the section
+    section.style.display = 'block';
+
+    const badge = document.getElementById('planStatusBadge');
+    const nameDisplay = document.getElementById('planNameDisplay');
+    const descDisplay = document.getElementById('planDescriptionDisplay');
+    const iconLarge = document.querySelector('.plan-icon-large');
+    const upgradeBtn = document.getElementById('planUpgradeBtn');
+    const expiryDiv = document.getElementById('planExpiry');
+    const expiryDate = document.getElementById('planExpiryDate');
+    const expiryDays = document.getElementById('planExpiryDays');
+    const renewalBadge = document.getElementById('planRenewalBadge');
+
+    const plan = window.rehabPlans ? window.rehabPlans.getCurrentPlan() : 'free';
+
+    const config = {
+      free: {
+        icon: '🚀',
+        name: 'Free Plan',
+        desc: 'Basic access with monthly usage limits',
+        badgeClass: 'free',
+        btnText: 'Upgrade Plan'
+      },
+      student: {
+        icon: '🎓',
+        name: 'Student Plan',
+        desc: 'Full access for healthcare students',
+        badgeClass: 'student',
+        btnText: 'Upgrade to Pro'
+      },
+      pro: {
+        icon: '💎',
+        name: 'Pro Plan',
+        desc: 'Unlimited everything for professionals',
+        badgeClass: 'pro',
+        btnText: 'Manage Plan'
+      }
+    };
+
+    const planConfig = config[plan] || config.free;
+
+    // Update badge
+    if (badge) {
+      badge.textContent = planConfig.name;
+      badge.className = `plan-status-badge ${planConfig.badgeClass}`;
+    }
+
+    // Update icon
+    if (iconLarge) iconLarge.textContent = planConfig.icon;
+
+    // Update name & description
+    if (nameDisplay) nameDisplay.textContent = planConfig.name;
+    if (descDisplay) descDisplay.textContent = planConfig.desc;
+
+    // Update upgrade button text
+    if (upgradeBtn) {
+      const btnText = upgradeBtn.querySelector('.btn-text');
+      if (btnText) btnText.textContent = planConfig.btnText;
+    }
+
+    // Show/hide expiry for paid plans
+    if (plan !== 'free') {
+      const user = firebase.auth().currentUser;
+      if (user) {
+        firebase.database().ref(`users/${user.uid}/subscription`).once('value')
+          .then(snap => {
+            const sub = snap.val();
+            if (sub && sub.ends) {
+              const endDate = new Date(sub.ends);
+              const now = new Date();
+              const diffDays = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+              
+              if (expiryDiv) expiryDiv.style.display = 'flex';
+              if (expiryDate) {
+                expiryDate.textContent = endDate.toLocaleDateString('en-GB', {
+                  day: 'numeric', month: 'long', year: 'numeric'
+                });
+              }
+              if (expiryDays) {
+                expiryDays.textContent = diffDays > 0 ? `${diffDays} days left` : 'Expired';
+                
+                if (diffDays <= 7 && diffDays > 0) {
+                  expiryDays.style.background = '#fef3c7';
+                  expiryDays.style.color = '#92400e';
+                } else {
+                  expiryDays.style.background = '#fef2f2';
+                  expiryDays.style.color = '#dc2626';
+                }
+              }
+            } else {
+              if (expiryDiv) expiryDiv.style.display = 'none';
+            }
+            if (renewalBadge) renewalBadge.style.display = 'inline-flex';
+          })
+          .catch(() => {
+            if (expiryDiv) expiryDiv.style.display = 'none';
+            if (renewalBadge) renewalBadge.style.display = 'none';
+          });
+      }
+    } else {
+      if (expiryDiv) expiryDiv.style.display = 'none';
+      if (renewalBadge) renewalBadge.style.display = 'none';
+    }
+  }
+
+  // Listen for plan updates from plan.js
+  document.addEventListener('planUpdated', () => {
+    updatePlanCard();
+  });
+
+  // Initial update with slight delay to ensure plan.js has loaded
+  setTimeout(updatePlanCard, 500);
+
+  // Also update when auth state changes (login/logout)
+  firebase.auth().onAuthStateChanged(() => {
+    setTimeout(updatePlanCard, 500);
+  });
+
   console.log('rehablix ready');
 });
