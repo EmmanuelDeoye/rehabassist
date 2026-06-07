@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Base Prices in USD (with "99" effect) =====
   const BASE_PRICES = {
-    student: { monthly: 2.99, yearly: 28.99 },
-    pro: { monthly: 9.99, yearly: 99.99 }
+    student: { monthly: 1.99, yearly: 20.99 },
+    pro: { monthly: 4.99, yearly: 49.99 }
   };
 
   // ===== Country Config: Currency, Gateways, Price Multipliers =====
@@ -70,6 +70,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Helpers =====
   function showToast(message, type = 'success', duration = 3500) {
+    if (!toastContainer) {
+      console.log('Toast:', message);
+      alert(message);
+      return;
+    }
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
@@ -123,10 +128,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       paymentGateways = config.gateways;
       
       // Update UI
-      locationFlag.textContent = config.flag;
-      locationText.textContent = `Prices in ${config.name} (${config.currency})`;
-      currencyCode.textContent = config.currency;
-      currencyNotice.style.display = 'flex';
+      if (locationFlag) locationFlag.textContent = config.flag;
+      if (locationText) locationText.textContent = `Prices in ${config.name} (${config.currency})`;
+      if (currencyCode) currencyCode.textContent = config.currency;
+      if (currencyNotice) currencyNotice.style.display = 'flex';
       
       return config;
     } catch (error) {
@@ -137,10 +142,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       exchangeRate = config.multiplier;
       paymentGateways = config.gateways;
       
-      locationFlag.textContent = config.flag;
-      locationText.textContent = `Prices in USD (International)`;
-      currencyCode.textContent = 'USD';
-      currencyNotice.style.display = 'flex';
+      if (locationFlag) locationFlag.textContent = config.flag;
+      if (locationText) locationText.textContent = `Prices in USD (International)`;
+      if (currencyCode) currencyCode.textContent = 'USD';
+      if (currencyNotice) currencyNotice.style.display = 'flex';
       
       return config;
     }
@@ -151,9 +156,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const symbol = config.symbol;
     
     // Update currency symbols
-    document.getElementById('freeCurrency').textContent = symbol;
-    document.getElementById('studentCurrency').textContent = symbol;
-    document.getElementById('proCurrency').textContent = symbol;
+    const freeCurrency = document.getElementById('freeCurrency');
+    const studentCurrency = document.getElementById('studentCurrency');
+    const proCurrency = document.getElementById('proCurrency');
+    
+    if (freeCurrency) freeCurrency.textContent = symbol;
+    if (studentCurrency) studentCurrency.textContent = symbol;
+    if (proCurrency) proCurrency.textContent = symbol;
     
     // Calculate prices with "99" effect
     const studentMonthly = calculatePrice(BASE_PRICES.student.monthly, config);
@@ -162,11 +171,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const proYearly = calculatePrice(BASE_PRICES.pro.yearly, config);
     
     // Update displayed prices
-    const price = isYearly ? studentYearly : studentMonthly;
-    document.getElementById('studentPrice').textContent = price.toFixed(2);
+    const studentPriceEl = document.getElementById('studentPrice');
+    const proPriceEl = document.getElementById('proPrice');
     
-    const proPrice = isYearly ? proYearly : proMonthly;
-    document.getElementById('proPrice').textContent = proPrice.toFixed(2);
+    if (studentPriceEl) {
+      const price = isYearly ? studentYearly : studentMonthly;
+      studentPriceEl.textContent = price.toFixed(2);
+    }
+    
+    if (proPriceEl) {
+      const proPrice = isYearly ? proYearly : proMonthly;
+      proPriceEl.textContent = proPrice.toFixed(2);
+    }
     
     // Update period display
     document.querySelectorAll('.period').forEach(el => {
@@ -175,22 +191,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ===== Billing Toggle =====
-  billingToggle.addEventListener('change', () => {
-    isYearly = billingToggle.checked;
-    const config = getCountryConfig(userCountry);
-    updatePlanPrices(config);
-    
-    // Update toggle labels
-    document.querySelectorAll('.toggle-label').forEach(label => {
-      label.classList.toggle('active', label.dataset.billing === (isYearly ? 'yearly' : 'monthly'));
+  if (billingToggle) {
+    billingToggle.addEventListener('change', () => {
+      isYearly = billingToggle.checked;
+      const config = getCountryConfig(userCountry);
+      updatePlanPrices(config);
+      
+      // Update toggle labels
+      document.querySelectorAll('.toggle-label').forEach(label => {
+        label.classList.toggle('active', label.dataset.billing === (isYearly ? 'yearly' : 'monthly'));
+      });
     });
-  });
+  }
 
   document.querySelectorAll('.toggle-label').forEach(label => {
     label.addEventListener('click', () => {
       const billing = label.dataset.billing;
       isYearly = billing === 'yearly';
-      billingToggle.checked = isYearly;
+      if (billingToggle) billingToggle.checked = isYearly;
       const config = getCountryConfig(userCountry);
       updatePlanPrices(config);
       
@@ -200,76 +218,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // ===== Plan Selection (improved with robust auth handling) =====
+  // ===== Function to open Auth Modal =====
+  function openAuthModal() {
+    const authModal = document.getElementById('authModal');
+    if (authModal) {
+      authModal.classList.add('show');
+      document.body.style.overflow = 'hidden';
+      
+      // Ensure login tab is active
+      const loginTab = document.getElementById('loginTab');
+      const registerTab = document.getElementById('registerTab');
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+      
+      if (loginTab && registerTab && loginForm && registerForm) {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.classList.add('active');
+        registerForm.classList.remove('active');
+      }
+    } else {
+      // Fallback redirect
+      window.location.href = 'index.html';
+    }
+  }
+
+  // ===== Plan Selection (IMPROVED VERSION) =====
   function attachPlanButtonListeners() {
-    document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
+    console.log('Attaching plan button listeners...');
+    const planButtons = document.querySelectorAll('.plan-btn:not(.current-plan)');
+    console.log(`Found ${planButtons.length} plan buttons`);
+    
+    planButtons.forEach(btn => {
       // Remove existing listeners by cloning
       const newBtn = btn.cloneNode(true);
       btn.parentNode.replaceChild(newBtn, btn);
 
-      newBtn.addEventListener('click', () => {
+      newBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
         const plan = newBtn.dataset.plan;
-        if (!plan || plan === 'free') return;
+        console.log(`Plan button clicked: ${plan}`);
+        
+        if (!plan || plan === 'free') {
+          console.log('Free plan - no action');
+          return;
+        }
 
         // Check if user is logged in
         if (!currentUser) {
-          showToast('Please log in to subscribe', 'error', 4000);
-          
-          // Try multiple methods to open the auth modal
-          const loginBtn = document.getElementById('loginBtn');
-          const authModal = document.getElementById('authModal');
-          
-          if (loginBtn && loginBtn.style.display !== 'none' && loginBtn.offsetParent !== null) {
-            // Login button is visible and in the DOM
-            loginBtn.click();
-          } else if (authModal) {
-            // Auth modal exists, open it directly
-            authModal.classList.add('show');
-            document.body.style.overflow = 'hidden';
-            
-            // Ensure login tab is active
-            const loginTab = document.getElementById('loginTab');
-            const registerTab = document.getElementById('registerTab');
-            const loginForm = document.getElementById('loginForm');
-            const registerForm = document.getElementById('registerForm');
-            
-            if (loginTab && registerTab && loginForm && registerForm) {
-              loginTab.classList.add('active');
-              registerTab.classList.remove('active');
-              loginForm.classList.add('active');
-              registerForm.classList.remove('active');
-            }
-          } else {
-            // Last resort: redirect to index which has auth handling
-            showToast('Redirecting to login page...', 'info', 2000);
-            setTimeout(() => {
-              window.location.href = 'index.html';
-            }, 1500);
-          }
+          console.log('User not logged in, opening auth modal');
+          showToast('Please log in to subscribe', 'error', 3000);
+          openAuthModal();
           return;
         }
 
         // User is logged in, proceed with payment
+        console.log(`User logged in: ${currentUser.email}, proceeding with ${plan} plan`);
         selectedPlan = plan;
         openPaymentModal(plan);
       });
     });
   }
 
-  // Attach immediately
-  attachPlanButtonListeners();
-
   // ===== Payment Modal =====
   function openPaymentModal(plan) {
+    console.log(`Opening payment modal for ${plan}`);
+    if (!paymentModal) {
+      console.error('Payment modal element not found');
+      showToast('Payment system error. Please refresh the page.', 'error');
+      return;
+    }
+    
     const config = getCountryConfig(userCountry);
     const basePrice = BASE_PRICES[plan][isYearly ? 'yearly' : 'monthly'];
     const price = calculatePrice(basePrice, config);
     
-    paymentPlanBadge.textContent = plan === 'student' ? '🎓 Student Plan' : '💎 Pro Plan';
-    paymentCurrency.textContent = config.symbol;
-    paymentAmount.textContent = price.toFixed(2);
-    paymentPeriod.textContent = isYearly ? '/year' : '/month';
-    paymentBilling.textContent = isYearly ? 'Billed yearly (save 20%)' : 'Billed monthly';
+    if (paymentPlanBadge) paymentPlanBadge.textContent = plan === 'student' ? '🎓 Student Plan' : '💎 Pro Plan';
+    if (paymentCurrency) paymentCurrency.textContent = config.symbol;
+    if (paymentAmount) paymentAmount.textContent = price.toFixed(2);
+    if (paymentPeriod) paymentPeriod.textContent = isYearly ? '/year' : '/month';
+    if (paymentBilling) paymentBilling.textContent = isYearly ? 'Billed yearly (save 20%)' : 'Billed monthly';
     
     // Render payment methods
     renderPaymentMethods(config);
@@ -279,6 +309,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderPaymentMethods(config) {
+    if (!paymentMethodsContainer) return;
+    
     paymentMethodsContainer.innerHTML = '';
     
     config.gateways.forEach(gateway => {
@@ -323,7 +355,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Initiate Payment =====
   function initiatePayment(gateway) {
-    if (!selectedPlan || !currentUser) return;
+    if (!selectedPlan || !currentUser) {
+      showToast('Please log in to continue', 'error');
+      return;
+    }
+    
+    console.log(`Initiating ${gateway} payment for ${selectedPlan} plan`);
     
     const config = getCountryConfig(userCountry);
     const basePrice = BASE_PRICES[selectedPlan][isYearly ? 'yearly' : 'monthly'];
@@ -465,6 +502,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function handlePaymentSuccess(gateway, response) {
     if (!currentUser || !selectedPlan) return;
     
+    console.log(`Payment successful via ${gateway}`);
+    
     const endDate = new Date();
     if (isYearly) {
       endDate.setFullYear(endDate.getFullYear() + 1);
@@ -485,7 +524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         amount: calculatePrice(BASE_PRICES[selectedPlan][isYearly ? 'yearly' : 'monthly'], getCountryConfig(userCountry))
       });
       
-      closePaymentModalHandler();
+      if (closePaymentModalHandler) closePaymentModalHandler();
       showToast(`🎉 Successfully subscribed to ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} plan!`, 'success', 5000);
       
       // Dispatch plan update event
@@ -506,18 +545,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function closePaymentModalHandler() {
-    paymentModal.classList.remove('show');
-    document.body.style.overflow = '';
+    if (paymentModal) {
+      paymentModal.classList.remove('show');
+      document.body.style.overflow = '';
+    }
     selectedPlan = null;
   }
 
-  closePaymentModal.addEventListener('click', closePaymentModalHandler);
-  paymentModal.addEventListener('click', (e) => {
-    if (e.target === paymentModal) closePaymentModalHandler();
-  });
+  if (closePaymentModal) {
+    closePaymentModal.addEventListener('click', closePaymentModalHandler);
+  }
+  
+  if (paymentModal) {
+    paymentModal.addEventListener('click', (e) => {
+      if (e.target === paymentModal) closePaymentModalHandler();
+    });
+  }
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && paymentModal.classList.contains('show')) {
+    if (e.key === 'Escape' && paymentModal && paymentModal.classList.contains('show')) {
       closePaymentModalHandler();
     }
   });
@@ -529,10 +575,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       const btn = card.querySelector('.plan-btn');
       
       if (cardPlan === plan) {
-        btn.textContent = 'Current Plan';
-        btn.classList.add('current-plan');
-        btn.disabled = true;
-      } else {
+        if (btn) {
+          btn.textContent = 'Current Plan';
+          btn.classList.add('current-plan');
+          btn.disabled = true;
+        }
+      } else if (btn && cardPlan !== 'free') {
         btn.textContent = 'Get Started';
         btn.classList.remove('current-plan');
         btn.disabled = false;
@@ -562,9 +610,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Auth Listener =====
   auth.onAuthStateChanged(async (user) => {
+    console.log('Auth state changed:', user ? `Logged in as ${user.email}` : 'Logged out');
     currentUser = user;
     if (user) {
       await loadCurrentSubscription();
+    } else {
+      // Reset UI for logged out state
+      document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
+        if (btn.dataset.plan !== 'free') {
+          btn.textContent = 'Get Started';
+          btn.disabled = false;
+        }
+      });
     }
     // Re-attach listeners after auth state changes
     attachPlanButtonListeners();
@@ -584,14 +641,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Initialize =====
   async function initialize() {
+    console.log('Initializing upgrade.js...');
     const config = await detectLocation();
     updatePlanPrices(config);
     
-    // Load initial plan
-    if (window.rehabPlans) {
-      currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
-      updateCurrentPlanUI(currentPlan);
-    }
+    // Initial attachment of listeners
+    setTimeout(() => {
+      attachPlanButtonListeners();
+    }, 500);
   }
 
   initialize();
