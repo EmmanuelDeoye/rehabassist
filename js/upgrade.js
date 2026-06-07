@@ -1,23 +1,25 @@
-// js/upgrade.js – Country-specific pricing with "99" effect, multi-gateway payments
+// js/upgrade.js – Country-specific fixed pricing with "slashed price" illusion, multi-gateway payments
 
 document.addEventListener('DOMContentLoaded', async () => {
 
-  // ===== DOM Elements =====
-  const plansGrid = document.getElementById('plansGrid');
-  const paymentModal = document.getElementById('paymentModal');
-  const closePaymentModal = document.getElementById('closePaymentModal');
-  const paymentMethodsContainer = document.getElementById('paymentMethods');
-  const paymentPlanBadge = document.getElementById('paymentPlanBadge');
-  const paymentCurrency = document.getElementById('paymentCurrency');
-  const paymentAmount = document.getElementById('paymentAmount');
-  const paymentPeriod = document.getElementById('paymentPeriod');
-  const paymentBilling = document.getElementById('paymentBilling');
-  const billingToggle = document.getElementById('billingToggle');
-  const locationFlag = document.getElementById('locationFlag');
-  const locationText = document.getElementById('locationText');
-  const currencyCode = document.getElementById('currencyCode');
-  const currencyNotice = document.getElementById('currencyNotice');
-  const toastContainer = document.getElementById('toast-container');
+  // ===== DOM Elements (with null safety) =====
+  const getEl = (id) => document.getElementById(id);
+  
+  const plansGrid = getEl('plansGrid');
+  const paymentModal = getEl('paymentModal');
+  const closePaymentModal = getEl('closePaymentModal');
+  const paymentMethodsContainer = getEl('paymentMethods');
+  const paymentPlanBadge = getEl('paymentPlanBadge');
+  const paymentCurrency = getEl('paymentCurrency');
+  const paymentAmount = getEl('paymentAmount');
+  const paymentPeriod = getEl('paymentPeriod');
+  const paymentBilling = getEl('paymentBilling');
+  const billingToggle = getEl('billingToggle');
+  const locationFlag = getEl('locationFlag');
+  const locationText = getEl('locationText');
+  const currencyCode = getEl('currencyCode');
+  const currencyNotice = getEl('currencyNotice');
+  const toastContainer = getEl('toast-container');
 
   // ===== State =====
   let currentUser = null;
@@ -26,55 +28,274 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isYearly = false;
   let userCountry = 'US';
   let userCurrency = 'USD';
-  let exchangeRate = 1;
+  let countrySymbol = '$';
   let paymentGateways = [];
 
   const database = firebase.database();
   const auth = firebase.auth();
 
-  // ===== Base Prices in USD (with "99" effect) =====
-  const BASE_PRICES = {
-    student: { monthly: 1.99, yearly: 20.99 },
-    pro: { monthly: 4.99, yearly: 49.99 }
+  // ===== Country-Specific Fixed Prices with "slashed original" illusion =====
+  // "original" = crossed-out price shown for discount illusion
+  // "current" = actual price user pays
+  const COUNTRY_PRICING = {
+    // Nigeria (NGN ₦)
+    NG: {
+      currency: 'NGN', symbol: '₦', flag: '🇳🇬', name: 'Nigeria',
+      gateways: ['paystack', 'flutterwave'],
+      student: { 
+        monthly: { original: 3499, current: 1899 }, 
+        yearly: { original: 34999, current: 18599 } 
+      },
+      pro: { 
+        monthly: { original: 17499, current: 9499 }, 
+        yearly: { original: 174999, current: 93599 } 
+      }
+    },
+    // Ghana (GHS GH₵)
+    GH: {
+      currency: 'GHS', symbol: 'GH₵', flag: '🇬🇭', name: 'Ghana',
+      gateways: ['paystack', 'flutterwave'],
+      student: { 
+        monthly: { original: 54.99, current: 29.99 }, 
+        yearly: { original: 539.99, current: 289.99 } 
+      },
+      pro: { 
+        monthly: { original: 269.99, current: 149.99 }, 
+        yearly: { original: 2649.99, current: 1479.99 } 
+      }
+    },
+    // Kenya (KES KSh)
+    KE: {
+      currency: 'KES', symbol: 'KSh', flag: '🇰🇪', name: 'Kenya',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 749, current: 399 }, 
+        yearly: { original: 7299, current: 3899 } 
+      },
+      pro: { 
+        monthly: { original: 3699, current: 1999 }, 
+        yearly: { original: 35999, current: 19599 } 
+      }
+    },
+    // South Africa (ZAR R)
+    ZA: {
+      currency: 'ZAR', symbol: 'R', flag: '🇿🇦', name: 'South Africa',
+      gateways: ['paystack', 'flutterwave'],
+      student: { 
+        monthly: { original: 89.99, current: 49.99 }, 
+        yearly: { original: 879.99, current: 479.99 } 
+      },
+      pro: { 
+        monthly: { original: 449.99, current: 249.99 }, 
+        yearly: { original: 4399.99, current: 2459.99 } 
+      }
+    },
+    // Tanzania (TZS TSh)
+    TZ: {
+      currency: 'TZS', symbol: 'TSh', flag: '🇹🇿', name: 'Tanzania',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 12999, current: 6999 }, 
+        yearly: { original: 127999, current: 68999 } 
+      },
+      pro: { 
+        monthly: { original: 64999, current: 34999 }, 
+        yearly: { original: 639999, current: 345999 } 
+      }
+    },
+    // Uganda (UGX USh)
+    UG: {
+      currency: 'UGX', symbol: 'USh', flag: '🇺🇬', name: 'Uganda',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 19999, current: 10999 }, 
+        yearly: { original: 195999, current: 107999 } 
+      },
+      pro: { 
+        monthly: { original: 99999, current: 54999 }, 
+        yearly: { original: 979999, current: 539999 } 
+      }
+    },
+    // Rwanda (RWF RF)
+    RW: {
+      currency: 'RWF', symbol: 'RF', flag: '🇷🇼', name: 'Rwanda',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 6499, current: 3499 }, 
+        yearly: { original: 62999, current: 33999 } 
+      },
+      pro: { 
+        monthly: { original: 32499, current: 17499 }, 
+        yearly: { original: 317999, current: 171999 } 
+      }
+    },
+    // Cameroon (XAF FCFA)
+    CM: {
+      currency: 'XAF', symbol: 'FCFA', flag: '🇨🇲', name: 'Cameroon',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 3299, current: 1799 }, 
+        yearly: { original: 31999, current: 17499 } 
+      },
+      pro: { 
+        monthly: { original: 16499, current: 8999 }, 
+        yearly: { original: 160999, current: 87999 } 
+      }
+    },
+    // Côte d'Ivoire (XOF CFA)
+    CI: {
+      currency: 'XOF', symbol: 'CFA', flag: '🇨🇮', name: "Côte d'Ivoire",
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 3299, current: 1799 }, 
+        yearly: { original: 31999, current: 17499 } 
+      },
+      pro: { 
+        monthly: { original: 16499, current: 8999 }, 
+        yearly: { original: 160999, current: 87999 } 
+      }
+    },
+    // Senegal (XOF CFA)
+    SN: {
+      currency: 'XOF', symbol: 'CFA', flag: '🇸🇳', name: 'Senegal',
+      gateways: ['flutterwave'],
+      student: { 
+        monthly: { original: 3299, current: 1799 }, 
+        yearly: { original: 31999, current: 17499 } 
+      },
+      pro: { 
+        monthly: { original: 16499, current: 8999 }, 
+        yearly: { original: 160999, current: 87999 } 
+      }
+    },
+    // India (INR ₹)
+    IN: {
+      currency: 'INR', symbol: '₹', flag: '🇮🇳', name: 'India',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 549, current: 299 }, 
+        yearly: { original: 5399, current: 2899 } 
+      },
+      pro: { 
+        monthly: { original: 1849, current: 999 }, 
+        yearly: { original: 17999, current: 9799 } 
+      }
+    },
+    // United States (USD $)
+    US: {
+      currency: 'USD', symbol: '$', flag: '🇺🇸', name: 'United States',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 5.99, current: 2.99 }, 
+        yearly: { original: 59.99, current: 28.99 } 
+      },
+      pro: { 
+        monthly: { original: 19.99, current: 9.99 }, 
+        yearly: { original: 199.99, current: 99.99 } 
+      }
+    },
+    // United Kingdom (GBP £)
+    GB: {
+      currency: 'GBP', symbol: '£', flag: '🇬🇧', name: 'United Kingdom',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 4.99, current: 2.49 }, 
+        yearly: { original: 48.99, current: 23.99 } 
+      },
+      pro: { 
+        monthly: { original: 15.99, current: 7.99 }, 
+        yearly: { original: 156.99, current: 78.99 } 
+      }
+    },
+    // Canada (CAD CA$)
+    CA: {
+      currency: 'CAD', symbol: 'CA$', flag: '🇨🇦', name: 'Canada',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 7.99, current: 3.99 }, 
+        yearly: { original: 77.99, current: 38.99 } 
+      },
+      pro: { 
+        monthly: { original: 24.99, current: 12.99 }, 
+        yearly: { original: 249.99, current: 127.99 } 
+      }
+    },
+    // Australia (AUD A$)
+    AU: {
+      currency: 'AUD', symbol: 'A$', flag: '🇦🇺', name: 'Australia',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 8.99, current: 4.49 }, 
+        yearly: { original: 87.99, current: 43.99 } 
+      },
+      pro: { 
+        monthly: { original: 29.99, current: 14.99 }, 
+        yearly: { original: 294.99, current: 147.99 } 
+      }
+    },
+    // Germany (EUR €)
+    DE: {
+      currency: 'EUR', symbol: '€', flag: '🇩🇪', name: 'Germany',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 5.99, current: 2.99 }, 
+        yearly: { original: 57.99, current: 28.99 } 
+      },
+      pro: { 
+        monthly: { original: 18.99, current: 9.49 }, 
+        yearly: { original: 184.99, current: 92.99 } 
+      }
+    },
+    // France (EUR €)
+    FR: {
+      currency: 'EUR', symbol: '€', flag: '🇫🇷', name: 'France',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 5.99, current: 2.99 }, 
+        yearly: { original: 57.99, current: 28.99 } 
+      },
+      pro: { 
+        monthly: { original: 18.99, current: 9.49 }, 
+        yearly: { original: 184.99, current: 92.99 } 
+      }
+    },
+    // Brazil (BRL R$)
+    BR: {
+      currency: 'BRL', symbol: 'R$', flag: '🇧🇷', name: 'Brazil',
+      gateways: ['gpay'],
+      student: { 
+        monthly: { original: 29.99, current: 14.99 }, 
+        yearly: { original: 289.99, current: 144.99 } 
+      },
+      pro: { 
+        monthly: { original: 99.99, current: 49.99 }, 
+        yearly: { original: 979.99, current: 489.99 } 
+      }
+    },
   };
 
-  // ===== Country Config: Currency, Gateways, Price Multipliers =====
-  const COUNTRY_CONFIG = {
-    NG: { currency: 'NGN', symbol: '₦', gateways: ['paystack', 'flutterwave'], flag: '🇳🇬', name: 'Nigeria', multiplier: 1550 },
-    GH: { currency: 'GHS', symbol: 'GH₵', gateways: ['paystack', 'flutterwave'], flag: '🇬🇭', name: 'Ghana', multiplier: 12.5 },
-    KE: { currency: 'KES', symbol: 'KSh', gateways: ['flutterwave'], flag: '🇰🇪', name: 'Kenya', multiplier: 145 },
-    ZA: { currency: 'ZAR', symbol: 'R', gateways: ['paystack', 'flutterwave'], flag: '🇿🇦', name: 'South Africa', multiplier: 18.5 },
-    US: { currency: 'USD', symbol: '$', gateways: ['gpay'], flag: '🇺🇸', name: 'United States', multiplier: 1 },
-    GB: { currency: 'GBP', symbol: '£', gateways: ['gpay'], flag: '🇬🇧', name: 'United Kingdom', multiplier: 0.79 },
-    IN: { currency: 'INR', symbol: '₹', gateways: ['gpay'], flag: '🇮🇳', name: 'India', multiplier: 83 },
-    CA: { currency: 'CAD', symbol: 'CA$', gateways: ['gpay'], flag: '🇨🇦', name: 'Canada', multiplier: 1.36 },
-    AU: { currency: 'AUD', symbol: 'A$', gateways: ['gpay'], flag: '🇦🇺', name: 'Australia', multiplier: 1.53 },
-    DE: { currency: 'EUR', symbol: '€', gateways: ['gpay'], flag: '🇩🇪', name: 'Germany', multiplier: 0.92 },
-    FR: { currency: 'EUR', symbol: '€', gateways: ['gpay'], flag: '🇫🇷', name: 'France', multiplier: 0.92 },
-    BR: { currency: 'BRL', symbol: 'R$', gateways: ['gpay'], flag: '🇧🇷', name: 'Brazil', multiplier: 5.05 },
-    TZ: { currency: 'TZS', symbol: 'TSh', gateways: ['flutterwave'], flag: '🇹🇿', name: 'Tanzania', multiplier: 2550 },
-    UG: { currency: 'UGX', symbol: 'USh', gateways: ['flutterwave'], flag: '🇺🇬', name: 'Uganda', multiplier: 3800 },
-    RW: { currency: 'RWF', symbol: 'RF', gateways: ['flutterwave'], flag: '🇷🇼', name: 'Rwanda', multiplier: 1300 },
-    CM: { currency: 'XAF', symbol: 'FCFA', gateways: ['flutterwave'], flag: '🇨🇲', name: 'Cameroon', multiplier: 610 },
-    CI: { currency: 'XOF', symbol: 'CFA', gateways: ['flutterwave'], flag: '🇨🇮', name: "Côte d'Ivoire", multiplier: 610 },
-    SN: { currency: 'XOF', symbol: 'CFA', gateways: ['flutterwave'], flag: '🇸🇳', name: 'Senegal', multiplier: 610 },
+  // Default/fallback pricing (USD)
+  const DEFAULT_PRICING = {
+    currency: 'USD', symbol: '$', flag: '🌍', name: 'International',
+    gateways: ['gpay'],
+    student: { 
+      monthly: { original: 5.99, current: 2.99 }, 
+      yearly: { original: 59.99, current: 28.99 } 
+    },
+    pro: { 
+      monthly: { original: 19.99, current: 9.99 }, 
+      yearly: { original: 199.99, current: 99.99 } 
+    }
   };
-
-  // Default config for unknown countries
-  const DEFAULT_CONFIG = { currency: 'USD', symbol: '$', gateways: ['gpay'], flag: '🌍', name: 'International', multiplier: 1 };
 
   // ===== Payment Gateway Keys =====
   const PAYSTACK_PUBLIC_KEY = 'pk_live_4c70eb590578eaedff80c3ea23da34d711af4fec';
   const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK_TEST-b879ba7c16b007a6b9abc7253b739730-X';
-  const GPAY_MERCHANT_ID = 'BCR2DN4T2Z2Z3Z2Z'; // Test merchant ID
+  const GPAY_MERCHANT_ID = 'BCR2DN4T2Z2Z3Z2Z';
 
   // ===== Helpers =====
   function showToast(message, type = 'success', duration = 3500) {
-    if (!toastContainer) {
-      console.log('Toast:', message);
-      alert(message);
-      return;
-    }
+    if (!toastContainer) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
@@ -86,34 +307,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, duration);
   }
 
-  function getCountryConfig(countryCode) {
-    return COUNTRY_CONFIG[countryCode] || DEFAULT_CONFIG;
-  }
-
-  function calculatePrice(basePrice, countryConfig) {
-    // Convert USD base to local currency, then apply "99" effect
-    let rawPrice = basePrice * countryConfig.multiplier;
-    
-    // Round to nearest whole number, then subtract 0.01 for "99" effect
-    // For amounts < 10, use .99 directly
-    if (rawPrice < 10) {
-      return Math.round(rawPrice) - 0.01;
-    } else if (rawPrice < 100) {
-      return Math.round(rawPrice) - 0.01;
-    } else if (rawPrice < 1000) {
-      return Math.round(rawPrice / 10) * 10 - 1;
-    } else {
-      return Math.round(rawPrice / 100) * 100 - 1;
-    }
+  function getCountryPricing(countryCode) {
+    return COUNTRY_PRICING[countryCode] || DEFAULT_PRICING;
   }
 
   function formatPrice(price, symbol) {
     if (price === 0) return `${symbol}0`;
-    // Handle small decimals
-    if (price < 1 && price > 0) return `${symbol}${price.toFixed(2)}`;
-    // Handle .99 effect
     if (price % 1 !== 0) return `${symbol}${price.toFixed(2)}`;
     return `${symbol}${price.toLocaleString()}`;
+  }
+
+  // ===== Get previous page URL for redirect =====
+  function getPreviousPage() {
+    const referrer = document.referrer;
+    // If came from rehablix site, go back there; otherwise go to index
+    if (referrer && (referrer.includes('rehablix') || referrer.includes('127.0.0.1') || referrer.includes('localhost'))) {
+      return referrer;
+    }
+    return 'index.html';
   }
 
   // ===== Detect Location =====
@@ -122,69 +333,152 @@ document.addEventListener('DOMContentLoaded', async () => {
       const response = await fetch('https://ipapi.co/json/');
       const data = await response.json();
       userCountry = data.country_code || 'US';
-      const config = getCountryConfig(userCountry);
-      userCurrency = config.currency;
-      exchangeRate = config.multiplier;
-      paymentGateways = config.gateways;
+      const pricing = getCountryPricing(userCountry);
+      userCurrency = pricing.currency;
+      countrySymbol = pricing.symbol;
+      paymentGateways = pricing.gateways;
       
-      // Update UI
-      if (locationFlag) locationFlag.textContent = config.flag;
-      if (locationText) locationText.textContent = `Prices in ${config.name} (${config.currency})`;
-      if (currencyCode) currencyCode.textContent = config.currency;
+      if (locationFlag) locationFlag.textContent = pricing.flag;
+      if (locationText) locationText.textContent = `Prices in ${pricing.name} (${pricing.currency})`;
+      if (currencyCode) currencyCode.textContent = pricing.currency;
       if (currencyNotice) currencyNotice.style.display = 'flex';
       
-      return config;
+      return pricing;
     } catch (error) {
       console.error('Location detection failed:', error);
       userCountry = 'US';
-      const config = DEFAULT_CONFIG;
-      userCurrency = config.currency;
-      exchangeRate = config.multiplier;
-      paymentGateways = config.gateways;
+      const pricing = DEFAULT_PRICING;
+      userCurrency = pricing.currency;
+      countrySymbol = pricing.symbol;
+      paymentGateways = pricing.gateways;
       
-      if (locationFlag) locationFlag.textContent = config.flag;
+      if (locationFlag) locationFlag.textContent = pricing.flag;
       if (locationText) locationText.textContent = `Prices in USD (International)`;
       if (currencyCode) currencyCode.textContent = 'USD';
       if (currencyNotice) currencyNotice.style.display = 'flex';
       
-      return config;
+      return pricing;
     }
   }
 
-  // ===== Update Plan Prices =====
-  function updatePlanPrices(config) {
-    const symbol = config.symbol;
+  // ===== Update Plan Prices with Slashed Original Price & Discount Badge =====
+  function updatePlanPrices(pricing) {
+    const symbol = pricing.symbol;
+    
+    const freeCurrencyEl = getEl('freeCurrency');
+    const studentCurrencyEl = getEl('studentCurrency');
+    const proCurrencyEl = getEl('proCurrency');
+    const studentPriceEl = getEl('studentPrice');
+    const proPriceEl = getEl('proPrice');
     
     // Update currency symbols
-    const freeCurrency = document.getElementById('freeCurrency');
-    const studentCurrency = document.getElementById('studentCurrency');
-    const proCurrency = document.getElementById('proCurrency');
+    if (freeCurrencyEl) freeCurrencyEl.textContent = symbol;
+    if (studentCurrencyEl) studentCurrencyEl.textContent = symbol;
+    if (proCurrencyEl) proCurrencyEl.textContent = symbol;
     
-    if (freeCurrency) freeCurrency.textContent = symbol;
-    if (studentCurrency) studentCurrency.textContent = symbol;
-    if (proCurrency) proCurrency.textContent = symbol;
+    // Get prices for current billing period
+    const studentPricing = isYearly ? pricing.student.yearly : pricing.student.monthly;
+    const proPricing = isYearly ? pricing.pro.yearly : pricing.pro.monthly;
     
-    // Calculate prices with "99" effect
-    const studentMonthly = calculatePrice(BASE_PRICES.student.monthly, config);
-    const studentYearly = calculatePrice(BASE_PRICES.student.yearly, config);
-    const proMonthly = calculatePrice(BASE_PRICES.pro.monthly, config);
-    const proYearly = calculatePrice(BASE_PRICES.pro.yearly, config);
-    
-    // Update displayed prices
-    const studentPriceEl = document.getElementById('studentPrice');
-    const proPriceEl = document.getElementById('proPrice');
-    
+    // Update Student price card
     if (studentPriceEl) {
-      const price = isYearly ? studentYearly : studentMonthly;
-      studentPriceEl.textContent = price.toFixed(2);
+      const studentCard = studentPriceEl.closest('.plan-price');
+      
+      // Remove existing slashed p&& rice and discount badge
+      const existingSlash = studentCard?.querySelector('.slashed-price');
+      if (existingSlash) existingSlash.remove();
+      const existingBadge = studentCard?.querySelector('.discount-badge');
+      if (existingBadge) existingBadge.remove();
+      
+      if (studentCard) {
+        // Add slashed original price above current price
+        const slashSpan = document.createElement('span');
+        slashSpan.className = 'slashed-price';
+        slashSpan.textContent = formatPrice(studentPricing.original, symbol);
+        slashSpan.style.cssText = `
+          text-decoration: line-through;
+          color: #dc2626;
+          font-size: 1.5rem;
+          font-weight: 500;
+          opacity: 0.7;
+          display: block;
+          margin-bottom: -0.2rem;
+        `;
+        studentCard.insertBefore(slashSpan, studentPriceEl);
+        
+        // Add discount badge
+        const discountPercent = Math.round((1 - studentPricing.current / studentPricing.original) * 100);
+        const badge = document.createElement('span');
+        badge.className = 'discount-badge';
+        badge.textContent = `-${discountPercent}%`;
+        badge.style.cssText = `
+          background: #10b981;
+          color: white;
+          padding: 0.15rem 0.5rem;
+          border-radius: 1rem;
+          font-size: 0.65rem;
+          font-weight: 700;
+          margin-left: 0.4rem;
+          vertical-align: middle;
+          animation: badgePop 0.3s ease;
+        `;
+        studentPriceEl.parentNode.appendChild(badge);
+      }
+      
+      // Update current price
+      studentPriceEl.textContent = studentPricing.current % 1 !== 0 ? studentPricing.current.toFixed(2) : studentPricing.current.toLocaleString();
     }
     
+    // Update Pro price card
     if (proPriceEl) {
-      const proPrice = isYearly ? proYearly : proMonthly;
-      proPriceEl.textContent = proPrice.toFixed(2);
+      const proCard = proPriceEl.closest('.plan-price');
+      
+      // Remove existing slashed price and discount badge
+      const existingSlash = proCard?.querySelector('.slashed-price');
+      if (existingSlash) existingSlash.remove();
+      const existingBadge = proCard?.querySelector('.discount-badge');
+      if (existingBadge) existingBadge.remove();
+      
+      if (proCard) {
+        // Add slashed original price above current price
+        const slashSpan = document.createElement('span');
+        slashSpan.className = 'slashed-price';
+        slashSpan.textContent = formatPrice(proPricing.original, symbol);
+        slashSpan.style.cssText = `
+          text-decoration: line-through;
+          color: #dc2626;
+          font-size: 1.5rem;
+          font-weight: 500;
+          opacity: 0.7;
+          display: block;
+          margin-bottom: -0.2rem;
+        `;
+        proCard.insertBefore(slashSpan, proPriceEl);
+        
+        // Add discount badge
+        const discountPercent = Math.round((1 - proPricing.current / proPricing.original) * 100);
+        const badge = document.createElement('span');
+        badge.className = 'discount-badge';
+        badge.textContent = `-${discountPercent}%`;
+        badge.style.cssText = `
+          background: #10b981;
+          color: white;
+          padding: 0.15rem 0.5rem;
+          border-radius: 1rem;
+          font-size: 0.65rem;
+          font-weight: 700;
+          margin-left: 0.4rem;
+          vertical-align: middle;
+          animation: badgePop 0.3s ease;
+        `;
+        proPriceEl.parentNode.appendChild(badge);
+      }
+      
+      // Update current price
+      proPriceEl.textContent = proPricing.current % 1 !== 0 ? proPricing.current.toFixed(2) : proPricing.current.toLocaleString();
     }
     
-    // Update period display
+    // Update period labels
     document.querySelectorAll('.period').forEach(el => {
       el.textContent = isYearly ? '/year' : '/month';
     });
@@ -194,10 +488,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (billingToggle) {
     billingToggle.addEventListener('change', () => {
       isYearly = billingToggle.checked;
-      const config = getCountryConfig(userCountry);
-      updatePlanPrices(config);
-      
-      // Update toggle labels
+      const pricing = getCountryPricing(userCountry);
+      updatePlanPrices(pricing);
       document.querySelectorAll('.toggle-label').forEach(label => {
         label.classList.toggle('active', label.dataset.billing === (isYearly ? 'yearly' : 'monthly'));
       });
@@ -209,113 +501,115 @@ document.addEventListener('DOMContentLoaded', async () => {
       const billing = label.dataset.billing;
       isYearly = billing === 'yearly';
       if (billingToggle) billingToggle.checked = isYearly;
-      const config = getCountryConfig(userCountry);
-      updatePlanPrices(config);
-      
+      const pricing = getCountryPricing(userCountry);
+      updatePlanPrices(pricing);
       document.querySelectorAll('.toggle-label').forEach(l => {
         l.classList.toggle('active', l.dataset.billing === billing);
       });
     });
   });
 
-  // ===== Function to open Auth Modal =====
-  function openAuthModal() {
-    const authModal = document.getElementById('authModal');
-    if (authModal) {
-      authModal.classList.add('show');
-      document.body.style.overflow = 'hidden';
-      
-      // Ensure login tab is active
-      const loginTab = document.getElementById('loginTab');
-      const registerTab = document.getElementById('registerTab');
-      const loginForm = document.getElementById('loginForm');
-      const registerForm = document.getElementById('registerForm');
-      
-      if (loginTab && registerTab && loginForm && registerForm) {
-        loginTab.classList.add('active');
-        registerTab.classList.remove('active');
-        loginForm.classList.add('active');
-        registerForm.classList.remove('active');
-      }
-    } else {
-      // Fallback redirect
-      window.location.href = 'index.html';
-    }
-  }
-
-  // ===== Plan Selection (IMPROVED VERSION) =====
+  // ===== Plan Selection =====
   function attachPlanButtonListeners() {
-    console.log('Attaching plan button listeners...');
-    const planButtons = document.querySelectorAll('.plan-btn:not(.current-plan)');
-    console.log(`Found ${planButtons.length} plan buttons`);
-    
-    planButtons.forEach(btn => {
-      // Remove existing listeners by cloning
+    document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
       const newBtn = btn.cloneNode(true);
       btn.parentNode.replaceChild(newBtn, btn);
 
-      newBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
+      newBtn.addEventListener('click', () => {
         const plan = newBtn.dataset.plan;
-        console.log(`Plan button clicked: ${plan}`);
-        
-        if (!plan || plan === 'free') {
-          console.log('Free plan - no action');
-          return;
-        }
+        if (!plan || plan === 'free') return;
 
-        // Check if user is logged in
         if (!currentUser) {
-          console.log('User not logged in, opening auth modal');
-          showToast('Please log in to subscribe', 'error', 3000);
-          openAuthModal();
+          showToast('Please log in to subscribe', 'error', 4000);
+          
+          const loginBtn = getEl('loginBtn');
+          const authModal = getEl('authModal');
+          
+          if (loginBtn && loginBtn.style.display !== 'none' && loginBtn.offsetParent !== null) {
+            loginBtn.click();
+          } else if (authModal) {
+            authModal.classList.add('show');
+            document.body.style.overflow = 'hidden';
+            
+            const loginTab = getEl('loginTab');
+            const registerTab = getEl('registerTab');
+            const loginForm = getEl('loginForm');
+            const registerForm = getEl('registerForm');
+            
+            if (loginTab && registerTab && loginForm && registerForm) {
+              loginTab.classList.add('active');
+              registerTab.classList.remove('active');
+              loginForm.classList.add('active');
+              registerForm.classList.remove('active');
+            }
+          } else {
+            showToast('Redirecting to login page...', 'info', 2000);
+            setTimeout(() => { window.location.href = 'index.html'; }, 1500);
+          }
           return;
         }
 
-        // User is logged in, proceed with payment
-        console.log(`User logged in: ${currentUser.email}, proceeding with ${plan} plan`);
         selectedPlan = plan;
         openPaymentModal(plan);
       });
     });
   }
 
+  attachPlanButtonListeners();
+
   // ===== Payment Modal =====
   function openPaymentModal(plan) {
-    console.log(`Opening payment modal for ${plan}`);
-    if (!paymentModal) {
-      console.error('Payment modal element not found');
-      showToast('Payment system error. Please refresh the page.', 'error');
-      return;
-    }
+    if (!paymentModal) return;
     
-    const config = getCountryConfig(userCountry);
-    const basePrice = BASE_PRICES[plan][isYearly ? 'yearly' : 'monthly'];
-    const price = calculatePrice(basePrice, config);
+    const pricing = getCountryPricing(userCountry);
+    const priceData = isYearly ? pricing[plan].yearly : pricing[plan].monthly;
+    const discountPercent = Math.round((1 - priceData.current / priceData.original) * 100);
     
     if (paymentPlanBadge) paymentPlanBadge.textContent = plan === 'student' ? '🎓 Student Plan' : '💎 Pro Plan';
-    if (paymentCurrency) paymentCurrency.textContent = config.symbol;
-    if (paymentAmount) paymentAmount.textContent = price.toFixed(2);
+    if (paymentCurrency) paymentCurrency.textContent = pricing.symbol;
+    if (paymentAmount) paymentAmount.textContent = priceData.current % 1 !== 0 ? priceData.current.toFixed(2) : priceData.current.toLocaleString();
     if (paymentPeriod) paymentPeriod.textContent = isYearly ? '/year' : '/month';
-    if (paymentBilling) paymentBilling.textContent = isYearly ? 'Billed yearly (save 20%)' : 'Billed monthly';
+    if (paymentBilling) {
+      paymentBilling.textContent = isYearly 
+        ? `Billed yearly (save ${discountPercent}%)` 
+        : 'Billed monthly';
+    }
     
-    // Render payment methods
-    renderPaymentMethods(config);
+    // Add slashed original price in payment modal
+    const paymentPriceDisplay = paymentAmount?.closest('.payment-price-display');
+    if (paymentPriceDisplay) {
+      // Remove existing slashed price
+      const existingSlash = paymentPriceDisplay.querySelector('.payment-slashed-price');
+      if (existingSlash) existingSlash.remove();
+      
+      // Add new slashed price above the current price
+      const slashSpan = document.createElement('span');
+      slashSpan.className = 'payment-slashed-price';
+      slashSpan.textContent = formatPrice(priceData.original, pricing.symbol);
+      slashSpan.style.cssText = `
+        text-decoration: line-through;
+        color: #dc2626;
+        font-size: 1rem;
+        font-weight: 500;
+        opacity: 0.6;
+        display: block;
+        margin-bottom: -0.3rem;
+      `;
+      paymentPriceDisplay.insertBefore(slashSpan, paymentPriceDisplay.firstChild);
+    }
+    
+    renderPaymentMethods(pricing);
     
     paymentModal.classList.add('show');
     document.body.style.overflow = 'hidden';
   }
 
-  function renderPaymentMethods(config) {
+  function renderPaymentMethods(pricing) {
     if (!paymentMethodsContainer) return;
-    
     paymentMethodsContainer.innerHTML = '';
     
-    config.gateways.forEach(gateway => {
+    pricing.gateways.forEach(gateway => {
       let iconClass, name, desc, icon;
-      
       switch (gateway) {
         case 'paystack':
           iconClass = 'paystack';
@@ -355,32 +649,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Initiate Payment =====
   function initiatePayment(gateway) {
-    if (!selectedPlan || !currentUser) {
-      showToast('Please log in to continue', 'error');
-      return;
-    }
+    if (!selectedPlan || !currentUser) return;
     
-    console.log(`Initiating ${gateway} payment for ${selectedPlan} plan`);
-    
-    const config = getCountryConfig(userCountry);
-    const basePrice = BASE_PRICES[selectedPlan][isYearly ? 'yearly' : 'monthly'];
-    const price = calculatePrice(basePrice, config);
+    const pricing = getCountryPricing(userCountry);
+    const priceData = isYearly ? pricing[selectedPlan].yearly : pricing[selectedPlan].monthly;
     
     switch (gateway) {
       case 'paystack':
-        initPaystack(price, config);
+        initPaystack(priceData.current, pricing);
         break;
       case 'flutterwave':
-        initFlutterwave(price, config);
+        initFlutterwave(priceData.current, pricing);
         break;
       case 'gpay':
-        initGooglePay(price, config);
+        initGooglePay(priceData.current, pricing);
         break;
     }
   }
 
   // ===== Paystack =====
-  function initPaystack(amount, config) {
+  function initPaystack(amount, pricing) {
     // Convert to kobo (smallest unit) for Paystack
     const amountInSmallest = Math.round(amount * 100);
     
@@ -388,7 +676,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       key: PAYSTACK_PUBLIC_KEY,
       email: currentUser.email,
       amount: amountInSmallest,
-      currency: config.currency,
+      currency: pricing.currency,
       ref: `rehab_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
       metadata: {
         plan: selectedPlan,
@@ -396,19 +684,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         user_id: currentUser.uid,
         country: userCountry
       },
-      callback: (response) => handlePaymentSuccess('paystack', response),
+      callback: (response) => handlePaymentSuccess('paystack', response, amount),
       onClose: () => showToast('Payment cancelled', 'warning', 2000)
     });
     handler.openIframe();
   }
 
   // ===== Flutterwave =====
-  function initFlutterwave(amount, config) {
+  function initFlutterwave(amount, pricing) {
     FlutterwaveCheckout({
       public_key: FLUTTERWAVE_PUBLIC_KEY,
       tx_ref: `rehab_${Date.now()}`,
       amount: amount,
-      currency: config.currency,
+      currency: pricing.currency,
       payment_options: 'card,banktransfer,ussd,mobilemoney',
       customer: {
         email: currentUser.email,
@@ -426,7 +714,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       },
       callback: (data) => {
         if (data.status === 'successful') {
-          handlePaymentSuccess('flutterwave', data);
+          handlePaymentSuccess('flutterwave', data, amount);
         }
       },
       onclose: () => showToast('Payment cancelled', 'warning', 2000)
@@ -434,7 +722,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ===== Google Pay =====
-  async function initGooglePay(amount, config) {
+  async function initGooglePay(amount, pricing) {
     const baseRequest = {
       apiVersion: 2,
       apiVersionMinor: 0
@@ -479,7 +767,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         paymentDataRequest.transactionInfo = {
           totalPriceStatus: 'FINAL',
           totalPrice: amount.toFixed(2),
-          currencyCode: config.currency,
+          currencyCode: pricing.currency,
           countryCode: userCountry
         };
         paymentDataRequest.merchantInfo = {
@@ -488,7 +776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
-        handlePaymentSuccess('gpay', { paymentMethodData: paymentData });
+        handlePaymentSuccess('gpay', { paymentMethodData: paymentData }, amount);
       } else {
         showToast('Google Pay is not available on this device', 'error');
       }
@@ -499,10 +787,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ===== Payment Success Handler =====
-  async function handlePaymentSuccess(gateway, response) {
+  async function handlePaymentSuccess(gateway, response, amount) {
     if (!currentUser || !selectedPlan) return;
-    
-    console.log(`Payment successful via ${gateway}`);
     
     const endDate = new Date();
     if (isYearly) {
@@ -512,6 +798,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     try {
+      // Update subscription in Firebase
       await database.ref(`users/${currentUser.uid}/subscription`).set({
         plan: selectedPlan,
         billing: isYearly ? 'yearly' : 'monthly',
@@ -521,22 +808,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         transactionRef: response.reference || response.tx_ref || response.paymentMethodData?.token || '',
         country: userCountry,
         currency: userCurrency,
-        amount: calculatePrice(BASE_PRICES[selectedPlan][isYearly ? 'yearly' : 'monthly'], getCountryConfig(userCountry))
+        amount: amount
       });
       
-      if (closePaymentModalHandler) closePaymentModalHandler();
-      showToast(`🎉 Successfully subscribed to ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} plan!`, 'success', 5000);
+      closePaymentModalHandler();
       
-      // Dispatch plan update event
+      // Force plan.js to reload the subscription by dispatching event
       document.dispatchEvent(new CustomEvent('planUpdated', { detail: { plan: selectedPlan } }));
       
-      // Update UI
-      updateCurrentPlanUI(selectedPlan);
+      showToast(`🎉 Successfully subscribed to ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} plan!`, 'success', 3000);
       
-      // Redirect after short delay
+      // Redirect back to previous page after short delay
       setTimeout(() => {
-        window.location.href = 'index.html';
-      }, 2000);
+        const previousPage = getPreviousPage();
+        window.location.href = previousPage;
+      }, 1500);
       
     } catch (error) {
       console.error('Subscription update failed:', error);
@@ -552,10 +838,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectedPlan = null;
   }
 
-  if (closePaymentModal) {
-    closePaymentModal.addEventListener('click', closePaymentModalHandler);
-  }
-  
+  if (closePaymentModal) closePaymentModal.addEventListener('click', closePaymentModalHandler);
   if (paymentModal) {
     paymentModal.addEventListener('click', (e) => {
       if (e.target === paymentModal) closePaymentModalHandler();
@@ -573,20 +856,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.querySelectorAll('.plan-card').forEach(card => {
       const cardPlan = card.dataset.plan;
       const btn = card.querySelector('.plan-btn');
-      
-      if (cardPlan === plan) {
-        if (btn) {
+      if (btn) {
+        if (cardPlan === plan) {
           btn.textContent = 'Current Plan';
           btn.classList.add('current-plan');
           btn.disabled = true;
+        } else {
+          btn.textContent = 'Get Started';
+          btn.classList.remove('current-plan');
+          btn.disabled = false;
         }
-      } else if (btn && cardPlan !== 'free') {
-        btn.textContent = 'Get Started';
-        btn.classList.remove('current-plan');
-        btn.disabled = false;
       }
     });
-    
     // Re-attach listeners after UI update
     attachPlanButtonListeners();
   }
@@ -610,25 +891,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Auth Listener =====
   auth.onAuthStateChanged(async (user) => {
-    console.log('Auth state changed:', user ? `Logged in as ${user.email}` : 'Logged out');
     currentUser = user;
     if (user) {
       await loadCurrentSubscription();
-    } else {
-      // Reset UI for logged out state
-      document.querySelectorAll('.plan-btn:not(.current-plan)').forEach(btn => {
-        if (btn.dataset.plan !== 'free') {
-          btn.textContent = 'Get Started';
-          btn.disabled = false;
-        }
-      });
     }
     // Re-attach listeners after auth state changes
     attachPlanButtonListeners();
   });
 
   // ===== Theme Toggle =====
-  const themeToggle = document.getElementById('themeToggle');
+  const themeToggle = getEl('themeToggle');
   if (themeToggle) {
     themeToggle.addEventListener('click', () => {
       const html = document.documentElement;
@@ -641,14 +913,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== Initialize =====
   async function initialize() {
-    console.log('Initializing upgrade.js...');
-    const config = await detectLocation();
-    updatePlanPrices(config);
+    const pricing = await detectLocation();
+    updatePlanPrices(pricing);
     
-    // Initial attachment of listeners
-    setTimeout(() => {
-      attachPlanButtonListeners();
-    }, 500);
+    // Load initial plan
+    if (window.rehabPlans) {
+      currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+      updateCurrentPlanUI(currentPlan);
+    }
   }
 
   initialize();
