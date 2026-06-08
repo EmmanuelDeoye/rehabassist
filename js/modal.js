@@ -1,5 +1,6 @@
 // js/modal.js
-// Dynamic Auth Modal Creator + Review System + Profile & Settings Modals
+// Dynamic Auth Modal Creator + Review System + Profile Modal
+// Settings now redirects to settings.html (no settings modal)
 
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('#loginPassword, #regPassword, #regRepeatPassword');
@@ -188,72 +189,12 @@ function createAuthModal() {
             <span class="detail-label">Subscription Plan</span>
             <span class="detail-value" id="profilePlan"></span>
           </div>
-          
         </div>
         <p class="profile-id">User ID: <span id="profileUserId"></span></p>
-      </div>
-    </div>
-  `;
-
-  // ---------- Settings Modal (Premium Redesign) ----------
-  const settingsModalHTML = `
-    <div id="settingsModal" class="modal">
-      <div class="modal-content glass settings-modal-content">
-        <button class="modal-close" id="closeSettingsModal">&times;</button>
-        <div class="settings-header">
-          <span class="settings-icon">⚙️</span>
-          <h3>Settings</h3>
-          <p class="settings-subtitle">Customize your experience</p>
+        <!-- Added a button to go to settings page -->
+        <div style="margin-top: 1rem; text-align: center;">
+          <button class="auth-btn" id="goToSettingsFromProfile" style="background: #009688;">⚙️ Account Settings</button>
         </div>
-
-        <div class="settings-section">
-          <!-- Theme Selection -->
-          <div class="setting-card">
-            <div class="setting-card-left">
-              <span class="setting-card-icon">🎨</span>
-              <div class="setting-card-info">
-                <span class="setting-card-title">Appearance</span>
-                <span class="setting-card-desc">Choose your preferred theme</span>
-              </div>
-            </div>
-            <div class="theme-selector">
-              <button class="theme-chip" data-theme="light">
-                <span class="theme-chip-icon">☀️</span>
-                <span class="theme-chip-label">Light</span>
-              </button>
-              <button class="theme-chip" data-theme="dark">
-                <span class="theme-chip-icon">🌙</span>
-                <span class="theme-chip-label">Dark</span>
-              </button>
-              <button class="theme-chip" data-theme="system">
-                <span class="theme-chip-icon">💻</span>
-                <span class="theme-chip-label">Auto</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Notifications Toggle -->
-          <div class="setting-card">
-            <div class="setting-card-left">
-              <span class="setting-card-icon">🔔</span>
-              <div class="setting-card-info">
-                <span class="setting-card-title">Notifications</span>
-                <span class="setting-card-desc">Receive updates and alerts</span>
-              </div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="notifToggle" checked>
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-
-        <button class="settings-save-btn" id="saveSettingsBtn">
-          <span>Save Preferences</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </button>
       </div>
     </div>
   `;
@@ -326,7 +267,8 @@ function createAuthModal() {
     }
   }
 
-  document.body.insertAdjacentHTML('beforeend', modalHTML + feedbackModalHTML + profileModalHTML + settingsModalHTML);
+  // Insert modals (settings modal is REMOVED)
+  document.body.insertAdjacentHTML('beforeend', modalHTML + feedbackModalHTML + profileModalHTML);
 
   // ---------- Review Bar (Footer) ----------
   const footer = document.querySelector('footer.site-footer');
@@ -447,7 +389,6 @@ function createAuthModal() {
     document.getElementById('profileSpec').textContent = '';
     document.getElementById('profileCreatedAt').textContent = '';
     document.getElementById('profilePlan').textContent = '';
-    
     document.getElementById('profileUserId').textContent = '';
 
     // Fetch user data from Firebase
@@ -460,9 +401,6 @@ function createAuthModal() {
     document.getElementById('profileSpec').textContent = data.specialization || 'Not specified';
     document.getElementById('profileCreatedAt').textContent = formatDate(data.createdAt);
     document.getElementById('profileUserId').textContent = user.uid;
-
-    // Terms agreed
-    
 
     // Subscription
     const subSnap = await firebase.database().ref('users/' + user.uid + '/subscription').once('value');
@@ -498,70 +436,23 @@ function createAuthModal() {
     }
   });
 
-  // ---------- Settings Modal Logic ----------
-  window.openSettingsModal = function() {
-    const modal = document.getElementById('settingsModal');
-    if (!modal) return;
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-
-    // Sync current theme with the chips
-    const current = document.documentElement.getAttribute('data-theme') || 'light';
-    document.querySelectorAll('.theme-chip').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.theme === current);
+  // ---------- Redirect to settings.html when settings menu item is clicked ----------
+  const settingsMenuItem = document.getElementById('settingsMenuItem');
+  if (settingsMenuItem) {
+    settingsMenuItem.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.location.href = 'settings.html';
     });
+  }
 
-    // Load saved notification preference
-    const savedNotif = localStorage.getItem('rehab-notifications');
-    const notifToggle = document.getElementById('notifToggle');
-    if (notifToggle && savedNotif !== null) {
-      notifToggle.checked = savedNotif === 'true';
-    }
-  };
-
-  document.getElementById('closeSettingsModal')?.addEventListener('click', () => {
-    document.getElementById('settingsModal').classList.remove('show');
-    document.body.style.overflow = '';
-  });
-
-  document.getElementById('settingsModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('settingsModal')) {
-      document.getElementById('settingsModal').classList.remove('show');
-      document.body.style.overflow = '';
-    }
-  });
-
-  // Theme switching inside settings
-  document.querySelectorAll('.theme-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const theme = btn.dataset.theme;
-      if (theme === 'system') {
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
-        localStorage.setItem('rehab-theme', 'system');
-      } else {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('rehab-theme', theme);
-      }
-      // Update active state
-      document.querySelectorAll('.theme-chip').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+  // Also handle the settings button inside profile modal (if exists)
+  const goToSettingsBtn = document.getElementById('goToSettingsFromProfile');
+  if (goToSettingsBtn) {
+    goToSettingsBtn.addEventListener('click', () => {
+      window.location.href = 'settings.html';
     });
-  });
-
-  // Save settings
-  document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
-    const notif = document.getElementById('notifToggle')?.checked;
-    localStorage.setItem('rehab-notifications', notif);
-    const toast = document.getElementById('toast');
-    if (toast) {
-      toast.textContent = '⚙️ Settings saved!';
-      toast.classList.remove('hidden');
-      setTimeout(() => toast.classList.add('hidden'), 2000);
-    }
-    document.getElementById('settingsModal').classList.remove('show');
-    document.body.style.overflow = '';
-  });
+  }
 
   // Close modals with Escape key
   document.addEventListener('keydown', (e) => {
@@ -571,15 +462,11 @@ function createAuthModal() {
         document.getElementById('profileModal').classList.remove('show');
         document.body.style.overflow = '';
       }
-      if (document.getElementById('settingsModal')?.classList.contains('show')) {
-        document.getElementById('settingsModal').classList.remove('show');
-        document.body.style.overflow = '';
-      }
     }
   });
 
   setupPasswordToggles();
-  console.log('Auth modal, review system, profile & settings modals created');
+  console.log('Auth modal, review system, profile modal created – Settings redirects to settings.html');
 }
 
 // Auto-create when script loads
