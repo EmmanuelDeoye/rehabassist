@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Nigeria (NGN ₦)
     NG: {
       currency: 'NGN', symbol: '₦', flag: '🇳🇬', name: 'Nigeria',
-      gateways: ['paystack', 'flutterwave'],
+      gateways: ['paystack', 'flutterwave', 'gpay'],
       student: { 
         monthly: { original: 3499, current: 1899 }, 
         yearly: { original: 34999, current: 18599 } 
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   // ===== Payment Gateway Keys =====
-  const PAYSTACK_PUBLIC_KEY = 'pk_live_4c70eb590578eaedff80c3ea23da34d711af4fec';
+  const PAYSTACK_PUBLIC_KEY = 'pk_live_1fd1c3c6380edae5c08ca9f1e69db8d717534af2';
   const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK_TEST-b879ba7c16b007a6b9abc7253b739730-X';
   const GPAY_MERCHANT_ID = 'BCR2DN4T2Z2Z3Z2Z';
 
