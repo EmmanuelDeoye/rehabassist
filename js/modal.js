@@ -1,4 +1,5 @@
-// js/modal.js - Updated: Settings now redirects to settings.html
+// js/modal.js
+// Dynamic Auth Modal Creator + Review System + Profile & Settings Modals
 
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('#loginPassword, #regPassword, #regRepeatPassword');
@@ -187,11 +188,72 @@ function createAuthModal() {
             <span class="detail-label">Subscription Plan</span>
             <span class="detail-value" id="profilePlan"></span>
           </div>
+          
         </div>
         <p class="profile-id">User ID: <span id="profileUserId"></span></p>
-        <div class="profile-modal-actions">
-          <button class="auth-btn" id="goToSettingsFromProfile">⚙️ Account Settings</button>
+      </div>
+    </div>
+  `;
+
+  // ---------- Settings Modal (Premium Redesign) ----------
+  const settingsModalHTML = `
+    <div id="settingsModal" class="modal">
+      <div class="modal-content glass settings-modal-content">
+        <button class="modal-close" id="closeSettingsModal">&times;</button>
+        <div class="settings-header">
+          <span class="settings-icon">⚙️</span>
+          <h3>Settings</h3>
+          <p class="settings-subtitle">Customize your experience</p>
         </div>
+
+        <div class="settings-section">
+          <!-- Theme Selection -->
+          <div class="setting-card">
+            <div class="setting-card-left">
+              <span class="setting-card-icon">🎨</span>
+              <div class="setting-card-info">
+                <span class="setting-card-title">Appearance</span>
+                <span class="setting-card-desc">Choose your preferred theme</span>
+              </div>
+            </div>
+            <div class="theme-selector">
+              <button class="theme-chip" data-theme="light">
+                <span class="theme-chip-icon">☀️</span>
+                <span class="theme-chip-label">Light</span>
+              </button>
+              <button class="theme-chip" data-theme="dark">
+                <span class="theme-chip-icon">🌙</span>
+                <span class="theme-chip-label">Dark</span>
+              </button>
+              <button class="theme-chip" data-theme="system">
+                <span class="theme-chip-icon">💻</span>
+                <span class="theme-chip-label">Auto</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Notifications Toggle -->
+          <div class="setting-card">
+            <div class="setting-card-left">
+              <span class="setting-card-icon">🔔</span>
+              <div class="setting-card-info">
+                <span class="setting-card-title">Notifications</span>
+                <span class="setting-card-desc">Receive updates and alerts</span>
+              </div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="notifToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <button class="settings-save-btn" id="saveSettingsBtn">
+          <span>Save Preferences</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
       </div>
     </div>
   `;
@@ -254,9 +316,6 @@ function createAuthModal() {
               <span>⚙️</span> Settings
             </button>
             <div class="dropdown-divider"></div>
-            <a href="index.html" class="dropdown-item">
-              <span>🏠</span> Home
-            </a>
             <button class="dropdown-item" id="logoutMenuItem">
               <span>🚪</span> Logout
             </button>
@@ -267,110 +326,28 @@ function createAuthModal() {
     }
   }
 
-  document.body.insertAdjacentHTML('beforeend', modalHTML + feedbackModalHTML + profileModalHTML);
+  document.body.insertAdjacentHTML('beforeend', modalHTML + feedbackModalHTML + profileModalHTML + settingsModalHTML);
 
-  // ==================== SETTINGS REDIRECT HANDLER ====================
-  function redirectToSettings() {
-    window.location.href = 'settings.html';
+  // ---------- Review Bar (Footer) ----------
+  const footer = document.querySelector('footer.site-footer');
+  if (footer && !document.getElementById('reviewBar')) {
+    const reviewBar = document.createElement('div');
+    reviewBar.id = 'reviewBar';
+    reviewBar.className = 'review-bar';
+    reviewBar.innerHTML = `
+      <span class="review-label">Rate your experience:</span>
+      <div class="emoji-rating">
+        <button class="emoji-btn" data-rating="5" data-emoji="😍" title="Love it!">😍</button>
+        <button class="emoji-btn" data-rating="4" data-emoji="😊" title="Good">😊</button>
+        <button class="emoji-btn" data-rating="3" data-emoji="😐" title="Okay">😐</button>
+        <button class="emoji-btn" data-rating="2" data-emoji="😕" title="Not great">😕</button>
+        <button class="emoji-btn" data-rating="1" data-emoji="😞" title="Bad">😞</button>
+      </div>
+    `;
+    footer.insertBefore(reviewBar, footer.firstChild);
   }
 
-  // ==================== PROFILE MODAL WITH SETTINGS BUTTON ====================
-  window.openProfileModal = async function() {
-    const user = firebase.auth().currentUser;
-    if (!user) return;
-
-    const profileModal = document.getElementById('profileModal');
-    if (!profileModal) return;
-
-    // Show loading state
-    document.getElementById('profileNameDisplay').textContent = 'Loading...';
-    document.getElementById('profileEmail').textContent = '';
-    document.getElementById('profileSpec').textContent = '';
-    document.getElementById('profileCreatedAt').textContent = '';
-    document.getElementById('profilePlan').textContent = '';
-    document.getElementById('profileUserId').textContent = '';
-
-    // Fetch user data from Firebase
-    const snapshot = await firebase.database().ref('users/' + user.uid).once('value');
-    const data = snapshot.val() || {};
-
-    // Populate
-    document.getElementById('profileNameDisplay').textContent = data.name || user.displayName || 'User';
-    document.getElementById('profileEmail').textContent = data.email || user.email;
-    document.getElementById('profileSpec').textContent = data.specialization || 'Not specified';
-    document.getElementById('profileCreatedAt').textContent = formatDate(data.createdAt);
-    document.getElementById('profileUserId').textContent = user.uid;
-
-    // Subscription
-    const subSnap = await firebase.database().ref('users/' + user.uid + '/subscription').once('value');
-    const sub = subSnap.val();
-    if (sub && sub.plan) {
-      document.getElementById('profilePlan').textContent = sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1) +
-        (sub.ends ? ' (until ' + formatDate(sub.ends) + ')' : '');
-    } else {
-      document.getElementById('profilePlan').textContent = 'Free';
-    }
-
-    // Avatar
-    const avatarEl = document.getElementById('profileAvatar');
-    if (data.photoURL) {
-      avatarEl.innerHTML = `<img src="${data.photoURL}" alt="${data.name}" class="profile-avatar-img">`;
-    } else {
-      avatarEl.textContent = (data.name || user.email).charAt(0).toUpperCase();
-    }
-
-    // Add settings button handler
-    const settingsBtn = document.getElementById('goToSettingsFromProfile');
-    if (settingsBtn) {
-      settingsBtn.onclick = () => {
-        profileModal.classList.remove('show');
-        document.body.style.overflow = '';
-        redirectToSettings();
-      };
-    }
-
-    profileModal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-  };
-
-  // Close profile modal
-  document.getElementById('closeProfileModal')?.addEventListener('click', () => {
-    document.getElementById('profileModal').classList.remove('show');
-    document.body.style.overflow = '';
-  });
-
-  document.getElementById('profileModal')?.addEventListener('click', (e) => {
-    if (e.target === document.getElementById('profileModal')) {
-      document.getElementById('profileModal').classList.remove('show');
-      document.body.style.overflow = '';
-    }
-  });
-
-  // ==================== SETTINGS MENU ITEM - REDIRECT ====================
-  function setupSettingsRedirect() {
-    const settingsMenuItem = document.getElementById('settingsMenuItem');
-    if (settingsMenuItem) {
-      // Remove any existing listeners by cloning
-      const newSettingsMenuItem = settingsMenuItem.cloneNode(true);
-      settingsMenuItem.parentNode.replaceChild(newSettingsMenuItem, settingsMenuItem);
-      
-      newSettingsMenuItem.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        redirectToSettings();
-      });
-    }
-  }
-
-  // Also handle any dynamically created settings menu items
-  const observer = new MutationObserver(() => {
-    setupSettingsRedirect();
-  });
-  
-  observer.observe(document.body, { childList: true, subtree: true });
-  setupSettingsRedirect();
-
-  // ==================== FEEDBACK LOGIC ====================
+  // ---------- Feedback Logic ----------
   const feedbackModal = document.getElementById('feedbackModal');
   const closeFeedbackBtn = document.getElementById('closeFeedbackModal');
   const ratingEmojiDisplay = document.getElementById('feedbackRatingEmoji');
@@ -399,18 +376,11 @@ function createAuthModal() {
     document.body.style.overflow = '';
   }
 
-  // Review bar setup
-  function setupReviewBar() {
-    const reviewBar = document.getElementById('reviewBar');
-    if (reviewBar) {
-      const emojiBtns = reviewBar.querySelectorAll('.emoji-btn');
-      emojiBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          openFeedbackModal(btn.getAttribute('data-rating'), btn.getAttribute('data-emoji'));
-        });
-      });
-    }
-  }
+  document.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openFeedbackModal(btn.getAttribute('data-rating'), btn.getAttribute('data-emoji'));
+    });
+  });
 
   if (closeFeedbackBtn) closeFeedbackBtn.addEventListener('click', closeFeedbackModal);
   if (feedbackModal) {
@@ -463,27 +433,135 @@ function createAuthModal() {
     });
   }
 
-  // Create review bar if it doesn't exist
-  const footer = document.querySelector('footer.site-footer');
-  if (footer && !document.getElementById('reviewBar')) {
-    const reviewBar = document.createElement('div');
-    reviewBar.id = 'reviewBar';
-    reviewBar.className = 'review-bar';
-    reviewBar.innerHTML = `
-      <span class="review-label">Rate your experience:</span>
-      <div class="emoji-rating">
-        <button class="emoji-btn" data-rating="5" data-emoji="😍" title="Love it!">😍</button>
-        <button class="emoji-btn" data-rating="4" data-emoji="😊" title="Good">😊</button>
-        <button class="emoji-btn" data-rating="3" data-emoji="😐" title="Okay">😐</button>
-        <button class="emoji-btn" data-rating="2" data-emoji="😕" title="Not great">😕</button>
-        <button class="emoji-btn" data-rating="1" data-emoji="😞" title="Bad">😞</button>
-      </div>
-    `;
-    footer.insertBefore(reviewBar, footer.firstChild);
-    setupReviewBar();
-  } else {
-    setupReviewBar();
-  }
+  // ---------- Profile Modal Logic ----------
+  window.openProfileModal = async function() {
+    const user = firebase.auth().currentUser;
+    if (!user) return;
+
+    const profileModal = document.getElementById('profileModal');
+    if (!profileModal) return;
+
+    // Show loading state
+    document.getElementById('profileNameDisplay').textContent = 'Loading...';
+    document.getElementById('profileEmail').textContent = '';
+    document.getElementById('profileSpec').textContent = '';
+    document.getElementById('profileCreatedAt').textContent = '';
+    document.getElementById('profilePlan').textContent = '';
+    
+    document.getElementById('profileUserId').textContent = '';
+
+    // Fetch user data from Firebase
+    const snapshot = await firebase.database().ref('users/' + user.uid).once('value');
+    const data = snapshot.val() || {};
+
+    // Populate
+    document.getElementById('profileNameDisplay').textContent = data.name || user.displayName || 'User';
+    document.getElementById('profileEmail').textContent = data.email || user.email;
+    document.getElementById('profileSpec').textContent = data.specialization || 'Not specified';
+    document.getElementById('profileCreatedAt').textContent = formatDate(data.createdAt);
+    document.getElementById('profileUserId').textContent = user.uid;
+
+    // Terms agreed
+    
+
+    // Subscription
+    const subSnap = await firebase.database().ref('users/' + user.uid + '/subscription').once('value');
+    const sub = subSnap.val();
+    if (sub && sub.plan) {
+      document.getElementById('profilePlan').textContent = sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1) +
+        (sub.ends ? ' (until ' + formatDate(sub.ends) + ')' : '');
+    } else {
+      document.getElementById('profilePlan').textContent = 'Free';
+    }
+
+    // Avatar
+    const avatarEl = document.getElementById('profileAvatar');
+    if (data.photoURL) {
+      avatarEl.innerHTML = `<img src="${data.photoURL}" alt="${data.name}" class="profile-avatar-img">`;
+    } else {
+      avatarEl.textContent = (data.name || user.email).charAt(0).toUpperCase();
+    }
+
+    profileModal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  };
+
+  document.getElementById('closeProfileModal')?.addEventListener('click', () => {
+    document.getElementById('profileModal').classList.remove('show');
+    document.body.style.overflow = '';
+  });
+
+  document.getElementById('profileModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('profileModal')) {
+      document.getElementById('profileModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  });
+
+  // ---------- Settings Modal Logic ----------
+  window.openSettingsModal = function() {
+    const modal = document.getElementById('settingsModal');
+    if (!modal) return;
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+
+    // Sync current theme with the chips
+    const current = document.documentElement.getAttribute('data-theme') || 'light';
+    document.querySelectorAll('.theme-chip').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.theme === current);
+    });
+
+    // Load saved notification preference
+    const savedNotif = localStorage.getItem('rehab-notifications');
+    const notifToggle = document.getElementById('notifToggle');
+    if (notifToggle && savedNotif !== null) {
+      notifToggle.checked = savedNotif === 'true';
+    }
+  };
+
+  document.getElementById('closeSettingsModal')?.addEventListener('click', () => {
+    document.getElementById('settingsModal').classList.remove('show');
+    document.body.style.overflow = '';
+  });
+
+  document.getElementById('settingsModal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('settingsModal')) {
+      document.getElementById('settingsModal').classList.remove('show');
+      document.body.style.overflow = '';
+    }
+  });
+
+  // Theme switching inside settings
+  document.querySelectorAll('.theme-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const theme = btn.dataset.theme;
+      if (theme === 'system') {
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', systemDark ? 'dark' : 'light');
+        localStorage.setItem('rehab-theme', 'system');
+      } else {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('rehab-theme', theme);
+      }
+      // Update active state
+      document.querySelectorAll('.theme-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Save settings
+  document.getElementById('saveSettingsBtn')?.addEventListener('click', () => {
+    const notif = document.getElementById('notifToggle')?.checked;
+    localStorage.setItem('rehab-notifications', notif);
+    const toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = '⚙️ Settings saved!';
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2000);
+    }
+    document.getElementById('settingsModal').classList.remove('show');
+    document.body.style.overflow = '';
+  });
 
   // Close modals with Escape key
   document.addEventListener('keydown', (e) => {
@@ -493,15 +571,15 @@ function createAuthModal() {
         document.getElementById('profileModal').classList.remove('show');
         document.body.style.overflow = '';
       }
-      if (document.getElementById('authModal')?.classList.contains('show')) {
-        document.getElementById('authModal').classList.remove('show');
+      if (document.getElementById('settingsModal')?.classList.contains('show')) {
+        document.getElementById('settingsModal').classList.remove('show');
         document.body.style.overflow = '';
       }
     }
   });
 
   setupPasswordToggles();
-  console.log('Auth modal, review system, profile modal created - Settings redirects to settings.html');
+  console.log('Auth modal, review system, profile & settings modals created');
 }
 
 // Auto-create when script loads
@@ -509,4 +587,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', createAuthModal);
 } else {
   createAuthModal();
-  }
+}
