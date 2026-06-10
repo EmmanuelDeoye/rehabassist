@@ -41,20 +41,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Nigeria (NGN ₦)
     NG: {
       currency: 'NGN', symbol: '₦', flag: '🇳🇬', name: 'Nigeria',
-      gateways: ['paystack', 'flutterwave', 'gpay'],
+      gateways: ['paystack', 'gpay'],
       student: { 
-        monthly: { original: 3499, current: 1899 }, 
-        yearly: { original: 34999, current: 18599 } 
+        monthly: { original: 3699, current: 1999 }, 
+        yearly: { original: 36999, current: 18599 } 
       },
       pro: { 
-        monthly: { original: 17499, current: 9499 }, 
-        yearly: { original: 174999, current: 93599 } 
+        monthly: { original: 6499, current: 3499 }, 
+        yearly: { original: 64999, current: 34499 } 
       }
     },
     // Ghana (GHS GH₵)
     GH: {
       currency: 'GHS', symbol: 'GH₵', flag: '🇬🇭', name: 'Ghana',
-      gateways: ['paystack', 'flutterwave'],
+      gateways: ['paystack', 'gpay'],
       student: { 
         monthly: { original: 54.99, current: 29.99 }, 
         yearly: { original: 539.99, current: 289.99 } 
@@ -171,7 +171,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // India (INR ₹)
     IN: {
       currency: 'INR', symbol: '₹', flag: '🇮🇳', name: 'India',
-      gateways: ['gpay'],
+      gateways: ['paystack','gpay'],
       student: { 
         monthly: { original: 549, current: 299 }, 
         yearly: { original: 5399, current: 2899 } 
@@ -291,7 +291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ===== Payment Gateway Keys =====
   const PAYSTACK_PUBLIC_KEY = 'pk_live_1fd1c3c6380edae5c08ca9f1e69db8d717534af2';
   const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK_TEST-b879ba7c16b007a6b9abc7253b739730-X';
-  const GPAY_MERCHANT_ID = 'BCR2DN4T2Z2Z3Z2Z';
+  const GPAY_MERCHANT_ID = 'BCR2DN7TTCZMPJCG';
 
   // ===== Helpers =====
   function showToast(message, type = 'success', duration = 3500) {
