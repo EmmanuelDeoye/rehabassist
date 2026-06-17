@@ -40,12 +40,17 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   // ===== LOCALSTORAGE PERSISTENCE FUNCTIONS =====
   
-  // Form field IDs to persist
+  // Form field IDs to persist (extended with new fields)
   const formFields = [
     'patientName',
     'patientAge',
     'patientGender',
+    'referralSource',
+    'clinicalSetting',
+    'diagnosisCategory',
     'patientDiagnosis',
+    'precautions',
+    'functionalGoals',
     'assessmentType',
     'categorySelect',
     'deptSelect',
@@ -54,14 +59,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     'includeStandardSections'
   ];
 
-  // Load saved form data from localStorage
   function loadFormFromStorage() {
     try {
       const savedData = localStorage.getItem('rehab_assessment_form');
       if (savedData) {
         const formData = JSON.parse(savedData);
         
-        // Apply saved values to form fields
         formFields.forEach(fieldId => {
           const element = document.getElementById(fieldId);
           if (element && formData[fieldId] !== undefined) {
@@ -73,7 +76,12 @@ document.addEventListener('DOMContentLoaded', async function() {
           }
         });
         
-        // Update page count display
+        // Restore diagnosis picker if category was saved
+        const catEl = document.getElementById('diagnosisCategory');
+        if (catEl && catEl.value && typeof updateDiagnosisList === 'function') {
+          updateDiagnosisList();
+        }
+
         const pageVal = document.getElementById('pageVal');
         if (pageVal && formData.pageCount) {
           pageVal.textContent = formData.pageCount;
@@ -86,7 +94,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
-  // Save form data to localStorage
   function saveFormToStorage() {
     try {
       const formData = {};
@@ -108,7 +115,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
-  // Clear saved form data
   function clearFormStorage() {
     localStorage.removeItem('rehab_assessment_form');
   }
@@ -125,17 +131,14 @@ document.addEventListener('DOMContentLoaded', async function() {
   // Load saved data on page load
   loadFormFromStorage();
 
-  // Check if Firebase is initialized
   if (typeof firebase === 'undefined') {
     console.error('Firebase SDK not loaded!');
     showToast('Firebase not initialized. Please check your connection.', true);
     return;
   }
 
-  // Get database reference
   const database = firebase.database();
 
-  // Fetch tokens from Firebase
   const tokens = await fetchTokens();
   if (tokens) {
     githubToken = tokens.token;
@@ -145,7 +148,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     showToast('Failed to load API credentials. Please try again.', true);
   }
 
-  // Check authentication state
   firebase.auth().onAuthStateChanged((user) => {
     currentUser = user;
     if (user) {
@@ -189,16 +191,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
-  // ===== Clean HTML Function =====
   function cleanHtml(html) {
-    // Remove any markdown code fences
     html = html.replace(/```html?/g, '').replace(/```/g, '');
-    // Remove any extra whitespace at start/end
     html = html.trim();
     return html;
   }
 
-  // ===== Helper to escape HTML =====
   function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
@@ -206,29 +204,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     return div.innerHTML;
   }
 
-  // ===== UPDATED: Check Subscription Plan Access (FREE FOR NOW) =====
   async function checkPlanAccess() {
-    // History saving is currently free for all authenticated users.
-    // To re-enable subscription checks later, restore the Firebase lookup:
-    // ----------------------------------------------------------------
-    // if (!currentUser) return false;
-    // const snap = await database.ref(`users/${currentUser.uid}/subscription/plan`).once('value');
-    // const plan = snap.val();
-    // return plan && plan !== 'free';
-    // ----------------------------------------------------------------
     return !!currentUser;
   }
 
   // ===== PREVIEW MODAL =====
   function showPreviewModal(html, formData, assessmentId, hasHistoryAccess) {
-    // Remove any existing preview modal
     const existingModal = document.querySelector('.preview-modal');
     if (existingModal) existingModal.remove();
 
     const previewModal = document.createElement('div');
     previewModal.className = 'preview-modal';
     
-    // Determine the view action based on whether we have an assessment ID
     const viewAction = assessmentId 
       ? `window.open('formatresult.html?id=${assessmentId}', '_blank'); document.querySelector('.preview-modal').remove();`
       : `(function() {
@@ -238,7 +225,6 @@ document.addEventListener('DOMContentLoaded', async function() {
            document.querySelector('.preview-modal').remove();
          })();`;
 
-    // Build history status message
     let historyMessage = '';
     if (hasHistoryAccess && assessmentId) {
       historyMessage = `
@@ -308,18 +294,15 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     document.body.appendChild(previewModal);
 
-    // Close handlers
     const closeBtn = previewModal.querySelector('.preview-close');
     const closeActionBtn = previewModal.querySelector('#closePreviewBtn');
     const overlay = previewModal.querySelector('.preview-overlay');
-
     const closeModal = () => previewModal.remove();
 
     closeBtn.addEventListener('click', closeModal);
     if (closeActionBtn) closeActionBtn.addEventListener('click', closeModal);
     overlay.addEventListener('click', closeModal);
 
-    // Escape key to close
     const escHandler = (e) => {
       if (e.key === 'Escape') {
         closeModal();
@@ -329,11 +312,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.addEventListener('keydown', escHandler);
   }
 
-  // ===== BUILD PROMPT =====
+  // ===== BUILD PROMPT (extended with new fields) =====
   function buildPrompt(data) {
     const sections = data.includeSections
       ? "SOAP notes may be included if clinically relevant."
       : "";
+
+    const precautionsLine = data.precautions
+      ? `- Precautions / Contraindications: ${data.precautions}`
+      : '';
+    const goalsLine = data.functionalGoals
+      ? `- Functional Goals: ${data.functionalGoals}`
+      : '';
+    const referralLine = data.referralSource
+      ? `- Referral Source: ${data.referralSource}`
+      : '';
+    const settingLine = data.clinicalSetting
+      ? `- Clinical Setting: ${data.clinicalSetting}`
+      : '';
 
     return `Generate a professional PRINTABLE medical assessment form.
 
@@ -343,6 +339,10 @@ CONTEXT:
 - Assessment Type: ${data.assessmentType}
 - Department: ${data.department}
 - Category: ${data.category}
+${referralLine}
+${settingLine}
+${precautionsLine}
+${goalsLine}
 - Clinical Notes: ${data.notes || "None"}
 
 REQUIREMENTS:
@@ -371,75 +371,36 @@ REQUIREMENTS:
    - No labels, only placeholder text
    - Format history sections like this:
      <h4>Psychiatric History</h4>
-     <textarea rows="4" 
-               style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
+     <textarea rows="4" style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
                placeholder="Enter psychiatric history, including diagnoses, hospitalizations, medications..."
                oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-     
-     <h4>Medical History</h4>
-     <textarea rows="4" 
-               style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
-               placeholder="Enter medical history, including chronic conditions, surgeries, allergies..."
-               oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-     
-     <h4>Family History</h4>
-     <textarea rows="4" 
-               style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
-               placeholder="Enter family history of relevant conditions..."
-               oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-     
-     <h4>Social History</h4>
-     <textarea rows="4" 
-               style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
-               placeholder="Enter social history (occupation, living situation, habits, support system)..."
-               oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-     
-     <h4>Previous Interventions</h4>
-     <textarea rows="4" 
-               style="width:100%; resize:vertical; min-height:80px; max-height:400px; overflow-y:auto;" 
-               placeholder="Enter previous treatments, therapies, medications, and their outcomes..."
-               oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
 
-7. STANDARD SECTIONS - ALL WITH AUTO-EXPAND TEXTAREAS:
-   For all narrative sections, use subheadings with auto-expand textareas:
-   
-   <h4>Presenting Complaint & Referral Reason</h4>
-   <textarea rows="5" 
-             style="width:100%; resize:vertical; min-height:100px; max-height:400px; overflow-y:auto;" 
-             placeholder="Describe the main presenting complaint, reason for referral, and relevant context..."
-             oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-   
-   <h4>Clinical Observations</h4>
-   <textarea rows="7" 
-             style="width:100%; resize:vertical; min-height:140px; max-height:400px; overflow-y:auto;" 
-             placeholder="Record behavioral observations, appearance, mood, affect, engagement, etc..."
-             oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-   
-   <h4>Assessment Findings</h4>
-   <textarea rows="7" 
-             style="width:100%; resize:vertical; min-height:140px; max-height:400px; overflow-y:auto;" 
-             placeholder="Summarize key assessment findings, test results, and clinical impressions..."
-             oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
-   
-   <h4>Treatment Plan & Recommendations</h4>
-   <textarea rows="7" 
-             style="width:100%; resize:vertical; min-height:140px; max-height:400px; overflow-y:auto;" 
-             placeholder="Outline treatment goals, interventions, referrals, and recommendations..."
-             oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 400) + 'px'"></textarea>
+7. STANDARD SECTIONS - ALL WITH AUTO-EXPAND TEXTAREAS (as before):
+   Include: Presenting Complaint & Referral Reason, Clinical Observations, Assessment Findings, Treatment Plan & Recommendations
+
+${precautionsLine ? `8a. PRECAUTIONS SECTION:
+   Include a clearly highlighted precautions/contraindications box near the top of the form:
+   <div style="border: 2px solid #dc2626; border-radius: 8px; padding: 12px 16px; margin: 16px 0; background: #fef2f2;">
+     <strong style="color: #dc2626;">⚠️ Precautions / Contraindications</strong>
+     <p style="margin: 4px 0 0; color: #333;">${data.precautions}</p>
+   </div>` : ''}
+
+${goalsLine ? `8b. FUNCTIONAL GOALS SECTION:
+   Include a goals section near the top highlighting: "${data.functionalGoals}"
+   Present this as a structured goal-setting area with space to note short-term and long-term goals.` : ''}
 
 8. USE TABLES ONLY FOR STRUCTURED DATA:
    - Tables should ONLY be used for numerical/structured data like:
      * Range of Motion (ROM) measurements
      * Muscle strength grading
      * Standardized test scores
-   - Example: ROM table with joints, movements, and values
    - Do NOT use tables for narrative content or history sections
 
 9. Department-specific guidance:
 ${getPrintableDepartmentContent(data.department, data.category)}
 
 10. Final Section - Standardized Assessment Tools:
-    You must List 5 REAL standardized assessment tools relevant to "${data.diagnosis}" with:
+    List 5 REAL standardized assessment tools relevant to "${data.diagnosis}" with:
     - Tool name (as heading)
     - Short clinical purpose (small text)
     - Clickable link (<a href="" target="_blank">)
@@ -451,13 +412,11 @@ ${getPrintableDepartmentContent(data.department, data.category)}
     - Avoid clutter
     - Ensure readability when printed
     - All textareas should be full width (width:100%)
-    - Textareas should auto-expand as user types
 
 12. PRINT STYLING:
     - Use CSS with @media print
     - Avoid page breaks inside sections
     - Ensure margins are print-safe
-    - Textareas should show their content fully when printed
 
 13. CLINICAL INTELLIGENCE:
     - Be flexible and adaptive
@@ -479,7 +438,6 @@ Return ONLY the HTML.`;
 - Provide space to document motor skills (fine/gross), coordination, and functional use.
 - Include sensory processing observations where relevant (e.g., tactile, vestibular, proprioceptive).
 - Allow space for cognitive and perceptual observations.
-- Use tables or structured layouts where helpful, but keep flexibility.
 `;
       case 'Physiotherapy':
         return `
@@ -534,7 +492,6 @@ Return ONLY the HTML.`;
       
       historyItems = [];
       if (data) {
-        // Convert object to array and sort by date (newest first)
         historyItems = Object.entries(data).map(([id, item]) => ({
           id: id,
           ...item
@@ -560,6 +517,10 @@ Return ONLY the HTML.`;
         patientAge: assessmentData.age,
         patientGender: assessmentData.gender,
         diagnosis: assessmentData.diagnosis || '',
+        referralSource: assessmentData.referralSource || '',
+        clinicalSetting: assessmentData.clinicalSetting || '',
+        precautions: assessmentData.precautions || '',
+        functionalGoals: assessmentData.functionalGoals || '',
         assessmentType: assessmentData.assessmentType,
         category: assessmentData.category,
         department: assessmentData.department,
@@ -572,12 +533,10 @@ Return ONLY the HTML.`;
         userId: currentUser.uid
       };
 
-      // Save to Firebase
       const newHistoryRef = database.ref(`history/${currentUser.uid}/formats`).push();
       await newHistoryRef.set(historyItem);
       const newId = newHistoryRef.key;
       
-      // Add to local array
       historyItems.unshift({
         id: newId,
         ...historyItem
@@ -624,14 +583,12 @@ Return ONLY the HTML.`;
   }
 
   function retrieveHistoryItem(item) {
-    // Open result page with the item ID as a query parameter
     window.open(`formatresult.html?id=${item.id}`, '_blank');
   }
 
   function updateHistoryUI(searchTerm = '') {
     if (!historyList) return;
     
-    // Update stats
     if (totalCountSpan) {
       totalCountSpan.textContent = historyItems.length;
     }
@@ -643,7 +600,6 @@ Return ONLY the HTML.`;
       latestDateSpan.textContent = '-';
     }
     
-    // Filter items based on search
     let filteredItems = historyItems;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
@@ -667,7 +623,6 @@ Return ONLY the HTML.`;
       return;
     }
     
-    // Render history items
     historyList.innerHTML = filteredItems.map(item => {
       const date = new Date(item.timestamp);
       const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
@@ -680,6 +635,7 @@ Return ONLY the HTML.`;
           </div>
           <div class="history-item-details">
             <span class="history-item-badge">${escapeHtml(item.assessmentType || 'Assessment')}</span>
+            ${item.clinicalSetting ? `<span class="history-item-badge">${escapeHtml(item.clinicalSetting)}</span>` : ''}
           </div>
           <div class="history-item-actions">
             <button class="history-item-btn retrieve" onclick="window.retrieveItem('${item.id}')">
@@ -694,7 +650,6 @@ Return ONLY the HTML.`;
     }).join('');
   }
 
-  // Make functions globally available for history buttons
   window.retrieveItem = (itemId) => {
     const item = historyItems.find(i => i.id === itemId);
     if (item) retrieveHistoryItem(item);
@@ -705,7 +660,7 @@ Return ONLY the HTML.`;
     deleteConfirmModal.classList.add('show');
   };
 
-  // ===== UPDATED: Form Submission with Free History Saving =====
+  // ===== Form Submission =====
   
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -715,12 +670,16 @@ Return ONLY the HTML.`;
       return;
     }
 
-    // Collect form data
+    // Collect form data (extended)
     const formData = {
       name: document.getElementById('patientName').value.trim(),
       age: document.getElementById('patientAge').value,
       gender: document.getElementById('patientGender').value,
+      referralSource: document.getElementById('referralSource')?.value || '',
+      clinicalSetting: document.getElementById('clinicalSetting')?.value || '',
       diagnosis: document.getElementById('patientDiagnosis')?.value.trim() || '',
+      precautions: document.getElementById('precautions')?.value.trim() || '',
+      functionalGoals: document.getElementById('functionalGoals')?.value.trim() || '',
       assessmentType: document.getElementById('assessmentType').value,
       category: document.getElementById('categorySelect').value,
       department: document.getElementById('deptSelect').value,
@@ -735,12 +694,16 @@ Return ONLY the HTML.`;
       return;
     }
 
+    if (!formData.diagnosis) {
+      showToast('Please enter a diagnosis or chief complaint.', true);
+      return;
+    }
+
     if (formData.age <= 0 || formData.age > 150) {
       showToast('Please enter a valid age.', true);
       return;
     }
 
-    // Show loading state on button
     generateBtn.disabled = true;
     const btnText = generateBtn.querySelector('.btn-text');
     const spinner = generateBtn.querySelector('.loading-spinner-small');
@@ -778,15 +741,12 @@ Return ONLY the HTML.`;
       }
 
       let html = data.choices[0].message.content;
-      
-      // Clean the HTML
       html = cleanHtml(html);
 
       if (!html) {
         throw new Error('Empty response from API');
       }
 
-      // Store generated HTML for download functions
       window.currentGeneratedText = html;
       window.currentFormData = formData;
 
@@ -794,11 +754,9 @@ Return ONLY the HTML.`;
       let hasHistoryAccess = false;
 
       if (currentUser) {
-        // Check if user has access (currently free for all authenticated users)
         hasHistoryAccess = await checkPlanAccess();
 
         if (hasHistoryAccess) {
-          // Save to history for all authenticated users
           assessmentId = await saveToHistory(formData, html);
           if (assessmentId) {
             window.currentAssessmentId = assessmentId;
@@ -808,7 +766,6 @@ Return ONLY the HTML.`;
         showToast('Assessment generated! Login to save to history.', false, 4000);
       }
 
-      // Show preview modal
       showPreviewModal(html, formData, assessmentId, hasHistoryAccess);
       
     } catch (error) {
@@ -853,23 +810,13 @@ Return ONLY the HTML.`;
   <meta charset="UTF-8">
   <title>Assessment - ${formData.name}</title>
   <style>
-    body { 
-      font-family: 'Arial', 'Helvetica', sans-serif; 
-      line-height: 1.6; 
-      padding: 2rem; 
-      max-width: 1200px; 
-      margin: 0 auto;
-    }
+    body { font-family: 'Arial', 'Helvetica', sans-serif; line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
     h1, h2, h3 { color: #00695c; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background-color: #f5f5f5; }
     textarea { width: 100%; min-height: 100px; margin: 0.5rem 0; padding: 8px; }
-    input[type="checkbox"] { margin: 0.5rem; }
-    @media print {
-      body { padding: 0.5in; }
-      textarea { border: 1px solid #ccc; }
-    }
+    @media print { body { padding: 0.5in; } textarea { border: 1px solid #ccc; } }
   </style>
 </head>
 <body>
@@ -904,23 +851,13 @@ Return ONLY the HTML.`;
   <meta charset="UTF-8">
   <title>Assessment - ${formData.name}</title>
   <style>
-    body { 
-      font-family: 'Arial', 'Helvetica', sans-serif; 
-      line-height: 1.6; 
-      padding: 2rem; 
-      max-width: 1200px; 
-      margin: 0 auto;
-    }
+    body { font-family: 'Arial', 'Helvetica', sans-serif; line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
     h1, h2, h3 { color: #00695c; }
     table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
     th { background-color: #f5f5f5; }
     textarea { width: 100%; min-height: 100px; margin: 0.5rem 0; padding: 8px; }
-    input[type="checkbox"] { margin: 0.5rem; }
-    @media print {
-      body { padding: 0.5in; }
-      textarea { border: 1px solid #ccc; }
-    }
+    @media print { body { padding: 0.5in; } textarea { border: 1px solid #ccc; } }
   </style>
 </head>
 <body>
@@ -953,11 +890,13 @@ Return ONLY the HTML.`;
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       form.reset();
-      // Reset page count display
       const pageVal = document.getElementById('pageVal');
       if (pageVal) pageVal.textContent = '2';
       
-      // Clear localStorage as well
+      // Hide diagnosis picker on clear
+      const pickerGroup = document.getElementById('diagnosisPickerGroup');
+      if (pickerGroup) pickerGroup.style.display = 'none';
+      
       clearFormStorage();
       
       delete window.currentGeneratedText;
@@ -988,7 +927,6 @@ Return ONLY the HTML.`;
     });
   }
 
-  // Click outside to close drawer
   document.addEventListener('click', (e) => {
     if (historyDrawer && historyNavBtn && 
         !historyDrawer.contains(e.target) && 
@@ -1037,7 +975,6 @@ Return ONLY the HTML.`;
     });
   }
 
-  // Close modals on outside click
   [downloadModal, deleteConfirmModal].forEach(modal => {
     if (modal) {
       modal.addEventListener('click', (e) => {
@@ -1049,13 +986,12 @@ Return ONLY the HTML.`;
     }
   });
 
-  // ===== Range Slider Display Update =====
+  // ===== Range Slider =====
   const pageCount = document.getElementById('pageCount');
   const pageVal = document.getElementById('pageVal');
   if (pageCount && pageVal) {
     pageCount.addEventListener('input', () => {
       pageVal.textContent = pageCount.value;
-      // Also save to storage on range change
       saveFormToStorage();
     });
   }
@@ -1078,7 +1014,6 @@ Return ONLY the HTML.`;
     }
   });
 
-  // Ctrl+Enter to submit form
   if (form) {
     form.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
