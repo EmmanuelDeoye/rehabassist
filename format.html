@@ -11,13 +11,12 @@
       } else if (stored === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
       } else {
-        // No preference saved or set to "system" → follow device setting
         document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
       }
     })();
   </script>
   <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
   <title>rehablix · Assessment Format Generator</title>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -27,11 +26,11 @@
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/format.css">
   <link rel="manifest" href="/manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js');
-  }
-</script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js');
+    }
+  </script>
 </head>
 <body>
   <nav class="navbar">
@@ -80,6 +79,7 @@
         <div class="format-card">
           <h2>Patient & Assessment Information</h2>
           <form id="assessmentForm">
+
             <!-- 1. Patient Biodata -->
             <div class="form-card">
               <h3>1. Patient Biodata</h3>
@@ -103,28 +103,96 @@
                   </select>
                 </div>
               </div>
+
+              <!-- NEW: Referral Source -->
               <div class="form-group">
-                <label for="patientDiagnosis">Diagnosis / Chief Complaint</label>
-                <input type="text" id="patientDiagnosis" class="form-input" placeholder="e.g. Stroke, Autism, Fracture...">
+                <label for="referralSource">Referral Source</label>
+                <select id="referralSource" class="form-input">
+                  <option value="">Select referral source</option>
+                  <option value="Self-referral">Self-referral</option>
+                  <option value="Physician / Medical Doctor">Physician / Medical Doctor</option>
+                  <option value="Neurologist">Neurologist</option>
+                  <option value="Orthopaedic Surgeon">Orthopaedic Surgeon</option>
+                  <option value="Paediatrician">Paediatrician</option>
+                  <option value="Psychiatrist">Psychiatrist</option>
+                  <option value="Family / Caregiver">Family / Caregiver</option>
+                  <option value="Another Therapist">Another Therapist</option>
+                  <option value="Hospital Ward">Hospital Ward</option>
+                  <option value="Community / NGO">Community / NGO</option>
+                </select>
+              </div>
+
+              <!-- NEW: Clinical Setting -->
+              <div class="form-group">
+                <label for="clinicalSetting">Clinical Setting</label>
+                <select id="clinicalSetting" class="form-input">
+                  <option value="">Select setting</option>
+                  <option value="Inpatient (Hospital Ward)">Inpatient (Hospital Ward)</option>
+                  <option value="Outpatient Clinic">Outpatient Clinic</option>
+                  <option value="Home Visit">Home Visit</option>
+                  <option value="Community / Day Centre">Community / Day Centre</option>
+                  <option value="School / Educational Setting">School / Educational Setting</option>
+                  <option value="Psychiatric Unit">Psychiatric Unit</option>
+                  <option value="Rehabilitation Centre">Rehabilitation Centre</option>
+                  <option value="Private Practice">Private Practice</option>
+                </select>
               </div>
             </div>
 
             <!-- 2. Assessment Details -->
             <div class="form-card">
               <h3>2. Assessment Details</h3>
+
+              <!-- NEW: Diagnosis Picker -->
               <div class="form-group">
-                <label for="assessmentType">Assessment Type *</label>
-                <select id="assessmentType" class="form-input" required>
-                  <option value="">Select type</option>
-                  <option value="Initial Evaluation">Initial Evaluation</option>
-                  <option value="Comprehensive Assessment">Comprehensive Assessment</option>
-                  <option value="Functional Assessment">Functional Assessment</option>
-                  <option value="Progress Note">Progress Note</option>
-                  <option value="Reassessment">Reassessment</option>
-                  <option value="Discharge Summary">Discharge Summary</option>
+                <label for="diagnosisCategory">Diagnosis Category</label>
+                <select id="diagnosisCategory" class="form-input" onchange="updateDiagnosisList()">
+                  <option value="">Select category (optional)</option>
+                  <option value="neurological">Neurological</option>
+                  <option value="orthopaedic">Orthopaedic</option>
+                  <option value="paediatric">Paediatric / Developmental</option>
+                  <option value="psychiatric">Psychiatric</option>
+                  <option value="cardiopulmonary">Cardiopulmonary</option>
+                  <option value="geriatric">Geriatric</option>
+                  <option value="other">Other / Custom</option>
                 </select>
               </div>
+              <div class="form-group" id="diagnosisPickerGroup" style="display:none;">
+                <label for="diagnosisPicker">Common Diagnoses</label>
+                <select id="diagnosisPicker" class="form-input" onchange="applyDiagnosisPicker()">
+                  <option value="">Pick a diagnosis...</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="patientDiagnosis">Diagnosis / Chief Complaint *</label>
+                <input type="text" id="patientDiagnosis" class="form-input" placeholder="e.g. Right hemiplegia post-stroke, Autism Spectrum Disorder..." required>
+              </div>
+
+              <!-- NEW: Precautions -->
+              <div class="form-group">
+                <label for="precautions">Precautions / Contraindications</label>
+                <input type="text" id="precautions" class="form-input" placeholder="e.g. Weight-bearing restrictions, fall risk, seizure history...">
+              </div>
+
+              <!-- NEW: Functional Goals -->
+              <div class="form-group">
+                <label for="functionalGoals">Functional Goals</label>
+                <input type="text" id="functionalGoals" class="form-input" placeholder="e.g. Independent dressing, return to work, safe ambulation...">
+              </div>
+
               <div class="form-row">
+                <div class="form-group">
+                  <label for="assessmentType">Assessment Type *</label>
+                  <select id="assessmentType" class="form-input" required>
+                    <option value="">Select type</option>
+                    <option value="Initial Evaluation">Initial Evaluation</option>
+                    <option value="Comprehensive Assessment">Comprehensive Assessment</option>
+                    <option value="Functional Assessment">Functional Assessment</option>
+                    <option value="Progress Note">Progress Note</option>
+                    <option value="Reassessment">Reassessment</option>
+                    <option value="Discharge Summary">Discharge Summary</option>
+                  </select>
+                </div>
                 <div class="form-group">
                   <label for="categorySelect">Category</label>
                   <select id="categorySelect" class="form-input">
@@ -135,6 +203,9 @@
                     <option value="Psychiatry">Psychiatry</option>
                   </select>
                 </div>
+              </div>
+
+              <div class="form-row">
                 <div class="form-group">
                   <label for="deptSelect">Department *</label>
                   <select id="deptSelect" class="form-input" required>
@@ -145,12 +216,12 @@
                     <option value="Clinical Psychology">Clinical Psychology</option>
                   </select>
                 </div>
-              </div>
-              <div class="form-group">
-                <label>Estimated Length (Pages)</label>
-                <div class="range-slider">
-                  <input type="range" id="pageCount" min="1" max="10" value="2">
-                  <span id="pageVal">2</span> Pages
+                <div class="form-group">
+                  <label>Estimated Length (Pages)</label>
+                  <div class="range-slider">
+                    <input type="range" id="pageCount" min="1" max="10" value="2">
+                    <span id="pageVal">2</span> Pages
+                  </div>
                 </div>
               </div>
             </div>
@@ -252,10 +323,108 @@
 
   <!-- Scripts -->
   <script src="js/config.js"></script>
-  <script src="js/modal.js"></script>      <!-- Creates auth modal, toast, welcome overlay -->
-  <script src="js/auth.js"></script>       <!-- Auth logic -->
+  <script src="js/modal.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/tools.js"></script>
-  <script src="js/format.js"></script>     <!-- Format generator logic -->
-  <script src="js/theme.js"></script>      <!-- Theme logic (see below) -->
+  <script src="js/format.js"></script>
+  <script src="js/theme.js"></script>
+
+  <!-- Diagnosis Picker Script -->
+  <script>
+    const diagnosisMap = {
+      neurological: [
+        'Stroke / CVA (Cerebrovascular Accident)',
+        'Traumatic Brain Injury (TBI)',
+        'Spinal Cord Injury',
+        'Multiple Sclerosis',
+        'Parkinson\'s Disease',
+        'Guillain-Barré Syndrome',
+        'Cerebral Palsy',
+        'Peripheral Neuropathy',
+        'Epilepsy / Seizure Disorder',
+        'Hydrocephalus',
+      ],
+      orthopaedic: [
+        'Fracture (Upper Limb)',
+        'Fracture (Lower Limb)',
+        'Total Hip Replacement',
+        'Total Knee Replacement',
+        'Rotator Cuff Tear',
+        'Lumbar Disc Herniation',
+        'Cervical Spondylosis',
+        'Tendon Repair (Hand)',
+        'Amputation',
+        'Osteoarthritis',
+      ],
+      paediatric: [
+        'Autism Spectrum Disorder (ASD)',
+        'Developmental Delay',
+        'Down Syndrome',
+        'Attention Deficit Hyperactivity Disorder (ADHD)',
+        'Sensory Processing Disorder',
+        'Intellectual Disability',
+        'Cerebral Palsy (Paediatric)',
+        'Dyspraxia / DCD',
+        'Cleft Palate (Post-surgical)',
+        'Spina Bifida',
+      ],
+      psychiatric: [
+        'Major Depressive Disorder',
+        'Schizophrenia',
+        'Bipolar Disorder',
+        'Anxiety Disorder',
+        'Post-Traumatic Stress Disorder (PTSD)',
+        'Substance Use Disorder',
+        'Borderline Personality Disorder',
+        'Obsessive-Compulsive Disorder (OCD)',
+        'Eating Disorder',
+        'First Episode Psychosis',
+      ],
+      cardiopulmonary: [
+        'Chronic Obstructive Pulmonary Disease (COPD)',
+        'Heart Failure (Cardiac Rehabilitation)',
+        'Post-COVID Syndrome (Long COVID)',
+        'Pulmonary Fibrosis',
+        'Post-Cardiac Surgery',
+        'Asthma',
+      ],
+      geriatric: [
+        'Dementia / Alzheimer\'s Disease',
+        'Hip Fracture (Elderly)',
+        'Falls & Balance Disorder',
+        'Frailty Syndrome',
+        'Deconditioning / Prolonged Bed Rest',
+        'Osteoporosis with Fracture',
+      ],
+    };
+
+    function updateDiagnosisList() {
+      const cat = document.getElementById('diagnosisCategory').value;
+      const pickerGroup = document.getElementById('diagnosisPickerGroup');
+      const picker = document.getElementById('diagnosisPicker');
+
+      if (!cat || cat === 'other') {
+        pickerGroup.style.display = 'none';
+        return;
+      }
+
+      const list = diagnosisMap[cat] || [];
+      picker.innerHTML = '<option value="">Pick a diagnosis...</option>';
+      list.forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        picker.appendChild(opt);
+      });
+      pickerGroup.style.display = 'block';
+    }
+
+    function applyDiagnosisPicker() {
+      const val = document.getElementById('diagnosisPicker').value;
+      if (val) {
+        document.getElementById('patientDiagnosis').value = val;
+      }
+    }
+  </script>
 </body>
 </html>

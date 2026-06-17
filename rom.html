@@ -11,13 +11,12 @@
       } else if (stored === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
       } else {
-        // No preference saved or set to "system" → follow device setting
         document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
       }
     })();
   </script>
   <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
   <title>rehablix · ROM Analyzer</title>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -36,6 +35,9 @@
   <link rel="stylesheet" href="css/rom.css">
 </head>
 <body>
+  <!-- Skip to content for accessibility -->
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
+  
   <nav class="navbar">
     <div class="nav-container">
       <div class="nav-left">
@@ -53,14 +55,14 @@
         </a>
         
         <!-- History Button -->
-        <button class="icon-btn" id="toggleHistoryBtn" aria-label="history" style="display:none;">
+        <button class="icon-btn" id="toggleHistoryBtn" aria-label="History" style="display:none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
           </svg>
         </button>
         
         <!-- Theme Toggle -->
-        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
+        <button class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle theme">
           <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
@@ -73,135 +75,222 @@
     </div>
   </nav>
 
-  <main class="rom-main">
+  <main class="rom-main" id="mainContent">
     <div class="container">
-      <!-- Progress Steps -->
+      <!-- Progress Steps (4 stages) -->
       <div class="rom-progress">
         <div class="step active" data-step="1">
           <span class="step-number">1</span>
-          <span class="step-label">Scan</span>
+          <span class="step-label">Record</span>
         </div>
         <div class="step-connector"></div>
         <div class="step" data-step="2">
           <span class="step-number">2</span>
-          <span class="step-label">Analyze</span>
+          <span class="step-label">Review</span>
         </div>
         <div class="step-connector"></div>
         <div class="step" data-step="3">
           <span class="step-number">3</span>
+          <span class="step-label">Analyze</span>
+        </div>
+        <div class="step-connector"></div>
+        <div class="step" data-step="4">
+          <span class="step-number">4</span>
           <span class="step-label">Results</span>
         </div>
       </div>
 
-      <!-- Stage 1: Camera & Capture -->
+      <!-- Usage Gauge (hidden for pro users) -->
+      <div id="usageGauge" class="usage-gauge" style="display:none;">
+        <div class="gauge-info">
+          <i class="fas fa-chart-bar"></i>
+          <span id="gaugeLabel">0/3 analyses this month</span>
+        </div>
+        <div class="gauge-bar">
+          <div class="gauge-fill" id="gaugeFill" style="width: 0%;"></div>
+        </div>
+        <span id="gaugeRemaining" class="gauge-remaining"></span>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- STAGE 1: Setup & Recording                                        -->
+      <!-- ================================================================= -->
       <div id="stageScan" class="stage-container active">
         <div class="glass-card camera-card full-width">
           <div class="camera-header">
-            <h3><i class="fas fa-video"></i> Live Motion Scanner</h3>
+            <h3><i class="fas fa-video"></i> Live Motion Capture</h3>
             <p id="movementInstruction">Select a joint to begin</p>
           </div>
           
-          
-          <!-- Assessment Mode Radio Buttons -->
-<div class="assessment-mode">
-  <label class="radio-label">
-    <input type="radio" name="assessmentMode" value="isolate" checked>
-    <i class="fas fa-crosshairs"></i>
-    <div class="radio-label-content">
-      <span class="radio-label-title">Isolate Joint</span>
-      <span class="mode-description">Single movement analysis</span>
-    </div>
-  </label>
-  <label class="radio-label">
-    <input type="radio" name="assessmentMode" value="full">
-    <i class="fas fa-layer-group"></i>
-    <div class="radio-label-content">
-      <span class="radio-label-title">Full Joint Assessment</span>
-      <span class="mode-description">Complete range analysis</span>
-    </div>
-  </label>
-</div>
+          <!-- Assessment Mode Selection -->
+          <div class="assessment-mode">
+            <label class="radio-label">
+              <input type="radio" name="assessmentMode" value="isolate" checked>
+              <i class="fas fa-crosshairs"></i>
+              <div class="radio-label-content">
+                <span class="radio-label-title">Isolate Joint</span>
+                <span class="mode-description">Single movement analysis</span>
+              </div>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="assessmentMode" value="full">
+              <i class="fas fa-layer-group"></i>
+              <div class="radio-label-content">
+                <span class="radio-label-title">Full Joint Assessment</span>
+                <span class="mode-description">Complete range analysis</span>
+              </div>
+            </label>
+          </div>
 
-          <select id="jointSelect" class="joint-select">
-  <option value="">-- Choose movement --</option>
-  <optgroup label="Shoulder">
-    <option value="shoulder_flexion">Shoulder Flexion</option>
-    <option value="shoulder_extension">Shoulder Extension</option>
-    <option value="shoulder_abduction">Shoulder Abduction</option>
-    <option value="shoulder_adduction">Shoulder Adduction</option>
-    <option value="shoulder_internal_rotation">Shoulder Internal Rotation</option>
-    <option value="shoulder_external_rotation">Shoulder External Rotation</option>
-  </optgroup>
-  <optgroup label="Elbow">
-    <option value="elbow_flexion">Elbow Flexion</option>
-    <option value="elbow_extension">Elbow Extension</option>
-  </optgroup>
-  <optgroup label="Wrist">
-    <option value="wrist_flexion">Wrist Flexion</option>
-    <option value="wrist_extension">Wrist Extension</option>
-    <option value="wrist_radial_deviation">Wrist Radial Deviation</option>
-    <option value="wrist_ulnar_deviation">Wrist Ulnar Deviation</option>
-  </optgroup>
-  <optgroup label="Hand / Fingers">
-    <option value="finger_flexion">Finger Flexion (MCP/PIP/DIP)</option>
-    <option value="finger_extension">Finger Extension</option>
-    <option value="thumb_abduction">Thumb Abduction</option>
-    <option value="thumb_opposition">Thumb Opposition</option>
-  </optgroup>
-  <optgroup label="Hip">
-    <option value="hip_flexion">Hip Flexion</option>
-    <option value="hip_extension">Hip Extension</option>
-    <option value="hip_abduction">Hip Abduction</option>
-    <option value="hip_adduction">Hip Adduction</option>
-    <option value="hip_internal_rotation">Hip Internal Rotation</option>
-    <option value="hip_external_rotation">Hip External Rotation</option>
-  </optgroup>
-  <optgroup label="Knee">
-    <option value="knee_flexion">Knee Flexion</option>
-    <option value="knee_extension">Knee Extension</option>
-  </optgroup>
-  <optgroup label="Ankle">
-    <option value="ankle_dorsiflexion">Ankle Dorsiflexion</option>
-    <option value="ankle_plantarflexion">Ankle Plantarflexion</option>
-  </optgroup>
-  <optgroup label="Cervical Spine">
-    <option value="cervical_flexion">Cervical Flexion</option>
-    <option value="cervical_extension">Cervical Extension</option>
-    <option value="cervical_rotation">Cervical Rotation</option>
-    <option value="cervical_lateral_flexion">Cervical Lateral Flexion</option>
-  </optgroup>
-  <optgroup label="Lumbar Spine">
-    <option value="lumbar_flexion">Lumbar Flexion</option>
-    <option value="lumbar_extension">Lumbar Extension</option>
-    <option value="lumbar_lateral_flexion">Lumbar Lateral Flexion</option>
-  </optgroup>
-</select>
+          <!-- Capture Mode Toggle (Photo / Video) -->
+          <div class="capture-mode-toggle">
+            <button class="capture-mode-btn active" data-mode="photo" title="Photo Mode - Capture individual frames" aria-pressed="true">
+              <i class="fas fa-camera"></i>
+              <span>Photo</span>
+            </button>
+            <button class="capture-mode-btn" data-mode="video" title="Video Mode - Auto frame extraction" aria-pressed="false">
+              <i class="fas fa-video"></i>
+              <span>Video</span>
+            </button>
+          </div>
+
+          <!-- Joint Selection -->
+          <div class="joint-selection">
+            <label for="jointSelect">Select Joint / Movement</label>
+            <select id="jointSelect" class="joint-select">
+              <option value="">-- Choose movement --</option>
+              <optgroup label="Shoulder">
+                <option value="shoulder_flexion">Shoulder Flexion</option>
+                <option value="shoulder_extension">Shoulder Extension</option>
+                <option value="shoulder_abduction">Shoulder Abduction</option>
+                <option value="shoulder_adduction">Shoulder Adduction</option>
+                <option value="shoulder_internal_rotation">Shoulder Internal Rotation</option>
+                <option value="shoulder_external_rotation">Shoulder External Rotation</option>
+              </optgroup>
+              <optgroup label="Elbow">
+                <option value="elbow_flexion">Elbow Flexion</option>
+                <option value="elbow_extension">Elbow Extension</option>
+              </optgroup>
+              <optgroup label="Wrist">
+                <option value="wrist_flexion">Wrist Flexion</option>
+                <option value="wrist_extension">Wrist Extension</option>
+                <option value="wrist_radial_deviation">Wrist Radial Deviation</option>
+                <option value="wrist_ulnar_deviation">Wrist Ulnar Deviation</option>
+              </optgroup>
+              <optgroup label="Hand / Fingers">
+                <option value="finger_flexion">Finger Flexion (MCP/PIP/DIP)</option>
+                <option value="finger_extension">Finger Extension</option>
+                <option value="thumb_abduction">Thumb Abduction</option>
+                <option value="thumb_opposition">Thumb Opposition</option>
+              </optgroup>
+              <optgroup label="Hip">
+                <option value="hip_flexion">Hip Flexion</option>
+                <option value="hip_extension">Hip Extension</option>
+                <option value="hip_abduction">Hip Abduction</option>
+                <option value="hip_adduction">Hip Adduction</option>
+                <option value="hip_internal_rotation">Hip Internal Rotation</option>
+                <option value="hip_external_rotation">Hip External Rotation</option>
+              </optgroup>
+              <optgroup label="Knee">
+                <option value="knee_flexion">Knee Flexion</option>
+                <option value="knee_extension">Knee Extension</option>
+              </optgroup>
+              <optgroup label="Ankle">
+                <option value="ankle_dorsiflexion">Ankle Dorsiflexion</option>
+                <option value="ankle_plantarflexion">Ankle Plantarflexion</option>
+              </optgroup>
+              <optgroup label="Cervical Spine">
+                <option value="cervical_flexion">Cervical Flexion</option>
+                <option value="cervical_extension">Cervical Extension</option>
+                <option value="cervical_rotation">Cervical Rotation</option>
+                <option value="cervical_lateral_flexion">Cervical Lateral Flexion</option>
+              </optgroup>
+              <optgroup label="Lumbar Spine">
+                <option value="lumbar_flexion">Lumbar Flexion</option>
+                <option value="lumbar_extension">Lumbar Extension</option>
+                <option value="lumbar_lateral_flexion">Lumbar Lateral Flexion</option>
+              </optgroup>
+            </select>
           </div>
           
-          
-          
-          <div class="camera-view large">
+          <!-- ============================================================= -->
+          <!-- CAMERA VIEW (video only, no controls inside)                   -->
+          <!-- ============================================================= -->
+          <div class="camera-view large" id="cameraView">
             <video id="cameraPreview" autoplay playsinline muted></video>
             <canvas id="cameraCanvas" style="display: none;"></canvas>
+            
             <!-- Scanning line overlay -->
-            <div class="scan-overlay">
+            <div class="scan-overlay" id="scanOverlay">
               <div class="scan-line"></div>
             </div>
+            
+            <!-- Guide overlay (joint silhouette) -->
+            <div class="guide-overlay" id="guideOverlay">
+              <canvas id="guideCanvas"></canvas>
+            </div>
+            
+            <!-- Recording indicator (top-right) -->
+            <div class="recording-indicator" id="recordingIndicator" style="display:none;">
+              <div class="recording-dot"></div>
+              <span id="recordingTime">00:00</span>
+            </div>
+            
+            <!-- Camera placeholder (when camera is off) -->
             <div id="cameraPlaceholder" class="camera-placeholder">
               <i class="fas fa-camera"></i>
               <p>Camera not started</p>
             </div>
+
+            <!-- Expand / collapse button (bottom-right) -->
+            <button id="expandCameraBtn" class="camera-expand-btn" title="Enter fullscreen" style="display:none;" aria-label="Enter fullscreen">
+              <i class="fas fa-expand"></i>
+            </button>
           </div>
-          
-          
-          <div class="camera-controls">
+          <!-- END CAMERA VIEW -->
+
+          <!-- ============================================================= -->
+          <!-- CAMERA CONTROLS (outside camera view by default)               -->
+          <!-- ============================================================= -->
+          <div class="camera-controls-outside" id="cameraControlsOutside">
+            <!-- Start Camera Button -->
             <button id="startCameraBtn" class="btn-primary" disabled>
-              <i class="fas fa-play"></i> Start Scanning
+              <i class="fas fa-play"></i> Start Camera
+            </button>
+            
+            <!-- Stop Camera Button (icon only) -->
+            <button id="stopCameraBtn" class="btn-secondary" style="display:none;" title="Stop Camera">
+              <i class="fas fa-stop"></i>
+            </button>
+            
+            <!-- Toggle Scan FX Button -->
+            <button id="toggleScanFxBtn" class="icon-btn-sm" title="Toggle scanning effect" style="display:none;" aria-label="Toggle scan effect">
+              <i class="fas fa-magic"></i>
             </button>
           </div>
 
-          <!-- Movement prompt display -->
-          <div id="movementPromptBox" class="movement-prompt-box" style="display: none;">
+          <!-- ============================================================= -->
+          <!-- CAPTURE BUTTONS (outside camera view by default)               -->
+          <!-- ============================================================= -->
+          <div class="capture-btn-container" id="captureBtnContainer" style="display:none;">
+            <!-- Photo Mode: Capture Frame Button -->
+            <button id="captureFrameBtn" class="btn-accent capture-photo-btn" aria-label="Capture current position">
+              <i class="fas fa-camera"></i> Capture Position
+            </button>
+            
+            <!-- Video Mode: Record Button -->
+            <button id="recordVideoBtn" class="btn-record" style="display:none;" aria-label="Start recording">
+              <i class="fas fa-circle"></i>
+            </button>
+            
+            <!-- Undo Button -->
+            <button id="undoFrameBtn" class="btn-secondary btn-undo" disabled aria-label="Undo last capture">
+              <i class="fas fa-undo"></i> Undo
+            </button>
+          </div>
+
+          <!-- Movement Prompt Display -->
+          <div id="movementPromptBox" class="movement-prompt-box" style="display: none;" aria-live="polite">
             <div class="prompt-header">
               <i class="fas fa-person-walking"></i>
               <span id="currentPrompt">Starting position</span>
@@ -211,6 +300,19 @@
             </div>
           </div>
 
+          <!-- Queue Navigation (Full Assessment mode only) -->
+          <div class="queue-navigation" id="queueNavigation" style="display:none;">
+            <button class="queue-nav-btn" id="prevMovementBtn" disabled aria-label="Previous movement">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="queue-progress-dots" id="queueDots"></div>
+            <button class="queue-nav-btn" id="nextMovementBtn" disabled aria-label="Next movement">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+            <span class="queue-movement-name" id="queueMovementName"></span>
+          </div>
+
+          <!-- Capture Preview (Photo mode thumbnails) -->
           <div id="capturePreview" class="capture-preview" style="display: none;">
             <h4>Captured Frames <span id="frameCount">0</span>/<span id="requiredFrames">0</span></h4>
             <div id="thumbnailContainer" class="thumbnail-container"></div>
@@ -221,7 +323,55 @@
         </div>
       </div>
 
-      <!-- Stage 2: Analysis (Loading) -->
+      <!-- ================================================================= -->
+      <!-- STAGE 2: Review (Video mode frame extraction review)              -->
+      <!-- ================================================================= -->
+      <div id="stageReview" class="stage-container">
+        <div class="glass-card review-card">
+          <div class="review-header">
+            <h3><i class="fas fa-check-circle"></i> Review Extracted Frames</h3>
+            <p id="reviewInstruction">Key positions extracted from your video. Review and confirm before analysis.</p>
+          </div>
+          
+          <!-- Frame Timeline Scrubber -->
+          <div class="review-timeline">
+            <video id="reviewVideo" style="display:none;" muted></video>
+            <div class="timeline-scrubber">
+              <input type="range" id="timelineSlider" min="0" max="100" value="0" step="0.1" class="scrubber-range" aria-label="Video timeline">
+              <div class="scrubber-markers" id="scrubberMarkers"></div>
+            </div>
+            <div class="timeline-controls">
+              <button id="playPauseBtn" class="icon-btn-sm" aria-label="Play/Pause video"><i class="fas fa-play"></i></button>
+              <span id="timelineTime">0:00 / 0:00</span>
+            </div>
+          </div>
+          
+          <!-- Extracted Frames -->
+          <div class="review-frames-header">
+            <h4>Auto-Extracted Positions</h4>
+            <button id="manualCaptureBtn" class="btn-sm" style="display:none;">
+              <i class="fas fa-plus"></i> Add Manual Frame
+            </button>
+          </div>
+          <div class="review-frames" id="reviewFrames">
+            <!-- Dynamically populated -->
+          </div>
+          
+          <!-- Review Actions -->
+          <div class="review-actions">
+            <button id="retakeVideoBtn" class="btn-secondary">
+              <i class="fas fa-redo"></i> Retake Video
+            </button>
+            <button id="confirmReviewBtn" class="btn-primary">
+              <i class="fas fa-check"></i> Confirm & Analyze
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- STAGE 3: Analysis (Loading)                                        -->
+      <!-- ================================================================= -->
       <div id="stageAnalyze" class="stage-container">
         <div class="glass-card analysis-card">
           <div class="loading-container">
@@ -231,11 +381,19 @@
             <div class="analysis-progress">
               <div class="progress-bar" id="analysisProgressBar"></div>
             </div>
+            <div class="analysis-steps" id="analysisSteps">
+              <div class="analysis-step pending" data-step="upload">⬆️ Uploading frames...</div>
+              <div class="analysis-step pending" data-step="analyze">🔍 Analyzing movement...</div>
+              <div class="analysis-step pending" data-step="compare">📊 Comparing to normative data...</div>
+              <div class="analysis-step pending" data-step="generate">📝 Generating report...</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Stage 3: Results -->
+      <!-- ================================================================= -->
+      <!-- STAGE 4: Results                                                   -->
+      <!-- ================================================================= -->
       <div id="stageResults" class="stage-container">
         <div class="glass-card results-card">
           <div class="results-toolbar">
@@ -244,8 +402,11 @@
               <span id="resultDate"></span>
             </div>
             <div class="results-actions">
-              <button id="downloadRomReport" class="tool-btn">
-                <i class="fas fa-file-pdf"></i> Export Report
+              <button id="downloadRomReport" class="tool-btn" title="Export as Word document">
+                <i class="fas fa-file-word"></i> Export Report
+              </button>
+              <button id="copyResultsBtn" class="tool-btn" title="Copy to clipboard">
+                <i class="fas fa-copy"></i> Copy
               </button>
               <button id="newScanBtn" class="tool-btn secondary">
                 <i class="fas fa-redo-alt"></i> New Scan
@@ -262,11 +423,19 @@
     <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
   </footer>
 
-  <!-- History Drawer -->
-  <aside class="history-drawer" id="historyDrawer">
+  <!-- ===================================================================== -->
+  <!-- HISTORY DRAWER                                                         -->
+  <!-- ===================================================================== -->
+  <aside class="history-drawer" id="historyDrawer" aria-label="Analysis history">
     <div class="drawer-header">
       <h3><i class='bx bx-time-five'></i> ROM Analysis History</h3>
-      <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
+      <button id="closeDrawerBtn" class="drawer-close-btn" aria-label="Close history"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="drawer-search">
+      <input type="text" id="historySearchInput" placeholder="Search history..." autocomplete="off" aria-label="Search history">
+      <button id="clearSearchBtn" class="icon-btn-sm" style="display:none;" aria-label="Clear search">
+        <i class="fas fa-times"></i>
+      </button>
     </div>
     <div class="history-content" id="historyList">
       <div class="empty-state">
@@ -276,13 +445,63 @@
     </div>
   </aside>
 
-  <!-- Scripts -->
+  <!-- ===================================================================== -->
+  <!-- LIMIT REACHED MODAL                                                    -->
+  <!-- ===================================================================== -->
+  <div id="limitModal" class="modal-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Monthly limit reached">
+    <div class="modal-card">
+      <div class="modal-icon">
+        <i class="fas fa-exclamation-triangle"></i>
+      </div>
+      <h3>Monthly Limit Reached</h3>
+      <p id="limitMessage"></p>
+      <div class="limit-info">
+        <span id="limitDetails"></span>
+      </div>
+      <div class="modal-actions">
+        <button id="upgradeFromLimitBtn" class="btn-primary">
+          ⚡ Upgrade Now
+        </button>
+        <button id="closeLimitModal" class="btn-secondary">
+          Maybe Later
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- ONBOARDING TOOLTIP                                                     -->
+  <!-- ===================================================================== -->
+  <div id="onboardingTooltip" class="onboarding-tooltip" style="display:none;" role="dialog" aria-label="Getting started guide">
+    <div class="tooltip-arrow"></div>
+    <div class="tooltip-content">
+      <p id="tooltipText"></p>
+      <div class="tooltip-actions">
+        <span class="tooltip-dots" id="tooltipDots"></span>
+        <div class="tooltip-buttons">
+          <button id="tooltipSkip" class="btn-text">Skip</button>
+          <button id="tooltipNext" class="btn-primary btn-sm">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- PREVIEW MODAL CONTAINER (injected dynamically)                         -->
+  <!-- ===================================================================== -->
+  <div id="previewModalContainer"></div>
+
+  <!-- ===================================================================== -->
+  <!-- TOAST CONTAINER                                                        -->
+  <!-- ===================================================================== -->
   <div id="toast-container"></div>
+  
+  <!-- Scripts -->
   <script src="js/config.js"></script>
   <script src="js/plan.js"></script>
-  <script src="js/modal.js"></script>     <!-- Creates auth modal, toast, etc. -->
-  <script src="js/auth.js"></script>      <!-- Auth logic -->
-  <script src="js/tools.js"></script>     <!-- Shared tools logic -->
-  <script src="js/rom.js"></script>       <!-- ROM analyzer logic -->
+  <script src="js/modal.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/rom.js"></script>
 </body>
 </html>
