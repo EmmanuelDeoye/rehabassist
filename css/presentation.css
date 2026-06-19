@@ -1485,3 +1485,28 @@
         padding: 0;
     }
 }
+
+
+/* Locked mode tab */
+.mode-tab.locked {
+    opacity: 0.6;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.mode-tab.locked::after {
+    content: '🔒';
+    font-size: 0.7rem;
+    margin-left: 4px;
+}
+
+.mode-tab.locked:hover {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Pulse animation for upgrade notice */
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+}
