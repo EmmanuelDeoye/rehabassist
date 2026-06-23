@@ -1,285 +1,430 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    
-    <!-- Inline script to set theme before paint -->
-  <script>
-    (function() {
-      var stored = localStorage.getItem('rehab-theme');
-      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (stored === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-      } else if (stored === 'light') {
-        document.documentElement.setAttribute('data-theme', 'light');
-      } else {
-        // No preference saved or set to "system" → follow device setting
-        document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
-      }
-    })();
-  </script>
-  <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-    <title>rehablix · Documentation Assistant</title>
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-    <!-- Markdown library -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- PDF.js for PDF extraction -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs" type="module"></script>
-    <!-- docx for export -->
-    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
-    <!-- Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <!-- Styles -->
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/auth.css">
-    <link rel="stylesheet" href="css/documentation.css">
-    <link rel="manifest" href="/manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js');
-  }
-</script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+    <script>
+        (function() {
+            var stored = localStorage.getItem('rehab-theme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (stored === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else if (stored === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            }
+        })();
+    </script>
+    <title>rehablix · EMR & Patient Journey</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js">
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet' />
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/auth.css" />
+    <link rel="stylesheet" href="css/doc.css" />
+    <link rel="manifest" href="/manifest.json" />
 </head>
 <body>
-    <!-- Navbar -->
+
+    <!-- NAVBAR -->
     <nav class="navbar">
         <div class="nav-container">
             <div class="nav-left">
-                <span class="logo-icon" aria-hidden="true"></span>
+                
                 <div class="logo-text">
                     <span class="logo-lop">rehablix</span>
-                    <span class="logo-full">doc. assistant</span>
+                    <span class="logo-full">emr</span>
                 </div>
             </div>
             <div class="nav-right">
-                <!-- Home Button -->
+                
                 <a href="index.html" class="icon-btn home-icon" aria-label="Home">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path d="M3 9L12 3L21 9L21 20H15V14H9V20H3V9Z" stroke="currentColor" fill="none"/>
                     </svg>
                 </a>
                 
-                <!-- History Button -->
-                <button class="icon-btn" id="toggleHistoryBtn" aria-label="history" style="display:none;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M12 8V12L15 15M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" fill="none"/>
+                <button class="icon-btn" id="emrSearchToggle" aria-label="search" style="display:none">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
                 </button>
-                
-                <!-- Theme Toggle -->
                 <button class="icon-btn theme-toggle" id="themeToggle" aria-label="theme mode">
                     <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
                     <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                     </svg>
                 </button>
-                <!-- Auth elements will be injected by modal.js -->
             </div>
         </div>
     </nav>
 
-    <main class="main-content">
-        <div class="container">
-            <!-- Upload Type Tabs -->
-            <div class="upload-type-container">
-                <div class="switch-toggle">
-                    <button class="switch-btn active" data-type="text">
-                        <i class="fas fa-keyboard"></i> Text
-                    </button>
-                    <button class="switch-btn" data-type="document">
-                        <i class="fas fa-file-medical"></i> Document
-                    </button>
-                    <button class="switch-btn" data-type="image">
-                        <i class="fas fa-camera"></i> Image
-                    </button>
-                    <button class="switch-btn" data-type="audio">
-                        <i class="fas fa-microphone-alt"></i> Audio
-                    </button>
-                </div>
+    <!-- AI LOADING OVERLAY -->
+    <div id="aiLoadingOverlay" style="display:none;">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p id="aiLoadingMessage">Generating with AI…</p>
+            <div class="loading-progress-bar">
+                <div class="loading-progress-fill" id="aiLoadingProgress" style="width:0%;"></div>
             </div>
-
-            <!-- Workspace Grid -->
-            <div class="workspace-grid">
-                <div class="glass-card upload-area">
-                    <div class="upload-view" id="textUploadSection" style="position: relative;">
-    <div class="text-input-container">
-        <div class="text-header">
-            <i class="fas fa-paste"></i>
-            <h3>Paste or type your text</h3>
-        </div>
-        <textarea id="plainTextInput" rows="12" placeholder="Paste clinical notes, reports, or any text here..."></textarea>
-        <!-- FLOATING MIC BUTTON -->
-        <button class="voice-input-btn" id="voiceInputBtn" title="Record voice note (click to start/stop)">
-            <i class="fas fa-microphone"></i>
-        </button>
-        <span class="voice-status" id="voiceStatus">Recording…</span>
-        <div class="text-footer">
-            <span id="textWordCount">0 words</span>
-            <button class="clear-text-btn" id="clearTextBtn">Clear</button>
         </div>
     </div>
-</div>
 
-                    <!-- Document Upload Section -->
-                    <div class="upload-view" id="documentUploadSection" style="display: none;">
-                        <div class="drop-zone" id="dropZone">
-                            <div class="drop-content">
-                                <div class="icon-pulse">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                </div>
-                                <h3>Upload Medical Report</h3>
-                                <p>Drag & drop PDF, DOCX, or TXT</p>
-                                <button class="browse-btn" id="browseDocumentBtn">
-                                    <i class="fas fa-folder-open"></i> Browse Files
-                                </button>
-                            </div>
-                            <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt" hidden>
-                        </div>
-                        <div class="file-info-card" id="fileInfo" style="display: none;"></div>
-                    </div>
+    <!-- EMR LAYOUT -->
+    <div class="emr-layout">
 
-                    <!-- Audio Upload Section -->
-                    <div class="upload-view" id="audioUploadSection" style="display: none;">
-                        <div class="audio-upload-zone" id="audioDropZone">
-                            <div class="drop-content">
-                                <div class="icon-pulse">
-                                    <i class="fas fa-file-audio"></i>
-                                </div>
-                                <h3>Upload Audio File</h3>
-                                <p>MP3, WAV, M4A, or other audio formats</p>
-                                <button class="browse-btn" id="browseAudioBtn">
-                                    <i class="fas fa-folder-open"></i> Choose Audio
-                                </button>
-                            </div>
-                            <input type="file" id="audioFileInput" accept="audio/*" hidden>
-                        </div>
-                        <div class="file-info-card" id="audioFileInfo" style="display: none;"></div>
-                        <div class="transcript-preview" id="audioTranscriptPreview" style="display: none;">
-                            <div class="transcript-header">
-                                <i class="fas fa-comment-dots"></i> Transcription Preview
-                            </div>
-                            <div class="transcript-content" id="transcriptPreviewText"></div>
-                        </div>
-                    </div>
-
-                    <!-- Image Upload Section -->
-                    <div class="upload-view" id="imageUploadSection" style="display: none;">
-                        <div class="image-upload-zone" id="imageDropZone">
-                            <div class="drop-content">
-                                <div class="icon-pulse">
-                                    <i class="fas fa-camera"></i>
-                                </div>
-                                <h3>Capture or Upload Image</h3>
-                                <p>Take a photo or select from gallery</p>
-                                <div class="image-buttons" style="display: flex; gap: 10px; justify-content: center; margin-top: 15px;">
-                                    <button class="browse-btn" id="cameraBtn">
-                                        <i class="fas fa-camera"></i> Take Photo
-                                    </button>
-                                    <button class="browse-btn" id="galleryBtn">
-                                        <i class="fas fa-folder-open"></i> Choose from Gallery
-                                    </button>
-                                </div>
-                            </div>
-                            <input type="file" id="imageFileInput" accept="image/*" hidden>
-                        </div>
-                        <div class="file-info-card" id="imageFileInfo" style="display: none;"></div>
-                        <div class="image-preview" id="imagePreview" style="display: none; margin-top: 15px; text-align: center; position: relative;">
-                            <img id="previewImage" alt="Preview" style="max-width: 100%; max-height: 300px; border-radius: var(--radius-md); border: 1px solid var(--border-light);">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="glass-card config-area">
-                    <div class="config-section">
-                        <h3><i class='bx bx-category'></i> Document Type</h3>
-                        <div class="chips-grid">
-                            <button class="chip-btn" data-type="medical">Medical</button>
-                            <button class="chip-btn" data-type="psychology">Psychology</button>
-                            <button class="chip-btn" data-type="occupational">Occupational</button>
-                            <button class="chip-btn" data-type="physio">Physio</button>
-                            <button class="chip-btn" data-type="speech">Speech</button>
-                        </div>
-                    </div>
-
-                    <div class="config-section">
-                        <h3><i class='bx bx-search-alt'></i> Analysis Focus</h3>
-                        <div class="quick-tags">
-                            <span class="tag" data-request="Summarize key findings">Summary</span>
-                            <span class="tag" data-request="Create a comprehensive treatment plan">Treatment Plan</span>
-                            <span class="tag" data-request="Diagnosis & Differential">Diagnosis</span>
-                            <span class="tag" data-request="Identify red flags">Red Flags</span>
-                        </div>
-                        <textarea id="analysisRequest" rows="4" placeholder="Describe specific insights needed..."></textarea>
-                    </div>
-
-                    <button id="analyzeBtn" class="analyze-btn" disabled>
-                        <span>Analyze</span>
-                        <i class="fas fa-magic"></i>
-                    </button>
-                </div>
+        <!-- SIDEBAR -->
+        <aside class="emr-sidebar" id="emrSidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-label">Navigation</div>
+                <div class="sidebar-item active" data-screen="dashboard"><i class="bx bx-grid-alt"></i> Dashboard</div>
+                <div class="sidebar-item" data-screen="intake"><i class="bx bx-user-plus"></i> New Intake <span class="sidebar-badge" id="intakeBadge">0</span></div>
+                <div class="sidebar-item" data-screen="patients"><i class="bx bx-group"></i> Patients</div>
             </div>
+            
+        </aside>
 
-            <!-- Results Section -->
-            <div id="analysisResultsContainer" class="analysis-results-container" style="display: none;">
-                <div class="analysis-loading" id="loadingIndicator">
-                    <div class="dna-spinner"></div>
-                    <h3>Synthesizing Clinical Intelligence</h3>
-                    <p class="loading-text">Analyzing patterns and generating insights...</p>
-                </div>
-                <div class="analysis-paper" id="reportContentArea" style="display: none;">
-                    <div class="paper-toolbar">
-                        <div class="meta-info">
-                            <span class="badge-ai">rehablix AI</span>
-                            <span class="date-generated" id="reportDate"></span>
+        <!-- MAIN CONTENT -->
+        <main class="emr-main" id="emrMain">
+
+            <!-- DASHBOARD -->
+            <section class="emr-screen active" id="screen-dashboard">
+                <div class="emr-content">
+                    <div class="emr-page-header">
+                        <div>
+                            <h1 class="emr-page-title">Good <span id="greetingTime">morning</span>, <em id="clinicianName">Clinician</em></h1>
+                            <p class="emr-page-sub" id="dashboardDate">Loading…</p>
                         </div>
-                        <div class="toolbar-actions">
-                            <button class="tool-btn" id="downloadReport">
-                                <i class="fas fa-file-pdf"></i> Export doc.
-                            </button>
-                            <button class="tool-btn secondary" id="closeResultsBtn">
-                                <i class="fas fa-times"></i> Clear
-                            </button>
+                        <div class="emr-header-actions">
+                            <button class="btn btn-secondary" id="dashNewIntakeBtn"><i class="bx bx-user-plus"></i> New Patient</button>
+                            <button class="btn btn-primary" id="dashStartSessionBtn"><i class="bx bx-play"></i> Start Session</button>
                         </div>
                     </div>
-                    <div class="paper-body typography-clean" id="resultsContent"></div>
-                </div>
-            </div>
-        </div>
-    </main>
 
-    <!-- History Drawer -->
-    <aside class="history-drawer" id="historyDrawer">
-        <div class="drawer-header">
-            <h3><i class='bx bx-time-five'></i> Analysis History</h3>
-            <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
-        </div>
-        <!-- Search Bar -->
-<div class="history-search">
-    <i class="fas fa-search"></i>
-    <input type="text" id="historySearchInput" placeholder="Search by name or type...">
-</div>
-        <div class="history-content" id="historyList">
-            <div class="empty-state">
-                <i class='bx bx-folder-open'></i>
-                <p>No history found</p>
-            </div>
-        </div>
-    </aside>
+                    <!-- Stats -->
+                    <div class="emr-stats-row" id="dashStats">
+                        <div class="stat-card">
+                            <div class="stat-label">Active Patients</div>
+                            <div class="stat-value" id="statPatients">0</div>
+                            <div class="stat-sub">This month</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Notes Pending</div>
+                            <div class="stat-value" id="statNotesPending">0</div>
+                            <div class="stat-sub">Due today</div>
+                        </div>
+                    </div>
+
+                    <!-- AI Insights + Pending Documentation side by side on desktop -->
+                    <div class="emr-grid-2" id="dashGrid">
+                        <!-- AI Insights -->
+                        <div class="glass-card">
+                            <div class="card-header">
+                                <div class="card-title"><i class="bx bx-bulb"></i> AI Insights</div>
+                            </div>
+                            <div class="card-body" id="dashAIInsights">
+                                <div class="emr-empty-state"><i class="bx bx-loader-alt bx-spin"></i><p>Loading insights…</p></div>
+                            </div>
+                        </div>
+
+                        <!-- Pending Documentation -->
+                        <div class="glass-card">
+                            <div class="card-header">
+                                <div class="card-title"><i class="bx bx-file"></i> Pending Documentation</div>
+                                <button class="btn btn-amber" style="font-size:12px;padding:4px 14px;" id="dashCompleteAllAI"><i class="bx bx-magic"></i> Complete with AI</button>
+                            </div>
+                            <div class="card-body" id="dashPendingDocs">
+                                <div class="emr-empty-state"><i class="bx bx-check-circle"></i><p>All notes signed off!</p></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- INTAKE -->
+            <section class="emr-screen" id="screen-intake">
+                <div class="emr-content">
+                    <div class="emr-journey-rail" id="intakeRail">
+                        <div class="rail-connector"></div>
+                        <div class="rail-progress" id="intakeRailProgress" style="width:0%;"></div>
+                        <div class="rail-steps">
+                            <div class="rail-step active" data-step="0"><div class="step-node"><i class="bx bx-user"></i></div><div class="step-label">Intake</div></div>
+                            <div class="rail-step" data-step="1"><div class="step-node"><i class="bx bx-clipboard"></i></div><div class="step-label">Treatment</div></div>
+                            <div class="rail-step" data-step="2"><div class="step-node"><i class="bx bx-calendar-check"></i></div><div class="step-label">Sessions</div></div>
+                            <div class="rail-step" data-step="3"><div class="step-node"><i class="bx bx-line-chart"></i></div><div class="step-label">Progress</div></div>
+                            <div class="rail-step" data-step="4"><div class="step-node"><i class="bx bx-file"></i></div><div class="step-label">Reports</div></div>
+                        </div>
+                    </div>
+
+                    <div class="emr-page-header">
+                        <div>
+                            <h1 class="emr-page-title"><span id="intakeModeTitle">New Patient</span> <em>Intake</em></h1>
+                            <p class="emr-page-sub" id="intakeSubtitle">Quick setup – you can edit all details later</p>
+                        </div>
+                        <div class="emr-header-actions">
+                            <button class="btn btn-secondary" id="intakeSaveDraft"><i class="bx bx-save"></i> Draft</button>
+                            <button class="btn btn-primary" id="intakeNextBtn"><span id="intakeCreateBtnText">Create Patient</span> <i class="bx bx-right-arrow-alt"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="ai-strip">
+                        <div class="ai-icon"><i class="bx bx-brain"></i></div>
+                        <div class="ai-text"><strong>AI is ready.</strong> After you create the patient, you can generate treatment plans, SOAP notes, and reports with AI.</div>
+                    </div>
+
+                    <!-- Essential Details -->
+                    <div class="glass-card">
+                        <div class="card-header"><div class="card-title"><i class="bx bx-user-circle"></i> Essential Details</div></div>
+                        <div class="card-body">
+                            <div class="form-row">
+                                <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="intakeName" placeholder="Full name" required /></div>
+                                <div class="form-group"><label class="form-label">Date of Birth</label><input class="form-input" id="intakeDOB" type="date" /></div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label class="form-label">Gender</label>
+                                    <select class="form-select" id="intakeGender"><option value="">Select</option><option>Male</option><option>Female</option><option>Non-binary</option></select>
+                                </div>
+                                <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="intakePhone" placeholder="Phone number" /></div>
+                            </div>
+                            <div class="form-group"><label class="form-label">Primary Diagnosis (ICD-10) *</label><input class="form-input" id="intakePrimaryDx" placeholder="e.g. M75.100 — Rotator cuff syndrome" required /></div>
+                            <div class="form-group"><label class="form-label">Chief Complaint</label><textarea class="form-textarea" id="intakeChiefComplaint" rows="2" placeholder="Patient's primary concern…"></textarea></div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Settings -->
+                    <div class="glass-card" style="margin-top:1rem;">
+                        <div class="card-header" style="cursor:pointer;" id="advancedToggle">
+                            <div class="card-title"><i class="bx bx-cog"></i> Advanced Settings</div>
+                            <i class="bx bx-chevron-down" id="advancedIcon"></i>
+                        </div>
+                        <div class="card-body" id="advancedContent" style="display:none;">
+                            <div class="form-row">
+                                <div class="form-group"><label class="form-label">Category (Specialty)</label>
+                                    <select class="form-select" id="intakeCategory">
+                                        <option value="">Select</option>
+                                        <option value="Physiotherapy">Physiotherapy</option>
+                                        <option value="Occupational Therapy">Occupational Therapy</option>
+                                        <option value="Speech Therapy">Speech Therapy</option>
+                                        <option value="Psychology">Psychology</option>
+                                        <option value="Orthopaedics">Orthopaedics</option>
+                                        <option value="Neurology">Neurology</option>
+                                        <option value="Paediatrics">Paediatrics</option>
+                                        <option value="Psychiatry">Psychiatry</option>
+                                        <option value="General Medicine">General Medicine</option>
+                                    </select>
+                                </div>
+                                <div class="form-group"><label class="form-label">Department</label>
+                                    <select class="form-select" id="intakeDepartment">
+                                        <option value="">Select</option>
+                                        <option value="Outpatient">Outpatient</option>
+                                        <option value="Inpatient">Inpatient</option>
+                                        <option value="Home Service">Home Service</option>
+                                        <option value="Telehealth">Telehealth</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group"><label class="form-label">Referring Physician</label><input class="form-input" id="intakeReferring" placeholder="Dr. Name" /></div>
+                                <div class="form-group"><label class="form-label">Insurance</label><input class="form-input" id="intakeInsurance" placeholder="Provider" /></div>
+                            </div>
+                            <div class="form-group"><label class="form-label">Functional Goals</label><textarea class="form-textarea" id="intakeGoals" rows="2" placeholder="Patient's goals…"></textarea></div>
+                        </div>
+                    </div>
+
+                    <!-- Assessment / Clinical Report with file upload + extraction -->
+                    <div class="glass-card" style="margin-top:1rem;">
+                        <div class="card-header"><div class="card-title"><i class="bx bx-file"></i> Assessment / Clinical Report</div></div>
+                        <div class="card-body" style="position:relative;">
+                            <textarea class="form-textarea" id="intakeAssessment" rows="4" placeholder="Paste or type the assessment / clinical report here. AI will use this to generate a comprehensive report."></textarea>
+                            <div style="position:absolute;bottom:1.5rem;right:1.5rem;">
+                                <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.6rem;" id="uploadAssessmentBtn"><i class="bx bx-upload"></i> Add File</button>
+                                <input type="file" id="assessmentFileInput" accept=".pdf,.docx,.txt,image/*" style="display:none;" multiple />
+                            </div>
+                            <div id="assessmentAttachments" style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+                            <!-- Hidden extraction progress indicator -->
+                            <div id="extractionProgress" style="display:none;margin-top:0.5rem;padding:0.5rem;background:var(--accent-soft);border-radius:0.5rem;font-size:0.8rem;color:var(--text-secondary);">
+                                <i class="bx bx-loader-alt bx-spin"></i> <span id="extractionMessage">Extracting text from files…</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;gap:12px;padding-bottom:24px;margin-top:1rem;">
+                        <button class="btn btn-secondary" id="intakeSaveDraft2"><i class="bx bx-save"></i> Save Draft</button>
+                        <button class="btn btn-primary" id="intakeNextBtn2"><span id="intakeCreateBtnText2">Create Patient</span> <i class="bx bx-right-arrow-alt"></i></button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PATIENT DETAIL -->
+            <section class="emr-screen" id="screen-patient">
+                <div class="emr-content">
+                    <!-- Hero -->
+                    <div class="patient-hero" id="patientHero">
+                        <div class="patient-avatar-lg" id="patientAvatar">MS</div>
+                        <div class="patient-details">
+                            <div class="patient-hero-name" id="patientHeroName">Maria Santos</div>
+                            <div style="font-size:13px;color:var(--text-secondary);margin-top:2px;" id="patientHeroDx">Post-op rotator cuff repair</div>
+                            <div class="patient-meta" id="patientHeroMeta">
+                                <span class="patient-meta-item">Age <strong id="patientHeroAge">—</strong></span>
+                                <span class="patient-meta-item">Category <strong id="patientHeroCategory">—</strong></span>
+                                <span class="patient-meta-item">Dept <strong id="patientHeroDept">—</strong></span>
+                                <span class="patient-meta-item">Sessions <strong id="patientHeroSession">0</strong></span>
+                                <span class="patient-meta-item">Status <span class="status-badge status-active" id="patientHeroStatus">Active</span></span>
+                            </div>
+                        </div>
+                        <div class="hero-right">
+                            <span class="status-badge status-active" id="patientHeroStatusBadge">Active</span>
+                            <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="editPatientBtn"><i class="bx bx-edit"></i> Edit</button>
+                            <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;color:#dc2626;border-color:#dc2626;" id="deletePatientBtn"><i class="bx bx-trash"></i> Delete</button>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="emr-tab-bar" id="patientTabs">
+                        <div class="emr-tab active" data-tab="intake">Intake</div>
+                        <div class="emr-tab" data-tab="summary">Summary</div>
+                        <div class="emr-tab" data-tab="treatment">Treatment Plan</div>
+                        <div class="emr-tab" data-tab="sessions">Sessions</div>
+                        <div class="emr-tab" data-tab="nextsession">Next Session</div>
+                        <div class="emr-tab" data-tab="progress">Progress</div>
+                        <div class="emr-tab" data-tab="reports">Reports</div>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div id="patientTabContent">
+
+                        <!-- Intake -->
+                        <div class="patient-tab-pane active" data-pane="intake">
+                            <div class="glass-card">
+                                <div class="card-header"><div class="card-title"><i class="bx bx-user-circle"></i> Patient Details</div><button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="editIntakeBtn"><i class="bx bx-edit"></i> Edit</button></div>
+                                <div class="card-body" id="paneIntakeContent">Loading…</div>
+                            </div>
+                        </div>
+
+                        <!-- Summary (replaces old Report) -->
+                        <div class="patient-tab-pane" data-pane="summary">
+                            <div class="glass-card">
+                                <div class="card-header">
+                                    <div class="card-title"><i class="bx bx-file"></i> Summary Reports</div>
+                                    <div style="display:flex;gap:0.5rem;">
+                                        <button class="btn btn-primary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="addSummaryBtn"><i class="bx bx-plus"></i> Add</button>
+                                        <button class="btn btn-amber" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="generateSummaryBtn"><i class="bx bx-magic"></i> Generate</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="paneSummaryContent">
+                                    <div class="emr-empty-state"><i class="bx bx-file"></i><p>No summary reports yet.</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Treatment Plan -->
+                        <div class="patient-tab-pane" data-pane="treatment">
+                            <div class="glass-card">
+                                <div class="card-header">
+                                    <div class="card-title"><i class="bx bx-clipboard"></i> Treatment Plans</div>
+                                    <div style="display:flex;gap:0.5rem;">
+                                        <button class="btn btn-primary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="addTreatmentPlanBtn"><i class="bx bx-plus"></i> Add</button>
+                                        <button class="btn btn-amber" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="generateTreatmentPlanBtn"><i class="bx bx-magic"></i> AI Generate</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="paneTreatmentPlanContent">
+                                    <div class="emr-empty-state"><i class="bx bx-clipboard"></i><p>No treatment plans yet.</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sessions -->
+                        <div class="patient-tab-pane" data-pane="sessions">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                                <div><div style="font-weight:600;font-size:14px;">Session History</div><div style="font-size:12px;color:var(--text-secondary);" id="paneSessionsCount">0 sessions</div></div>
+                                <button class="btn btn-primary" id="addSessionBtn"><i class="bx bx-plus"></i> Add</button>
+                            </div>
+                            <div id="paneSessionsList">Loading…</div>
+                        </div>
+
+                        <!-- Next Session -->
+                        <div class="patient-tab-pane" data-pane="nextsession">
+                            <div class="glass-card">
+                                <div class="card-header">
+                                    <div class="card-title"><i class="bx bx-calendar-check"></i> Next Session Plan</div>
+                                    <div style="display:flex;gap:0.5rem;">
+                                        <button class="btn btn-amber" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="generateNextSessionBtn"><i class="bx bx-magic"></i> AI Generate</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="paneNextSessionContent">
+                                    <div class="emr-empty-state"><i class="bx bx-calendar"></i><p>No next session planned. Click "AI Generate" to create one.</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress -->
+                        <div class="patient-tab-pane" data-pane="progress">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                                <div><div style="font-weight:600;font-size:14px;">Progress Notes</div></div>
+                                <div style="display:flex;gap:0.5rem;">
+                                    <button class="btn btn-primary" id="addProgressBtn"><i class="bx bx-plus"></i> Add Note</button>
+                                    <button class="btn btn-amber" id="aiProgressBtn"><i class="bx bx-magic"></i> AI Assistant</button>
+                                </div>
+                            </div>
+                            <div id="paneProgressList">Loading…</div>
+                            <div id="aiProgressModal" style="display:none;margin-top:1rem;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
+                                    <div style="font-weight:600;">AI Progress Assistant</div>
+                                    <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="closeAiProgressModal"><i class="bx bx-x"></i></button>
+                                </div>
+                                <div id="aiProgressQuestions"></div>
+                                <button class="btn btn-amber" id="submitAiProgressAnswers" style="margin-top:1rem;"><i class="bx bx-magic"></i> Generate Progress Note</button>
+                            </div>
+                        </div>
+
+                        <!-- Reports (historical) -->
+                        <div class="patient-tab-pane" data-pane="reports">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                                <div><div style="font-weight:600;font-size:14px;">Saved Reports</div></div>
+                                <button class="btn btn-amber" id="paneReportsNew"><i class="bx bx-magic"></i> Generate Report</button>
+                            </div>
+                            <div id="paneReportsList">Loading…</div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+            <!-- PATIENTS LIST -->
+            <section class="emr-screen" id="screen-patients">
+                <div class="emr-content">
+                    <div class="emr-page-header">
+                        <div><h1 class="emr-page-title">All <em>Patients</em></h1><p class="emr-page-sub">Manage your patient roster</p></div>
+                        <div class="emr-header-actions"><button class="btn btn-primary" id="patientsNewBtn"><i class="bx bx-user-plus"></i> New Patient</button></div>
+                    </div>
+                    <div class="glass-card">
+                        <div class="card-body" id="patientsList">Loading…</div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast-container"></div>
+
     
-    
 
-    <!-- Scripts -->
     <script src="js/config.js"></script>
-    <script src="js/modal.js"></script>        <!-- Creates auth modal, toast, etc. -->
-    <script src="js/auth.js"></script>         <!-- Auth logic -->
+    <script src="js/plan.js"></script>
+    <script src="js/modal.js"></script>
+    <script src="js/auth.js"></script>
     <script src="js/tools.js"></script>
-    <script src="js/documentation.js"></script> <!-- Documentation assistant logic -->
+    <script src="js/doc.js"></script>
+
 </body>
 </html>
