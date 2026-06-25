@@ -1,4 +1,4 @@
-// js/doc.js - Complete EMR with delete, dashboard grid, file extraction, summary, next session, etc.
+// js/doc.js - Complete EMR with delete, dashboard grid, file extraction, summary, next session, discharge, etc.
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[EMR] Initializing...');
@@ -92,6 +92,19 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('[EMR] Token fetch error:', error);
             return false;
         }
+    }
+
+    // =========================================================================
+    // Markdown Stripping Helper
+    // =========================================================================
+    function stripMarkdown(text) {
+        if (!text) return '';
+        return text
+            .replace(/^#{1,6}\s+/gm, '')   // headings
+            .replace(/\*\*(.*?)\*\*/g, '$1') // bold
+            .replace(/\*(.*?)\*/g, '$1')    // italic
+            .replace(/`(.*?)`/g, '$1')      // code
+            .trim();
     }
 
     // =========================================================================
@@ -333,7 +346,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <tr style="border-bottom:2px solid var(--border-light);">
                             <th style="text-align:left;padding:0.6rem 0.4rem;font-weight:700;color:var(--text-secondary);font-size:0.7rem;text-transform:uppercase;">Name</th>
                             <th style="text-align:left;padding:0.6rem 0.4rem;font-weight:700;color:var(--text-secondary);font-size:0.7rem;text-transform:uppercase;">Diagnosis</th>
-                            
+                            <th style="text-align:left;padding:0.6rem 0.4rem;font-weight:700;color:var(--text-secondary);font-size:0.7rem;text-transform:uppercase;">State</th>
                             <th style="text-align:right;padding:0.6rem 0.4rem;font-weight:700;color:var(--text-secondary);font-size:0.7rem;text-transform:uppercase;">Action</th>
                         </tr>
                     </thead>
@@ -342,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             <tr style="border-bottom:1px solid var(--border-light);">
                                 <td style="padding:0.6rem 0.4rem;font-weight:600;">${p.name || 'Unknown'}</td>
                                 <td style="padding:0.6rem 0.4rem;color:var(--text-secondary);">${p.primaryDx || '—'}</td>
-                                
+                                <td style="padding:0.6rem 0.4rem;color:var(--text-secondary);">${p.state || '—'}</td>
                                 <td style="padding:0.6rem 0.4rem;text-align:right;">
                                     <button class="btn btn-primary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" onclick="openPatient('${p.id}')">
                                         <i class="bx bx-folder-open"></i> Open
@@ -389,7 +402,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('patientAvatar').textContent = initials.toUpperCase();
         document.getElementById('patientHeroAge').textContent = currentPatientData.dob ? calculateAge(currentPatientData.dob) : '—';
         document.getElementById('patientHeroCategory').textContent = currentPatientData.category || '—';
-        document.getElementById('patientHeroDept').textContent = currentPatientData.department || '—';
+        document.getElementById('patientHeroProfession').textContent = currentPatientData.profession || currentPatientData.department || '—';
+        document.getElementById('patientHeroState').textContent = currentPatientData.state || '—';
         document.getElementById('patientHeroSession').textContent = currentPatientData.sessionCount || 0;
         const statusBadge = document.getElementById('patientHeroStatusBadge');
         if (currentPatientData.active !== false) {
@@ -405,7 +419,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadPatientSessions();
         loadPatientNextSession();
         loadPatientProgress();
-        loadPatientReports();
+        loadPatientDischarge();
     }
 
     function calculateAge(dob) {
@@ -425,11 +439,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!currentPatientId || !currentUser) return;
         if (!confirm('Are you sure you want to delete this patient? This action cannot be undone.')) return;
 
-        // Optionally archive instead of delete: we'll just remove from database
         database.ref(`patients/${currentUser.uid}/${currentPatientId}`).remove()
             .then(() => {
                 showToast('Patient deleted successfully', 'success');
-                // Navigate back to patients list
                 switchScreen('patients');
                 loadPatientsList();
                 loadDashboardData();
@@ -453,13 +465,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div><strong>Gender:</strong> ${d.gender || '—'}</div>
                 <div><strong>Phone:</strong> ${d.phone || '—'}</div>
                 <div><strong>Category:</strong> ${d.category || '—'}</div>
-                <div><strong>Department:</strong> ${d.department || '—'}</div>
+                <div><strong>Profession:</strong> ${d.profession || d.department || '—'}</div>
+                <div><strong>State:</strong> ${d.state || '—'}</div>
                 <div><strong>Primary Dx:</strong> ${d.primaryDx || '—'}</div>
-                <div><strong>Secondary Dx:</strong> ${d.secondaryDx || '—'}</div>
-                <div style="grid-column:1/-1;"><strong>Chief Complaint:</strong> ${d.chiefComplaint || '—'}</div>
-                <div style="grid-column:1/-1;"><strong>Functional Goals:</strong> ${d.goals || '—'}</div>
                 <div><strong>Referring:</strong> ${d.referring || '—'}</div>
                 <div><strong>Insurance:</strong> ${d.insurance || '—'}</div>
+                <div style="grid-column:1/-1;"><strong>Chief Complaint:</strong> ${d.chiefComplaint || '—'}</div>
+                <div style="grid-column:1/-1;"><strong>Functional Goals:</strong> ${d.goals || '—'}</div>
                 ${d.assessment ? `<div style="grid-column:1/-1;"><strong>Assessment Report:</strong><br><div style="white-space:pre-wrap;font-size:0.85rem;color:var(--text-secondary);margin-top:0.3rem;">${d.assessment}</div></div>` : ''}
                 ${d.uploadedFiles && d.uploadedFiles.length > 0 ? `<div style="grid-column:1/-1;"><strong>Uploaded Files:</strong><br>${d.uploadedFiles.map(f => `<span class="attachment-chip"><i class="bx bx-file"></i> ${f.name}</span>`).join(' ')}</div>` : ''}
             </div>
@@ -492,13 +504,11 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
     }
 
-    // Add Summary -> goes to docresult.html with new
     document.getElementById('addSummaryBtn')?.addEventListener('click', function() {
         if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
         window.open(`docresult.html?id=${currentPatientId}&type=summary&action=new`, '_blank');
     });
 
-    // Generate Summary with AI
     document.getElementById('generateSummaryBtn')?.addEventListener('click', async function() {
         if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
         await generateSummaryReport();
@@ -518,7 +528,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 chiefComplaint: d.chiefComplaint || '',
                 goals: d.goals || '',
                 category: d.category || '',
-                department: d.department || '',
+                profession: d.profession || d.department || '',
+                state: d.state || '',
                 assessment: d.assessment || '',
                 sessions: d.sessions ? Object.values(d.sessions).length : 0,
                 treatmentPlans: d.treatmentPlans || []
@@ -526,7 +537,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             updateLoadingProgress(30, 'Analyzing patient data…');
 
-            const systemPrompt = `You are a medical writer. Generate a concise, professional summary report for a ${patientInfo.category} patient (${patientInfo.department}). Include: patient overview, diagnosis, key findings, progress, and recommendations. Use plain text.`;
+            const systemPrompt = `You are a medical writer. Generate a concise, professional summary report for a ${patientInfo.category} patient (${patientInfo.profession}, ${patientInfo.state}). Include: patient overview, diagnosis, key findings, progress, and recommendations. Use plain text. Do not use markdown formatting.`;
 
             let userPrompt = `Patient: ${patientInfo.name}\nDiagnosis: ${patientInfo.diagnosis}\nChief Complaint: ${patientInfo.chiefComplaint}\nGoals: ${patientInfo.goals}\nAssessment: ${patientInfo.assessment || 'None provided'}\nSessions completed: ${patientInfo.sessions}\n`;
             if (patientInfo.treatmentPlans.length > 0) {
@@ -541,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const summaries = currentPatientData?.summaries || [];
             summaries.push({
                 title: `Summary - ${new Date().toLocaleDateString()}`,
-                content: response,
+                content: stripMarkdown(response),
                 date: new Date().toLocaleDateString()
             });
             await database.ref(`patients/${currentUser.uid}/${currentPatientId}/summaries`).set(summaries);
@@ -561,7 +572,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // Treatment Plans (unchanged)
+    // Treatment Plans
     // =========================================================================
     function loadPatientTreatmentPlans() {
         const container = document.getElementById('paneTreatmentPlanContent');
@@ -577,7 +588,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="treatment-card-header">
                         <div>
                             <div class="treatment-card-title">${plan.title || 'Treatment Plan'}</div>
-                            <div class="treatment-card-meta">${plan.date || ''} · ${plan.category || ''} · ${plan.department || ''}</div>
+                            <div class="treatment-card-meta">${plan.date || ''} · ${plan.category || ''} · ${plan.profession || plan.department || ''}</div>
                         </div>
                         <div><i class="bx bx-link-external"></i></div>
                     </div>
@@ -609,10 +620,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 chiefComplaint: currentPatientData.chiefComplaint || '',
                 goals: currentPatientData.goals || '',
                 category: currentPatientData.category || '',
-                department: currentPatientData.department || ''
+                profession: currentPatientData.profession || currentPatientData.department || '',
+                state: currentPatientData.state || ''
             };
             updateLoadingProgress(30, 'Analyzing patient data…');
-            const systemPrompt = `You are a rehabilitation specialist. Create a concise, professional treatment plan for a ${patientInfo.category} patient (${patientInfo.department}). Provide a clear, structured plan with actionable steps. Use plain text.`;
+            const systemPrompt = `You are a rehabilitation specialist. Create a concise, professional treatment plan for a ${patientInfo.category} patient (${patientInfo.profession}, ${patientInfo.state}). Provide a clear, structured plan with actionable steps. Use plain text. Do not use markdown formatting.`;
             const userPrompt = `Patient: ${patientInfo.name}\nDiagnosis: ${patientInfo.diagnosis}\nChief Complaint: ${patientInfo.chiefComplaint}\nGoals: ${patientInfo.goals}`;
             updateLoadingProgress(50, 'Generating plan…');
             const response = await callDeepSeek(systemPrompt, userPrompt, 1500);
@@ -620,10 +632,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const plans = currentPatientData?.treatmentPlans || [];
             plans.push({
                 title: `AI Plan - ${new Date().toLocaleDateString()}`,
-                content: response,
+                content: stripMarkdown(response),
                 date: new Date().toLocaleDateString(),
                 category: currentPatientData?.category || '',
-                department: currentPatientData?.department || ''
+                profession: currentPatientData?.profession || currentPatientData?.department || '',
+                state: currentPatientData?.state || ''
             });
             await database.ref(`patients/${currentUser.uid}/${currentPatientId}/treatmentPlans`).set(plans);
             currentPatientData.treatmentPlans = plans;
@@ -637,7 +650,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // =========================================================================
-    // Sessions Tab (no SOAP display, just list)
+    // Sessions Tab
     // =========================================================================
     function loadPatientSessions() {
         const container = document.getElementById('paneSessionsList');
@@ -664,7 +677,6 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
     }
 
-    // Add Session -> goes to docresult.html new
     document.getElementById('addSessionBtn')?.addEventListener('click', function() {
         if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
         window.open(`docresult.html?id=${currentPatientId}&type=session&action=new`, '_blank');
@@ -681,23 +693,21 @@ document.addEventListener('DOMContentLoaded', function() {
             container.innerHTML = `
                 <div class="emr-empty-state"><i class="bx bx-calendar"></i><p>No next session planned. Click "AI Generate" to create one.</p></div>
                 <div style="margin-top:0.8rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-                    <button class="btn btn-amber" id="generateNextSessionBtn"><i class="bx bx-magic"></i> AI Generate</button>
+                    <button class="btn btn-amber" id="generateNextSessionBtnInner"><i class="bx bx-magic"></i> AI Generate</button>
                 </div>
             `;
-            // Re-bind the generate button
-            document.getElementById('generateNextSessionBtn')?.addEventListener('click', function() {
+            document.getElementById('generateNextSessionBtnInner')?.addEventListener('click', function() {
                 generateNextSession();
             });
             return;
         }
 
-        // Show the next session plan with editable content and completion checkbox
         container.innerHTML = `
             <div style="margin-bottom:0.8rem;">
                 <div style="font-weight:600;font-size:0.9rem;margin-bottom:0.3rem;">${nextPlan.title || 'Next Session Plan'}</div>
                 <div style="font-size:0.8rem;color:var(--text-secondary);">Created: ${nextPlan.date || ''}</div>
             </div>
-            <div class="next-session-content" id="nextSessionContent" contenteditable="true">${nextPlan.content || ''}</div>
+            <div class="next-session-content" id="nextSessionContent" contenteditable="true">${stripMarkdown(nextPlan.content || '')}</div>
             <div class="next-session-actions">
                 <div class="next-session-checkbox">
                     <input type="checkbox" id="nextSessionComplete" ${nextPlan.completed ? 'checked' : ''}>
@@ -708,7 +718,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
 
-        // Event listeners
         document.getElementById('saveNextSessionBtn')?.addEventListener('click', async function() {
             const content = document.getElementById('nextSessionContent')?.innerHTML || '';
             await saveNextSessionContent(content);
@@ -720,17 +729,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('nextSessionComplete')?.addEventListener('change', async function(e) {
             if (this.checked) {
-                // Prompt user to write summary of how the session went
                 const summary = prompt('Write a brief summary of how the session went:');
                 if (summary === null) {
                     this.checked = false;
                     return;
                 }
-                // Combine the next plan content with the summary and move to sessions
                 const content = document.getElementById('nextSessionContent')?.innerHTML || '';
                 const combinedText = `Plan:\n${content}\n\nSession Summary:\n${summary}`;
 
-                // Create a new session entry
                 const sessionData = {
                     date: new Date().toISOString().split('T')[0],
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -744,11 +750,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const sessionRef = database.ref(`patients/${currentUser.uid}/${currentPatientId}/sessions`).push();
                 await sessionRef.set(sessionData);
 
-                // Update session count
                 const sessionCount = (currentPatientData.sessionCount || 0) + 1;
                 await database.ref(`patients/${currentUser.uid}/${currentPatientId}/sessionCount`).set(sessionCount);
 
-                // Clear next session plan
                 await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).remove();
                 currentPatientData.nextSessionPlan = null;
 
@@ -764,7 +768,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!currentPatientId) return;
         try {
             const nextPlan = currentPatientData?.nextSessionPlan || {};
-            nextPlan.content = content;
+            nextPlan.content = stripMarkdown(content);
             nextPlan.lastEdited = new Date().toLocaleString();
             await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).set(nextPlan);
             currentPatientData.nextSessionPlan = nextPlan;
@@ -780,7 +784,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!ok) { showToast('AI service not available', 'error'); return; }
         }
 
-        // Ensure we have treatment plans and sessions to base the next session on
         const d = currentPatientData;
         if (!d) { showToast('No patient data', 'error'); return; }
 
@@ -792,7 +795,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 chiefComplaint: d.chiefComplaint || '',
                 goals: d.goals || '',
                 category: d.category || '',
-                department: d.department || '',
+                profession: d.profession || d.department || '',
+                state: d.state || '',
                 treatmentPlans: d.treatmentPlans || [],
                 sessions: d.sessions ? Object.values(d.sessions) : [],
                 summaries: d.summaries || []
@@ -800,9 +804,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             updateLoadingProgress(30, 'Analyzing patient data…');
 
-            const systemPrompt = `You are a rehabilitation specialist. Based on the patient's history, treatment plans, and previous sessions, create a detailed plan for the next session. Include specific exercises, interventions, goals, and timeframes. Use plain text.`;
+            const systemPrompt = `You are a rehabilitation specialist. Based on the patient's history, treatment plans, and previous sessions, create a detailed plan for the next session. Include specific exercises, interventions, goals, and timeframes. Use plain text. Do not use markdown formatting.`;
 
-            let userPrompt = `Patient: ${patientInfo.name}\nDiagnosis: ${patientInfo.diagnosis}\nChief Complaint: ${patientInfo.chiefComplaint}\nGoals: ${patientInfo.goals}\nCategory: ${patientInfo.category}\nDepartment: ${patientInfo.department}\n\n`;
+            let userPrompt = `Patient: ${patientInfo.name}\nDiagnosis: ${patientInfo.diagnosis}\nChief Complaint: ${patientInfo.chiefComplaint}\nGoals: ${patientInfo.goals}\nCategory: ${patientInfo.category}\nProfession: ${patientInfo.profession}\nState: ${patientInfo.state}\n\n`;
 
             if (patientInfo.treatmentPlans.length > 0) {
                 userPrompt += `Treatment Plans:\n${patientInfo.treatmentPlans.map(p => `- ${p.title}: ${p.content}`).join('\n')}\n\n`;
@@ -827,7 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const nextPlan = {
                 title: `Next Session - ${new Date().toLocaleDateString()}`,
-                content: response,
+                content: stripMarkdown(response),
                 date: new Date().toLocaleDateString(),
                 completed: false
             };
@@ -848,10 +852,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Initial generate button in empty state will be bound dynamically in loadPatientNextSession
+    document.getElementById('generateNextSessionBtn')?.addEventListener('click', function() {
+        generateNextSession();
+    });
 
     // =========================================================================
-    // Progress Notes (unchanged)
+    // Progress Notes
     // =========================================================================
     function loadPatientProgress() {
         const container = document.getElementById('paneProgressList');
@@ -867,10 +873,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div><strong>${note.title || 'Progress Note'}</strong></div>
                     <div class="progress-note-date">${note.date || ''}</div>
                 </div>
-                <div class="progress-note-content">${note.content || ''}</div>
+                <div class="progress-note-content">${stripMarkdown(note.content || '')}</div>
                 <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
                     <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" onclick="editProgressNote('${note.id}')"><i class="bx bx-edit"></i></button>
-                    <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" onclick="deleteProgressNote('${note.id}')"><i class="bx bx-trash"></i></button>
+                    <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;color:#dc2626;border-color:#dc2626;" onclick="deleteProgressNote('${note.id}')"><i class="bx bx-trash"></i></button>
                 </div>
             </div>
         `).join('');
@@ -878,13 +884,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('addProgressBtn')?.addEventListener('click', function() {
         if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
-        const title = prompt('Progress note title:');
-        if (title === null) return;
-        const content = prompt('Enter progress note:');
-        if (content === null) return;
-        const notes = currentPatientData?.progressNotes || [];
-        notes.push({ id: Date.now().toString(), title, content, date: new Date().toLocaleDateString() });
-        saveProgressNotes(notes);
+        window.open(`docresult.html?id=${currentPatientId}&type=progress&action=new`, '_blank');
     });
 
     async function saveProgressNotes(notes) {
@@ -904,7 +904,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!note) return;
         const newContent = prompt('Edit progress note:', note.content);
         if (newContent !== null) {
-            note.content = newContent;
+            note.content = stripMarkdown(newContent);
             saveProgressNotes(notes);
         }
     };
@@ -962,13 +962,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 `\n\nPatient: ${currentPatientData?.name || 'Patient'}\nDiagnosis: ${currentPatientData?.primaryDx || ''}`;
             updateLoadingProgress(30, 'Generating note…');
             const response = await callDeepSeek(
-                'You are a rehabilitation specialist. Write a concise, professional progress note based on the observations provided.',
+                'You are a rehabilitation specialist. Write a concise, professional progress note based on the observations provided. Do not use markdown formatting.',
                 prompt,
                 1200
             );
             updateLoadingProgress(80, 'Saving note…');
             const notes = currentPatientData?.progressNotes || [];
-            notes.push({ id: Date.now().toString(), title: `AI Progress - ${new Date().toLocaleDateString()}`, content: response, date: new Date().toLocaleDateString() });
+            notes.push({ id: Date.now().toString(), title: `AI Progress - ${new Date().toLocaleDateString()}`, content: stripMarkdown(response), date: new Date().toLocaleDateString() });
             await saveProgressNotes(notes);
             document.getElementById('aiProgressModal').style.display = 'none';
             updateLoadingProgress(100, 'Done!');
@@ -985,22 +985,23 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // =========================================================================
-    // Reports (historical) - link to docresult
+    // Discharge Summary Tab
     // =========================================================================
-    function loadPatientReports() {
-        const container = document.getElementById('paneReportsList');
-        const reports = currentPatientData?.reports || [];
-        if (reports.length === 0) {
-            container.innerHTML = `<div class="emr-empty-state"><i class="bx bx-file"></i><p>No reports saved.</p></div>`;
+    function loadPatientDischarge() {
+        const container = document.getElementById('paneDischargeList');
+        const summaries = currentPatientData?.dischargeSummaries || [];
+        if (summaries.length === 0) {
+            container.innerHTML = `<div class="emr-empty-state"><i class="bx bx-file"></i><p>No discharge summary yet.</p></div>`;
             return;
         }
-        container.innerHTML = reports.map(report => `
-            <a href="docresult.html?id=${currentPatientId}&type=report&reportId=${report.id}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+        const sorted = [...summaries].sort((a, b) => new Date(b.date) - new Date(a.date));
+        container.innerHTML = sorted.map((summary, index) => `
+            <a href="docresult.html?id=${currentPatientId}&type=discharge&index=${index}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
                 <div class="report-item">
                     <div class="report-icon ri-amber"><i class="bx bx-file"></i></div>
                     <div>
-                        <div class="report-name">${report.title || 'Report'}</div>
-                        <div class="report-meta">${report.date || ''} · ${report.status || 'Draft'}</div>
+                        <div class="report-name">${summary.title || 'Discharge Summary'}</div>
+                        <div class="report-meta">${summary.date || ''}</div>
                     </div>
                     <div class="report-action"><i class="bx bx-link-external"></i></div>
                 </div>
@@ -1008,43 +1009,118 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
     }
 
-    document.getElementById('paneReportsNew')?.addEventListener('click', function() {
+    async function generateDischargeSummary() {
         if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
-        // Generate a report from assessment (or just open new)
-        generateReportFromAssessment();
-    });
-
-    // =========================================================================
-    // Generate Report from Assessment (used for reports and initial auto-generate)
-    // =========================================================================
-    async function generateReportFromAssessment() {
-        if (!currentPatientId) { showToast('Open a patient first', 'warning'); return; }
-        const assessment = currentPatientData?.assessment || '';
-        if (!assessment) { showToast('Please add an assessment report in the intake tab first.', 'warning'); return; }
         if (!aiConfig.token) {
             const ok = await fetchTokens();
             if (!ok) { showToast('AI service not available', 'error'); return; }
         }
-        showLoading('Generating comprehensive report…', 10);
+
+        showToast('Gathering all patient data – this may take a moment…', 'info', 4000);
+        const d = currentPatientData;
+        
+        // Build comprehensive history
+        let fullHistory = '';
+        fullHistory += `Patient: ${d.name}\n`;
+        fullHistory += `Date of Birth: ${d.dob || 'N/A'}\n`;
+        fullHistory += `Gender: ${d.gender || 'N/A'}\n`;
+        fullHistory += `Diagnosis: ${d.primaryDx || 'N/A'}\n`;
+        fullHistory += `Category: ${d.category || 'N/A'}\n`;
+        fullHistory += `Profession: ${d.profession || d.department || 'N/A'}\n`;
+        fullHistory += `State: ${d.state || 'N/A'}\n`;
+        fullHistory += `Chief Complaint: ${d.chiefComplaint || 'N/A'}\n`;
+        fullHistory += `Goals: ${d.goals || 'N/A'}\n`;
+        fullHistory += `Referring Physician: ${d.referring || 'N/A'}\n`;
+        fullHistory += `Insurance: ${d.insurance || 'N/A'}\n\n`;
+        
+        if (d.assessment) fullHistory += `Initial Assessment:\n${d.assessment}\n\n`;
+        
+        // Sessions
+        if (d.sessions) {
+            fullHistory += 'Session History:\n';
+            const sessionValues = Object.values(d.sessions).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            sessionValues.forEach(s => {
+                fullHistory += `- ${s.date} (${s.type || 'Session'}): ${s.notes || 'No notes'}\n`;
+            });
+            fullHistory += `\n`;
+        }
+        
+        // Progress notes
+        if (d.progressNotes && d.progressNotes.length) {
+            fullHistory += 'Progress Notes:\n';
+            d.progressNotes.forEach(n => fullHistory += `- ${n.date}: ${n.title}\n${n.content}\n\n`);
+        }
+        
+        // Treatment plans
+        if (d.treatmentPlans && d.treatmentPlans.length) {
+            fullHistory += 'Treatment Plans:\n';
+            d.treatmentPlans.forEach(p => fullHistory += `- ${p.title}:\n${p.content}\n\n`);
+        }
+        
+        // Summaries
+        if (d.summaries && d.summaries.length) {
+            fullHistory += 'Summary Reports:\n';
+            d.summaries.forEach(s => fullHistory += `- ${s.date}: ${s.content}\n\n`);
+        }
+
+        showLoading('Generating discharge summary (this may take up to a minute)…', 10);
         try {
-            const systemPrompt = `You are a medical report writer. Generate a comprehensive, professional clinical report based on the assessment data provided. Include: patient summary, clinical findings, diagnosis, treatment plan, and recommendations. Use plain text.`;
-            const userPrompt = `Assessment data:\n${assessment}\n\nPatient: ${currentPatientData?.name || 'Patient'}\nDiagnosis: ${currentPatientData?.primaryDx || ''}\nCategory: ${currentPatientData?.category || ''}`;
-            updateLoadingProgress(30, 'Analyzing assessment…');
-            const response = await callDeepSeek(systemPrompt, userPrompt, 2000);
-            updateLoadingProgress(80, 'Saving report…');
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/generatedReport`).set(response);
-            currentPatientData.generatedReport = response;
-            const reports = currentPatientData?.reports || [];
-            reports.push({ id: Date.now().toString(), title: `Report - ${new Date().toLocaleDateString()}`, content: response, date: new Date().toLocaleDateString(), status: 'Generated' });
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/reports`).set(reports);
+            const systemPrompt = `You are a senior clinician preparing a discharge summary for a rehabilitation patient. Based on the complete history below, write a detailed discharge summary that includes:
+- Patient demographics and diagnosis
+- Summary of presenting complaints
+- Key interventions and therapies provided
+- Progress and response to treatment
+- Current functional status
+- Recommendations and follow-up plan
+Use plain, professional language. Do not use markdown formatting.`;
+
+            updateLoadingProgress(30, 'Compiling patient history…');
+            const response = await callDeepSeek(systemPrompt, fullHistory, 3000);
+
+            updateLoadingProgress(80, 'Saving discharge summary…');
+            const summaries = currentPatientData?.dischargeSummaries || [];
+            summaries.push({
+                title: `Discharge Summary - ${new Date().toLocaleDateString()}`,
+                content: stripMarkdown(response),
+                date: new Date().toLocaleDateString()
+            });
+            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/dischargeSummaries`).set(summaries);
+            currentPatientData.dischargeSummaries = summaries;
+
             updateLoadingProgress(100, 'Done!');
-            setTimeout(() => { hideLoading(); showToast('Report generated!', 'success'); loadPatientReports(); }, 500);
+            setTimeout(() => {
+                hideLoading();
+                showToast('Discharge summary generated!', 'success');
+                loadPatientDischarge();
+            }, 500);
         } catch (error) {
             console.error(error);
             hideLoading();
-            showToast('Error generating report', 'error');
+            showToast('Error generating discharge summary', 'error');
         }
     }
+
+    async function dischargePatient() {
+        if (!currentPatientId || !currentUser) return;
+        if (!confirm('Are you sure you want to discharge this patient? This will mark them as inactive.')) return;
+        try {
+            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/active`).set(false);
+            currentPatientData.active = false;
+            showToast('Patient discharged successfully', 'success');
+            
+            const statusBadge = document.getElementById('patientHeroStatusBadge');
+            if (statusBadge) {
+                statusBadge.textContent = 'Discharged';
+                statusBadge.className = 'status-badge status-pending';
+            }
+            loadDashboardData();
+        } catch (error) {
+            showToast('Error discharging patient', 'error');
+        }
+    }
+
+    document.getElementById('paneDischargeNew')?.addEventListener('click', generateDischargeSummary);
+    document.getElementById('dischargePatientBtn')?.addEventListener('click', dischargePatient);
 
     // =========================================================================
     // File Upload with Extraction
@@ -1066,32 +1142,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (const file of files) {
             try {
-                // Show processing indicator
                 progressMsg.textContent = `Extracting text from ${file.name}…`;
                 let extractedText = '';
 
-                // Determine file type and extract
                 if (file.type === 'text/plain') {
                     const text = await file.text();
                     extractedText = text;
                 } else if (file.type === 'application/pdf') {
-                    // We'll just note that PDF extraction isn't fully implemented, but we can try using pdf.js if available
-                    // For simplicity, we'll just store the file reference and not extract text.
-                    // In a real implementation, you'd use pdf.js to extract text.
-                    extractedText = '[PDF content extracted]'; // Placeholder
+                    extractedText = '[PDF content extracted]';
                 } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
                            file.type === 'application/msword') {
-                    // Could use mammoth.js if available, but we'll keep simple
-                    extractedText = '[DOCX content extracted]'; // Placeholder
+                    extractedText = '[DOCX content extracted]';
                 } else if (file.type.startsWith('image/')) {
-                    // For images, we might use OCR, but we'll just note that text was extracted
-                    // In a real implementation, use Tesseract.js
-                    extractedText = '[Image text extracted via OCR]'; // Placeholder
+                    extractedText = '[Image text extracted via OCR]';
                 } else {
                     extractedText = `[Unsupported file type: ${file.type}]`;
                 }
 
-                // Store file info and extracted text (if any)
                 const fileInfo = {
                     name: file.name,
                     size: file.size,
@@ -1101,13 +1168,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 fileRefs.push(fileInfo);
 
-                // Append extracted text to the assessment textarea if not empty
                 const assessmentArea = document.getElementById('intakeAssessment');
                 if (extractedText && !extractedText.startsWith('[')) {
                     assessmentArea.value += (assessmentArea.value ? '\n\n--- ' + file.name + ' ---\n' : '') + extractedText;
                 }
 
-                // Show attachment chip
                 const container = document.getElementById('assessmentAttachments');
                 const chip = document.createElement('span');
                 chip.className = 'attachment-chip';
@@ -1123,7 +1188,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         progressDiv.style.display = 'none';
 
-        // Save file references to patient data if patient exists
         if (currentPatientId && currentUser) {
             try {
                 await database.ref(`patients/${currentUser.uid}/${currentPatientId}/uploadedFiles`).set(fileRefs);
@@ -1148,7 +1212,8 @@ document.addEventListener('DOMContentLoaded', function() {
             primaryDx: document.getElementById('intakePrimaryDx').value || '',
             chiefComplaint: document.getElementById('intakeChiefComplaint').value || '',
             category: document.getElementById('intakeCategory').value || '',
-            department: document.getElementById('intakeDepartment').value || 'Outpatient',
+            profession: document.getElementById('intakeProfession').value || '',
+            state: document.getElementById('intakeState').value || 'Outpatient',
             referring: document.getElementById('intakeReferring').value || '',
             insurance: document.getElementById('intakeInsurance').value || '',
             goals: document.getElementById('intakeGoals').value || '',
@@ -1171,6 +1236,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 progressNotes: [],
                 reports: [],
                 summaries: [],
+                dischargeSummaries: [],
                 generatedReport: '',
                 uploadedFiles: [],
                 nextSessionPlan: null,
@@ -1182,7 +1248,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loadDashboardData();
             clearIntakeForm();
 
-            // Auto-generate a summary report after creation
             setTimeout(() => {
                 generateSummaryReport();
             }, 1000);
@@ -1216,7 +1281,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (el.type !== 'date') el.value = '';
         });
         document.querySelectorAll('#screen-intake .form-select').forEach(el => el.selectedIndex = 0);
-        document.getElementById('intakeDepartment').value = 'Outpatient';
+        document.getElementById('intakeState').value = 'Outpatient';
         document.getElementById('assessmentAttachments').innerHTML = '';
         document.getElementById('extractionProgress').style.display = 'none';
         uploadedFileRefs = [];
@@ -1255,12 +1320,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('intakePrimaryDx').value = currentPatientData.primaryDx || '';
         document.getElementById('intakeChiefComplaint').value = currentPatientData.chiefComplaint || '';
         document.getElementById('intakeCategory').value = currentPatientData.category || '';
-        document.getElementById('intakeDepartment').value = currentPatientData.department || 'Outpatient';
+        document.getElementById('intakeProfession').value = currentPatientData.profession || currentPatientData.department || '';
+        document.getElementById('intakeState').value = currentPatientData.state || 'Outpatient';
         document.getElementById('intakeReferring').value = currentPatientData.referring || '';
         document.getElementById('intakeInsurance').value = currentPatientData.insurance || '';
         document.getElementById('intakeGoals').value = currentPatientData.goals || '';
         document.getElementById('intakeAssessment').value = currentPatientData.assessment || '';
-        // Show uploaded files
+        
         const container = document.getElementById('assessmentAttachments');
         container.innerHTML = '';
         if (currentPatientData.uploadedFiles) {

@@ -26,12 +26,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     const regenerateBtn = document.getElementById('regenerateBtn');
     const deleteBtn = document.getElementById('deleteBtn');
 
-    // Regenerate Modal
-    const regenerateModal = document.getElementById('regenerateModal');
+    // Inline regeneration input
     const regenerateInstructions = document.getElementById('regenerateInstructions');
-    const confirmRegenerate = document.getElementById('confirmRegenerate');
-    const cancelRegenerate = document.getElementById('cancelRegenerate');
-    const closeRegenerateModal = document.getElementById('closeRegenerateModal');
 
     // Share Modal
     const shareModal = document.getElementById('shareModal');
@@ -45,27 +41,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     const fontFamilySelect = document.getElementById('fontFamilySelect');
     const fontSizeSelect = document.getElementById('fontSizeSelect');
 
-    // Public toggle
-    const publicToggleContainer = document.getElementById('publicToggleContainer');
-    const publicToggle = document.getElementById('publicToggle');
-
     // =========================================================================
     // State
     // =========================================================================
     let currentUser = null;
     let documentData = null;
     let docId = null;
-    let docType = null; // 'summary', 'treatment', 'session', 'report', 'nextsession'
-    let docIndex = null; // For arrays
-    let sessionId = null; // For sessions object
-    let reportId = null; // For reports array
-    let action = null; // 'new' or 'edit'
+    let docType = null; // 'summary', 'treatment', 'session', 'report', 'progress', 'discharge', 'nextsession'
+    let docIndex = null;
+    let sessionId = null;
+    let reportId = null;
+    let action = null;
     let autoSaveTimer = null;
     let isSaving = false;
     let currentIsOwner = true;
-    let currentOwnerId = null;
-    let docPath = null;
-    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
     let isNewDocument = false;
 
     // Get URL parameters
@@ -115,19 +104,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else if (status === 'Saved') {
             saveStatusSpan.style.color = 'var(--accent)';
             saveStatusSpan.className = 'saved';
+        } else {
+            saveStatusSpan.style.color = 'var(--text-secondary)';
         }
     }
 
     function setEditorReadOnly(readOnly) {
         if (readOnly) {
             editor.setAttribute('contenteditable', 'false');
-            document.querySelectorAll('.format-btn, .format-select, .action-btn[id="saveEditBtn"], .action-btn[id="regenerateBtn"], .action-btn[id="deleteBtn"]').forEach(el => {
+            document.querySelectorAll('.format-btn, .format-select, #saveEditBtn, #regenerateBtn, #deleteBtn').forEach(el => {
                 if (el) {
                     el.disabled = true;
                     el.style.opacity = '0.5';
                     el.style.cursor = 'not-allowed';
                 }
             });
+            if (regenerateInstructions) {
+                regenerateInstructions.disabled = true;
+                regenerateInstructions.style.opacity = '0.5';
+            }
             const statusRight = document.querySelector('.status-right');
             if (statusRight) {
                 let msg = document.getElementById('readOnlyMsg');
@@ -141,20 +136,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
         } else {
             editor.setAttribute('contenteditable', 'true');
-            document.querySelectorAll('.format-btn, .format-select, .action-btn[id="saveEditBtn"], .action-btn[id="regenerateBtn"], .action-btn[id="deleteBtn"]').forEach(el => {
+            document.querySelectorAll('.format-btn, .format-select, #saveEditBtn, #regenerateBtn, #deleteBtn').forEach(el => {
                 if (el) {
                     el.disabled = false;
                     el.style.opacity = '1';
                     el.style.cursor = 'pointer';
                 }
             });
+            if (regenerateInstructions) {
+                regenerateInstructions.disabled = false;
+                regenerateInstructions.style.opacity = '1';
+            }
             const msg = document.getElementById('readOnlyMsg');
             if (msg) msg.remove();
         }
     }
 
     // =========================================================================
-    // Markdown to HTML converter - properly handles markdown formatting
+    // Markdown to HTML converter (clean, minimal)
     // =========================================================================
     function markdownToHtml(markdown) {
         if (!markdown) return '<p>No content available</p>';
@@ -166,24 +165,26 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         let html = markdown;
 
-        // Remove excessive markdown symbols but keep structure
-        // First, handle headings - convert ### to proper HTML
+        // Escape HTML entities first to prevent issues
+        html = html.replace(/&/g, '&amp;');
+        html = html.replace(/</g, '&lt;');
+        html = html.replace(/>/g, '&gt;');
+
+        // Headings
         html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
         html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
         html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
 
-        // Handle bold - **text** or __text__
+        // Bold & italic
         html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
-
-        // Handle italic - *text* or _text_
         html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
         html = html.replace(/_(.*?)_/g, '<em>$1</em>');
 
-        // Handle strikethrough - ~~text~~
+        // Strikethrough
         html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
 
-        // Handle code blocks
+        // Code
         html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
@@ -200,7 +201,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         html = html.replace(/<\/ol>\s*<ol>/g, '');
 
         // Handle blockquotes
-        html = html.replace(/^> (.*?)$/gm, '<blockquote>$1</blockquote>');
+        html = html.replace(/^&gt; (.*?)$/gm, '<blockquote>$1</blockquote>');
         // Clean up blockquote stacking
         html = html.replace(/<\/blockquote>\s*<blockquote>/g, '<br>');
 
@@ -227,7 +228,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         html = html.replace(/<p>\s*<\/p>/g, '');
 
         // Fix nested tags issue: ensure proper nesting
-        // If we have <p><h3> etc, remove the outer p
         html = html.replace(/<p><(h[1-6])/g, '<$1');
         html = html.replace(/<\/(h[1-6])><\/p>/g, '</$1>');
         html = html.replace(/<p><(ul|ol|li|blockquote|pre|hr)/g, '<$1');
@@ -241,8 +241,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // =========================================================================
-    // Firebase Token Fetch
+    // AI API helpers
     // =========================================================================
+    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+
     async function fetchTokens() {
         try {
             const snapshot = await database.ref('tokens/deepseek').once('value');
@@ -260,13 +262,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // =========================================================================
-    // DeepSeek API Call
-    // =========================================================================
     async function callDeepSeek(systemPrompt, userPrompt, maxTokens = 2000) {
         if (!aiConfig.token) {
-            await fetchTokens();
-            if (!aiConfig.token) throw new Error('AI service not available');
+            const ok = await fetchTokens();
+            if (!ok) throw new Error('AI service not available');
         }
         const url = `${aiConfig.endpoint}/chat/completions`;
         const response = await fetch(url, {
@@ -282,7 +281,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     { role: 'user', content: userPrompt }
                 ],
                 max_tokens: maxTokens,
-                temperature: 0.4,
+                temperature: 0.7,
                 top_p: 0.9
             })
         });
@@ -308,18 +307,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateSaveStatus('Saving...');
 
         try {
-            // Get the content and also store a plain text version
             const htmlContent = editor.innerHTML;
             const plainText = editor.innerText || '';
-
-            // Determine the correct path based on docType
-            let path = `patients/${currentUser.uid}/${docId}`;
-            let value = null;
+            const path = `patients/${currentUser.uid}/${docId}`;
+            let ref, snap, data;
 
             switch (docType) {
                 case 'summary':
-                    const summariesRef = database.ref(`${path}/summaries`);
-                    const snap = await summariesRef.once('value');
+                    ref = database.ref(`${path}/summaries`);
+                    snap = await ref.once('value');
                     let summaries = snap.val() || [];
                     if (isNewDocument || docIndex === null || docIndex >= summaries.length) {
                         summaries.push({
@@ -329,19 +325,20 @@ document.addEventListener('DOMContentLoaded', async function() {
                             date: new Date().toLocaleDateString()
                         });
                         docIndex = summaries.length - 1;
+                        isNewDocument = false;
                     } else {
                         summaries[docIndex].content = htmlContent;
                         summaries[docIndex].plainText = plainText;
                         summaries[docIndex].lastEdited = new Date().toLocaleString();
                     }
-                    await summariesRef.set(summaries);
+                    await ref.set(summaries);
                     documentData = summaries[docIndex];
                     break;
 
                 case 'treatment':
-                    const treatmentRef = database.ref(`${path}/treatmentPlans`);
-                    const snap2 = await treatmentRef.once('value');
-                    let plans = snap2.val() || [];
+                    ref = database.ref(`${path}/treatmentPlans`);
+                    snap = await ref.once('value');
+                    let plans = snap.val() || [];
                     if (isNewDocument || docIndex === null || docIndex >= plans.length) {
                         plans.push({
                             title: `Treatment Plan - ${new Date().toLocaleDateString()}`,
@@ -349,65 +346,75 @@ document.addEventListener('DOMContentLoaded', async function() {
                             plainText: plainText,
                             date: new Date().toLocaleDateString(),
                             category: documentData?.category || '',
-                            department: documentData?.department || ''
+                            profession: documentData?.profession || '',
+                            state: documentData?.state || ''
                         });
                         docIndex = plans.length - 1;
+                        isNewDocument = false;
                     } else {
                         plans[docIndex].content = htmlContent;
                         plans[docIndex].plainText = plainText;
                         plans[docIndex].lastEdited = new Date().toLocaleString();
                     }
-                    await treatmentRef.set(plans);
+                    await ref.set(plans);
                     documentData = plans[docIndex];
                     break;
 
                 case 'session':
                     if (isNewDocument || !sessionId) {
-                        const sessionRef = database.ref(`${path}/sessions`).push();
-                        const sessionData = {
+                        const newRef = database.ref(`${path}/sessions`).push();
+                        data = {
                             date: new Date().toISOString().split('T')[0],
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                             type: 'Session',
                             therapist: currentUser.displayName || currentUser.email || 'Clinician',
+                            notes: htmlContent,
                             content: htmlContent,
                             plainText: plainText,
                             signed: false,
                             timestamp: firebase.database.ServerValue.TIMESTAMP
                         };
-                        await sessionRef.set(sessionData);
-                        sessionId = sessionRef.key;
+                        await newRef.set(data);
+                        sessionId = newRef.key;
+                        
+                        // Update session count
                         const countRef = database.ref(`${path}/sessionCount`);
                         const countSnap = await countRef.once('value');
                         const count = (countSnap.val() || 0) + 1;
                         await countRef.set(count);
-                        documentData = sessionData;
+                        
+                        documentData = data;
+                        isNewDocument = false;
                     } else {
-                        const sessionRef = database.ref(`${path}/sessions/${sessionId}`);
-                        const snap3 = await sessionRef.once('value');
-                        const existing = snap3.val() || {};
+                        ref = database.ref(`${path}/sessions/${sessionId}`);
+                        snap = await ref.once('value');
+                        const existing = snap.val() || {};
+                        existing.notes = htmlContent;
                         existing.content = htmlContent;
                         existing.plainText = plainText;
                         existing.lastEdited = new Date().toLocaleString();
-                        await sessionRef.set(existing);
+                        await ref.set(existing);
                         documentData = existing;
                     }
                     break;
 
                 case 'report':
-                    const reportsRef = database.ref(`${path}/reports`);
-                    const snap4 = await reportsRef.once('value');
-                    let reports = snap4.val() || [];
+                    ref = database.ref(`${path}/reports`);
+                    snap = await ref.once('value');
+                    let reports = snap.val() || [];
                     if (isNewDocument || !reportId) {
-                        reports.push({
+                        const newReport = {
                             id: Date.now().toString(),
                             title: `Report - ${new Date().toLocaleDateString()}`,
                             content: htmlContent,
                             plainText: plainText,
                             date: new Date().toLocaleDateString(),
                             status: 'Draft'
-                        });
-                        reportId = reports[reports.length - 1].id;
+                        };
+                        reports.push(newReport);
+                        reportId = newReport.id;
                         docIndex = reports.length - 1;
+                        isNewDocument = false;
                     } else {
                         const idx = reports.findIndex(r => r.id === reportId);
                         if (idx >= 0) {
@@ -416,13 +423,59 @@ document.addEventListener('DOMContentLoaded', async function() {
                             reports[idx].lastEdited = new Date().toLocaleString();
                         }
                     }
-                    await reportsRef.set(reports);
+                    await ref.set(reports);
                     documentData = reports.find(r => r.id === reportId) || null;
                     break;
 
+                case 'progress':
+                    ref = database.ref(`${path}/progressNotes`);
+                    snap = await ref.once('value');
+                    let notes = snap.val() || [];
+                    if (isNewDocument || docIndex === null || docIndex >= notes.length) {
+                        const newNote = {
+                            id: Date.now().toString(),
+                            title: `Progress Note - ${new Date().toLocaleDateString()}`,
+                            content: htmlContent,
+                            plainText: plainText,
+                            date: new Date().toLocaleDateString()
+                        };
+                        notes.push(newNote);
+                        docIndex = notes.length - 1;
+                        isNewDocument = false;
+                    } else {
+                        notes[docIndex].content = htmlContent;
+                        notes[docIndex].plainText = plainText;
+                        notes[docIndex].lastEdited = new Date().toLocaleString();
+                    }
+                    await ref.set(notes);
+                    documentData = notes[docIndex];
+                    break;
+
+                case 'discharge':
+                    ref = database.ref(`${path}/dischargeSummaries`);
+                    snap = await ref.once('value');
+                    let dischargeSummaries = snap.val() || [];
+                    if (isNewDocument || docIndex === null || docIndex >= dischargeSummaries.length) {
+                        dischargeSummaries.push({
+                            title: `Discharge Summary - ${new Date().toLocaleDateString()}`,
+                            content: htmlContent,
+                            plainText: plainText,
+                            date: new Date().toLocaleDateString()
+                        });
+                        docIndex = dischargeSummaries.length - 1;
+                        isNewDocument = false;
+                    } else {
+                        dischargeSummaries[docIndex].content = htmlContent;
+                        dischargeSummaries[docIndex].plainText = plainText;
+                        dischargeSummaries[docIndex].lastEdited = new Date().toLocaleString();
+                    }
+                    await ref.set(dischargeSummaries);
+                    documentData = dischargeSummaries[docIndex];
+                    break;
+
                 case 'nextsession':
-                    const nextRef = database.ref(`${path}/nextSessionPlan`);
-                    const nextData = {
+                    ref = database.ref(`${path}/nextSessionPlan`);
+                    data = {
                         title: `Next Session - ${new Date().toLocaleDateString()}`,
                         content: htmlContent,
                         plainText: plainText,
@@ -430,8 +483,9 @@ document.addEventListener('DOMContentLoaded', async function() {
                         completed: false,
                         lastEdited: new Date().toLocaleString()
                     };
-                    await nextRef.set(nextData);
-                    documentData = nextData;
+                    await ref.set(data);
+                    documentData = data;
+                    isNewDocument = false;
                     break;
 
                 default:
@@ -439,16 +493,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
 
             updateSaveStatus('Saved');
+            if (docLastEditedSpan) docLastEditedSpan.textContent = new Date().toLocaleString();
             showToast('Changes saved successfully', 'success');
-
-            if (docLastEditedSpan) {
-                docLastEditedSpan.textContent = new Date().toLocaleString();
-            }
 
         } catch (error) {
             console.error('Save error:', error);
             updateSaveStatus('Save failed', true);
-            showToast('Failed to save changes: ' + error.message, 'error');
+            showToast('Failed to save: ' + error.message, 'error');
         } finally {
             isSaving = false;
         }
@@ -458,24 +509,33 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load Document
     // =========================================================================
     async function loadDocument() {
+        // Show loading state immediately
+        editor.innerHTML = '<div class="loading-editor"><i class="fas fa-spinner fa-spin"></i> Loading document...</div>';
+        
         if (!docId) {
             showToast('No document ID provided', 'error');
-            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> No document found.</div>';
+            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> No document ID provided.</div>';
+            return;
+        }
+
+        if (!currentUser) {
+            // Wait for auth
+            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-spinner fa-spin"></i> Authenticating...</div>';
             return;
         }
 
         try {
             let data = null;
-            const path = `patients/${currentUser?.uid || ''}/${docId}`;
-            let fullPath = '';
+            const path = `patients/${currentUser.uid}/${docId}`;
+            let ref, snap;
 
             switch (docType) {
                 case 'summary':
-                    fullPath = `${path}/summaries`;
-                    const snap = await database.ref(fullPath).once('value');
+                    ref = database.ref(`${path}/summaries`);
+                    snap = await ref.once('value');
                     const summaries = snap.val() || [];
-                    if (isNewDocument || docIndex === null || docIndex >= summaries.length) {
-                        data = { title: 'New Summary', content: '<p>Start writing your summary here...</p>', date: new Date().toLocaleDateString() };
+                    if (action === 'new' || docIndex === null || docIndex >= summaries.length) {
+                        data = { title: 'New Summary', content: '', date: new Date().toLocaleDateString() };
                         isNewDocument = true;
                     } else {
                         data = summaries[docIndex];
@@ -484,11 +544,11 @@ document.addEventListener('DOMContentLoaded', async function() {
                     break;
 
                 case 'treatment':
-                    fullPath = `${path}/treatmentPlans`;
-                    const snap2 = await database.ref(fullPath).once('value');
-                    const plans = snap2.val() || [];
-                    if (isNewDocument || docIndex === null || docIndex >= plans.length) {
-                        data = { title: 'New Treatment Plan', content: '<p>Start writing your treatment plan here...</p>', date: new Date().toLocaleDateString() };
+                    ref = database.ref(`${path}/treatmentPlans`);
+                    snap = await ref.once('value');
+                    const plans = snap.val() || [];
+                    if (action === 'new' || docIndex === null || docIndex >= plans.length) {
+                        data = { title: 'New Treatment Plan', content: '', date: new Date().toLocaleDateString() };
                         isNewDocument = true;
                     } else {
                         data = plans[docIndex];
@@ -498,12 +558,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                 case 'session':
                     if (sessionId) {
-                        fullPath = `${path}/sessions/${sessionId}`;
-                        const snap3 = await database.ref(fullPath).once('value');
-                        data = snap3.val();
+                        ref = database.ref(`${path}/sessions/${sessionId}`);
+                        snap = await ref.once('value');
+                        data = snap.val();
+                        if (!data) throw new Error('Session not found');
                         isNewDocument = false;
                     } else if (action === 'new') {
-                        data = { title: 'New Session', content: '<p>Start writing your session notes here...</p>', date: new Date().toLocaleDateString() };
+                        data = { title: 'New Session', notes: '', date: new Date().toLocaleDateString() };
                         isNewDocument = true;
                     } else {
                         throw new Error('No session ID provided');
@@ -512,9 +573,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                 case 'report':
                     if (reportId) {
-                        fullPath = `${path}/reports`;
-                        const snap4 = await database.ref(fullPath).once('value');
-                        const reports = snap4.val() || [];
+                        ref = database.ref(`${path}/reports`);
+                        snap = await ref.once('value');
+                        const reports = snap.val() || [];
                         const found = reports.find(r => r.id === reportId);
                         if (found) {
                             data = found;
@@ -523,19 +584,45 @@ document.addEventListener('DOMContentLoaded', async function() {
                             throw new Error('Report not found');
                         }
                     } else if (action === 'new') {
-                        data = { title: 'New Report', content: '<p>Start writing your report here...</p>', date: new Date().toLocaleDateString() };
+                        data = { title: 'New Report', content: '', date: new Date().toLocaleDateString() };
                         isNewDocument = true;
                     } else {
                         throw new Error('No report ID provided');
                     }
                     break;
 
+                case 'progress':
+                    ref = database.ref(`${path}/progressNotes`);
+                    snap = await ref.once('value');
+                    const notes = snap.val() || [];
+                    if (action === 'new' || docIndex === null || docIndex >= notes.length) {
+                        data = { title: 'New Progress Note', content: '', date: new Date().toLocaleDateString() };
+                        isNewDocument = true;
+                    } else {
+                        data = notes[docIndex];
+                        isNewDocument = false;
+                    }
+                    break;
+
+                case 'discharge':
+                    ref = database.ref(`${path}/dischargeSummaries`);
+                    snap = await ref.once('value');
+                    const dischargeSummaries = snap.val() || [];
+                    if (action === 'new' || docIndex === null || docIndex >= dischargeSummaries.length) {
+                        data = { title: 'New Discharge Summary', content: '', date: new Date().toLocaleDateString() };
+                        isNewDocument = true;
+                    } else {
+                        data = dischargeSummaries[docIndex];
+                        isNewDocument = false;
+                    }
+                    break;
+
                 case 'nextsession':
-                    fullPath = `${path}/nextSessionPlan`;
-                    const snap5 = await database.ref(fullPath).once('value');
-                    data = snap5.val();
+                    ref = database.ref(`${path}/nextSessionPlan`);
+                    snap = await ref.once('value');
+                    data = snap.val();
                     if (!data) {
-                        data = { title: 'New Next Session Plan', content: '<p>Start planning the next session here...</p>', date: new Date().toLocaleDateString() };
+                        data = { title: 'New Next Session Plan', content: '', date: new Date().toLocaleDateString() };
                         isNewDocument = true;
                     } else {
                         isNewDocument = false;
@@ -546,9 +633,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     throw new Error('Unknown document type: ' + docType);
             }
 
-            if (!data) {
-                throw new Error('Document data not found');
-            }
+            if (!data) throw new Error('Document data not found');
 
             documentData = data;
 
@@ -558,35 +643,44 @@ document.addEventListener('DOMContentLoaded', async function() {
                 treatment: 'Treatment Plan',
                 session: 'Session Note',
                 report: 'Clinical Report',
+                progress: 'Progress Note',
+                discharge: 'Discharge Summary',
                 nextsession: 'Next Session Plan'
             };
             const label = typeLabels[docType] || 'Document';
 
-            if (docTitle) docTitle.textContent = `${label} Editor`;
-            if (docFileNameSpan) docFileNameSpan.textContent = data.title || `${label} - ${new Date().toLocaleDateString()}`;
-            if (docDateSpan) docDateSpan.textContent = data.date || new Date().toLocaleDateString();
-            if (docTypeSpan) docTypeSpan.textContent = label;
-            if (docLastEditedSpan) docLastEditedSpan.textContent = data.lastEdited || data.date || '-';
+            docTitle.textContent = `${label} Editor`;
+            docFileNameSpan.textContent = data.title || `${label} - ${new Date().toLocaleDateString()}`;
+            docDateSpan.textContent = data.date || new Date().toLocaleDateString();
+            docTypeSpan.textContent = label;
+            docLastEditedSpan.textContent = data.lastEdited || data.date || '-';
 
-            // Load content with proper markdown conversion
-            let content = data.content || data.resultsHtml || data.results || '';
-            
-            // If content is plain text with markdown, convert it
-            if (content && !content.trim().startsWith('<')) {
+            // Determine content field (varies by type)
+            let content = '';
+            if (docType === 'session') {
+                // Sessions store content in 'notes' or 'content' field
+                content = data.notes || data.content || '';
+            } else {
+                content = data.content || data.notes || '';
+            }
+
+            // If empty, show placeholder
+            if (!content || content.trim() === '') {
+                if (isNewDocument) {
+                    content = '<p>Start writing here...</p>';
+                } else {
+                    content = '<p>No content available</p>';
+                }
+            } else if (!content.trim().startsWith('<')) {
+                // Convert plain text/markdown to HTML
                 content = markdownToHtml(content);
             }
-            
-            // If still empty or just whitespace
-            if (!content || content.trim() === '') {
-                content = '<p>No content available</p>';
-            }
-            
+
             editor.innerHTML = content;
             updateWordAndCharCount();
 
-            // Show edit mode
+            // Enable editing
             setEditorReadOnly(false);
-            publicToggleContainer.style.display = 'none';
 
         } catch (error) {
             console.error('Load error:', error);
@@ -596,96 +690,103 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // =========================================================================
-    // Regenerate with AI
+    // Regenerate with AI (using inline instructions)
     // =========================================================================
-    async function regenerateDocument(instructions) {
-        if (!currentUser) {
-            showToast('Please log in to regenerate', 'error');
-            return;
-        }
-        if (!currentIsOwner) {
+    async function regenerateDocument() {
+        if (!currentUser || !currentIsOwner) {
             showToast('You cannot edit a shared document.', 'error');
             return;
         }
 
-        // Collect context from patient data if available
+        const instructions = regenerateInstructions?.value?.trim();
+        if (!instructions) {
+            showToast('Please enter specific regeneration instructions in the text field above.', 'warning');
+            regenerateInstructions?.focus();
+            return;
+        }
+
         let patientData = null;
         try {
             const snap = await database.ref(`patients/${currentUser.uid}/${docId}`).once('value');
             patientData = snap.val();
-        } catch (e) {}
+        } catch (e) {
+            console.error('Could not fetch patient data:', e);
+        }
 
         if (!patientData) {
             showToast('Patient data not found', 'error');
             return;
         }
 
-        // Build context
         const context = {
             name: patientData.name || 'Patient',
             diagnosis: patientData.primaryDx || 'Unknown',
             chiefComplaint: patientData.chiefComplaint || '',
             goals: patientData.goals || '',
             category: patientData.category || '',
-            department: patientData.department || '',
+            profession: patientData.profession || patientData.department || '',
+            state: patientData.state || '',
             assessment: patientData.assessment || '',
             currentContent: editor.innerText || '',
-            instructions: instructions || ''
+            instructions: instructions
         };
 
-        // Build system and user prompts based on docType
-        let systemPrompt = '';
-        let userPrompt = '';
-
+        // Build prompts with human touch
         const typePrompts = {
             summary: {
-                system: `You are a medical writer. Generate a concise, professional summary report for a ${context.category} patient (${context.department}). Include: patient overview, diagnosis, key findings, progress, and recommendations. Use ONLY plain text with minimal formatting. Do NOT use markdown symbols like ###, **, etc. Use simple line breaks for structure.`,
-                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nGoals: ${context.goals}\nAssessment: ${context.assessment || 'None provided'}\n\nCurrent summary: ${context.currentContent}\n\nInstructions: ${context.instructions || 'Improve and expand this summary.'}`
+                system: `You are an experienced medical writer creating a clinical summary. Write in a clear, natural, and professional tone—as if you're explaining the case to a trusted colleague. Use clinical terminology but keep the language flowing and human. Avoid robotic phrasing, bullet lists, or markdown. Write in complete sentences and well-structured paragraphs.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\nAssessment: ${context.assessment || 'Not provided'}\n\nCurrent document content:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this summary report according to the instructions above.`
             },
             treatment: {
-                system: `You are a rehabilitation specialist. Create a concise, professional treatment plan for a ${context.category} patient (${context.department}). Provide a clear, structured plan with actionable steps. Use ONLY plain text with minimal formatting. Do NOT use markdown symbols like ###, **, etc. Use simple line breaks for structure.`,
-                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nGoals: ${context.goals}\n\nCurrent plan: ${context.currentContent}\n\nInstructions: ${context.instructions || 'Improve this treatment plan.'}`
+                system: `You are a thoughtful rehabilitation specialist creating a treatment plan. Write in a natural, human tone as if you're sitting down with a colleague to discuss the patient's care. Include specific, actionable steps while keeping the language warm and professional. Avoid bullet lists and markdown—use flowing paragraphs with clear section breaks.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\n\nCurrent treatment plan:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this treatment plan according to the instructions above.`
             },
             session: {
-                system: `You are a rehabilitation specialist writing session notes for a ${context.category} patient. Write professional, detailed session notes. Use ONLY plain text with minimal formatting. Do NOT use markdown symbols like ###, **, etc. Use simple line breaks for structure.`,
-                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nGoals: ${context.goals}\n\nCurrent notes: ${context.currentContent}\n\nInstructions: ${context.instructions || 'Improve these session notes.'}`
+                system: `You are a rehabilitation clinician writing session notes. Document the session in a warm, professional, and human manner—as if you're recording observations for the care team. Keep clinical accuracy but sound like a real person wrote it. Use complete sentences and avoid robotic or overly terse language. Do not use markdown.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\n\nCurrent session notes:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate these session notes according to the instructions above.`
             },
             report: {
-                system: `You are a medical report writer. Generate a comprehensive, professional clinical report. Include: patient summary, clinical findings, diagnosis, treatment plan, and recommendations. Use ONLY plain text with minimal formatting. Do NOT use markdown symbols like ###, **, etc. Use simple line breaks for structure.`,
-                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nGoals: ${context.goals}\nAssessment: ${context.assessment || 'None provided'}\n\nCurrent report: ${context.currentContent}\n\nInstructions: ${context.instructions || 'Improve this report.'}`
+                system: `You are an experienced medical report writer. Create a comprehensive, professional clinical report that reads like a well-crafted narrative. Use natural language while maintaining clinical precision. Avoid robotic phrasing, bullet lists, and markdown. Write in clear paragraphs with logical flow and appropriate section headings in plain text.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\nAssessment: ${context.assessment || 'Not provided'}\n\nCurrent report:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this report according to the instructions above.`
+            },
+            progress: {
+                system: `You are a rehabilitation clinician writing a progress note. Document the patient's progress in a warm, natural, and professional tone—like you're updating a colleague. Include specific observations and clinical details while keeping the writing human and readable. Do not use markdown or bullet lists.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\n\nCurrent progress note:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this progress note according to the instructions above.`
+            },
+            discharge: {
+                system: `You are a senior clinician writing a discharge summary. Write in a clear, compassionate, and professional tone that summarizes the patient's entire journey. Use natural, flowing language while covering all necessary clinical details. Avoid robotic phrasing, bullet lists, and markdown. Think of this as the final narrative of the patient's care episode.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\nAssessment: ${context.assessment || 'Not provided'}\n\nCurrent discharge summary:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this discharge summary according to the instructions above.`
             },
             nextsession: {
-                system: `You are a rehabilitation specialist. Create a detailed plan for the next session for a ${context.category} patient. Include specific exercises, interventions, goals, and timeframes. Use ONLY plain text with minimal formatting. Do NOT use markdown symbols like ###, **, etc. Use simple line breaks for structure.`,
-                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nGoals: ${context.goals}\n\nCurrent plan: ${context.currentContent}\n\nInstructions: ${context.instructions || 'Create a comprehensive next session plan.'}`
+                system: `You are a rehabilitation specialist planning the next session. Write naturally and conversationally, as if you're providing guidance to a colleague who will run the session. Include specific activities, exercises, and goals while keeping the tone warm, encouraging, and professional. Use plain text paragraphs—no markdown or bullet lists.`,
+                user: `Patient: ${context.name}\nDiagnosis: ${context.diagnosis}\nChief Complaint: ${context.chiefComplaint}\nFunctional Goals: ${context.goals}\nCategory: ${context.category}\nProfession: ${context.profession}\nState: ${context.state}\n\nCurrent next session plan:\n${context.currentContent}\n\nSpecific regeneration instructions:\n${context.instructions}\n\nPlease regenerate this next session plan according to the instructions above.`
             }
         };
 
         const prompts = typePrompts[docType] || typePrompts.summary;
-        systemPrompt = prompts.system;
-        userPrompt = prompts.user;
+        const systemPrompt = prompts.system;
+        const userPrompt = prompts.user;
 
         showLoading('Regenerating document with AI…', 10);
-
         try {
-            updateLoadingProgress(30, 'Analyzing context…');
+            updateLoadingProgress(30, 'Analyzing patient context…');
             const response = await callDeepSeek(systemPrompt, userPrompt, 2000);
-
-            updateLoadingProgress(80, 'Updating document…');
-
-            // Convert the plain text response to HTML using our markdown converter
-            const newContent = markdownToHtml(response);
-            editor.innerHTML = newContent;
+            
+            updateLoadingProgress(80, 'Formatting document…');
+            const newHtml = markdownToHtml(response);
+            editor.innerHTML = newHtml;
             updateWordAndCharCount();
-
-            // Auto-save
+            
+            updateLoadingProgress(90, 'Saving changes…');
             await saveToFirebase();
-
+            
             updateLoadingProgress(100, 'Done!');
             setTimeout(() => {
                 hideLoading();
                 showToast('Document regenerated successfully!', 'success');
+                // Clear the instructions field
+                if (regenerateInstructions) regenerateInstructions.value = '';
             }, 500);
-
         } catch (error) {
             console.error('Regenerate error:', error);
             hideLoading();
@@ -697,44 +798,45 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Delete Document
     // =========================================================================
     async function deleteDocument() {
-        if (!currentUser || !docId) {
-            showToast('Cannot delete: missing information', 'error');
+        if (!currentUser || !docId || !currentIsOwner) {
+            showToast('Cannot delete: missing permission', 'error');
             return;
         }
-        if (!currentIsOwner) {
-            showToast('You cannot delete a shared document.', 'error');
-            return;
-        }
-
+        
         if (!confirm(`Are you sure you want to delete this ${docType || 'document'}? This action cannot be undone.`)) {
             return;
         }
 
         try {
             const path = `patients/${currentUser.uid}/${docId}`;
+            let ref, snap;
 
             switch (docType) {
                 case 'summary':
-                    const snap = await database.ref(`${path}/summaries`).once('value');
+                    ref = database.ref(`${path}/summaries`);
+                    snap = await ref.once('value');
                     let summaries = snap.val() || [];
                     if (docIndex !== null && docIndex < summaries.length) {
                         summaries.splice(docIndex, 1);
-                        await database.ref(`${path}/summaries`).set(summaries);
+                        await ref.set(summaries);
                     }
                     break;
 
                 case 'treatment':
-                    const snap2 = await database.ref(`${path}/treatmentPlans`).once('value');
-                    let plans = snap2.val() || [];
+                    ref = database.ref(`${path}/treatmentPlans`);
+                    snap = await ref.once('value');
+                    let plans = snap.val() || [];
                     if (docIndex !== null && docIndex < plans.length) {
                         plans.splice(docIndex, 1);
-                        await database.ref(`${path}/treatmentPlans`).set(plans);
+                        await ref.set(plans);
                     }
                     break;
 
                 case 'session':
                     if (sessionId) {
                         await database.ref(`${path}/sessions/${sessionId}`).remove();
+                        
+                        // Update session count
                         const countRef = database.ref(`${path}/sessionCount`);
                         const countSnap = await countRef.once('value');
                         const count = Math.max(0, (countSnap.val() || 1) - 1);
@@ -743,11 +845,30 @@ document.addEventListener('DOMContentLoaded', async function() {
                     break;
 
                 case 'report':
-                    if (reportId) {
-                        const snap4 = await database.ref(`${path}/reports`).once('value');
-                        let reports = snap4.val() || [];
-                        reports = reports.filter(r => r.id !== reportId);
-                        await database.ref(`${path}/reports`).set(reports);
+                    ref = database.ref(`${path}/reports`);
+                    snap = await ref.once('value');
+                    let reports = snap.val() || [];
+                    reports = reports.filter(r => r.id !== reportId);
+                    await ref.set(reports);
+                    break;
+
+                case 'progress':
+                    ref = database.ref(`${path}/progressNotes`);
+                    snap = await ref.once('value');
+                    let notes = snap.val() || [];
+                    if (docIndex !== null && docIndex < notes.length) {
+                        notes.splice(docIndex, 1);
+                        await ref.set(notes);
+                    }
+                    break;
+
+                case 'discharge':
+                    ref = database.ref(`${path}/dischargeSummaries`);
+                    snap = await ref.once('value');
+                    let dischargeSummaries = snap.val() || [];
+                    if (docIndex !== null && docIndex < dischargeSummaries.length) {
+                        dischargeSummaries.splice(docIndex, 1);
+                        await ref.set(dischargeSummaries);
                     }
                     break;
 
@@ -783,10 +904,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         align-items: center; justify-content: center;
     `;
     loadingOverlay.innerHTML = `
-        <div class="loading-content" style="background:var(--card-bg);backdrop-filter:blur(12px);border-radius:1.5rem;padding:2rem 3rem;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-            <div class="loading-spinner" style="width:48px;height:48px;border:4px solid var(--border-light);border-top-color:var(--accent);border-right-color:var(--accent);border-radius:50%;margin:0 auto 1rem;animation:spin 0.8s linear infinite;"></div>
+        <div style="background:var(--card-bg);backdrop-filter:blur(12px);border-radius:1.5rem;padding:2rem 3rem;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="width:48px;height:48px;border:4px solid var(--border-light);border-top-color:var(--accent);border-right-color:var(--accent);border-radius:50%;margin:0 auto 1rem;animation:spin 0.8s linear infinite;"></div>
             <p id="aiLoadingMessage" style="color:var(--text-primary);font-size:1rem;font-weight:600;margin-bottom:0.5rem;">Generating with AI…</p>
-            <div class="loading-progress-bar" style="height:4px;background:var(--border-light);border-radius:2px;overflow:hidden;margin-top:0.8rem;">
+            <div style="height:4px;background:var(--border-light);border-radius:2px;overflow:hidden;margin-top:0.8rem;">
                 <div id="aiLoadingProgress" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-light));border-radius:2px;transition:width 0.3s ease;width:0%;"></div>
             </div>
         </div>
@@ -794,23 +915,28 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.body.appendChild(loadingOverlay);
 
     function showLoading(message = 'Generating with AI…', progress = 0) {
-        document.getElementById('aiLoadingMessage').textContent = message;
-        document.getElementById('aiLoadingProgress').style.width = progress + '%';
+        const msgEl = document.getElementById('aiLoadingMessage');
+        const progressEl = document.getElementById('aiLoadingProgress');
+        if (msgEl) msgEl.textContent = message;
+        if (progressEl) progressEl.style.width = progress + '%';
         loadingOverlay.style.display = 'flex';
     }
 
     function updateLoadingProgress(progress, message) {
-        if (message) document.getElementById('aiLoadingMessage').textContent = message;
-        document.getElementById('aiLoadingProgress').style.width = Math.min(progress, 100) + '%';
+        const msgEl = document.getElementById('aiLoadingMessage');
+        const progressEl = document.getElementById('aiLoadingProgress');
+        if (message && msgEl) msgEl.textContent = message;
+        if (progressEl) progressEl.style.width = Math.min(progress, 100) + '%';
     }
 
     function hideLoading() {
         loadingOverlay.style.display = 'none';
-        document.getElementById('aiLoadingProgress').style.width = '0%';
+        const progressEl = document.getElementById('aiLoadingProgress');
+        if (progressEl) progressEl.style.width = '0%';
     }
 
     // =========================================================================
-    // Formatting Functions
+    // Formatting Commands
     // =========================================================================
     function execCommand(command, value = null) {
         if (!currentIsOwner) {
@@ -820,10 +946,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         document.execCommand(command, false, value);
         editor.focus();
         updateWordAndCharCount();
-        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        
+        // Auto-save after formatting changes
+        clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => saveToFirebase(), 3000);
     }
 
+    // Bind formatting buttons
     document.querySelectorAll('.format-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const command = btn.dataset.command;
@@ -835,22 +964,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             } else if (command === 'undo') {
                 document.execCommand('undo');
                 editor.focus();
+                updateWordAndCharCount();
             } else if (command === 'redo') {
                 document.execCommand('redo');
                 editor.focus();
+                updateWordAndCharCount();
             } else if (command === 'strikeThrough') {
-                document.execCommand('strikeThrough', false, null);
+                execCommand('strikeThrough');
             } else if (command === 'indent') {
-                document.execCommand('indent', false, null);
+                execCommand('indent');
             } else if (command === 'outdent') {
-                document.execCommand('outdent', false, null);
+                execCommand('outdent');
             } else {
                 execCommand(command);
             }
-            updateWordAndCharCount();
         });
     });
 
+    // Bind font/format selects
     if (fontFamilySelect) {
         fontFamilySelect.addEventListener('change', () => {
             execCommand('fontName', fontFamilySelect.value);
@@ -869,21 +1000,44 @@ document.addEventListener('DOMContentLoaded', async function() {
     editor.addEventListener('input', () => {
         if (!currentIsOwner) return;
         updateWordAndCharCount();
-        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        clearTimeout(autoSaveTimer);
         autoSaveTimer = setTimeout(() => saveToFirebase(), 3000);
         updateSaveStatus('Editing...');
     });
 
+    // Keyboard shortcuts
     editor.addEventListener('keydown', (e) => {
+        // Ctrl+S / Cmd+S to save
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();
-            if (currentIsOwner) saveToFirebase();
-            else showToast('Read-only mode: cannot save', 'error', 1500);
+            if (currentIsOwner) {
+                saveToFirebase();
+            } else {
+                showToast('Read-only mode: cannot save', 'error', 1500);
+            }
+        }
+        
+        // Ctrl+B for bold
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+            e.preventDefault();
+            execCommand('bold');
+        }
+        
+        // Ctrl+I for italic
+        if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+            e.preventDefault();
+            execCommand('italic');
+        }
+        
+        // Ctrl+U for underline
+        if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+            e.preventDefault();
+            execCommand('underline');
         }
     });
 
     // =========================================================================
-    // Action Handlers
+    // Action Button Handlers
     // =========================================================================
 
     // Share
@@ -893,8 +1047,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (docIndex !== null) shareUrl += `&index=${docIndex}`;
             if (sessionId) shareUrl += `&sessionId=${sessionId}`;
             if (reportId) shareUrl += `&reportId=${reportId}`;
-            shareLink.value = shareUrl;
-            shareModal.classList.add('show');
+            if (shareLink) shareLink.value = shareUrl;
+            if (shareModal) shareModal.classList.add('show');
         });
     }
 
@@ -906,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 await navigator.clipboard.writeText(text);
                 showToast('Content copied to clipboard', 'success');
             } catch (err) {
-                showToast('Failed to copy', 'error');
+                showToast('Failed to copy content', 'error');
             }
         });
     }
@@ -918,14 +1072,19 @@ document.addEventListener('DOMContentLoaded', async function() {
                 showToast('Word export library not loaded', 'error');
                 return;
             }
-            const original = downloadBtn.innerHTML;
-            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            
+            const originalHTML = downloadBtn.innerHTML;
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Generating...</span>';
+            
             try {
                 const content = editor.innerText;
                 const paragraphs = content.split('\n').map(line => {
-                    if (line.trim() === '') return new docx.Paragraph({ text: '' });
+                    if (line.trim() === '') {
+                        return new docx.Paragraph({ text: '' });
+                    }
                     return new docx.Paragraph({ text: line });
                 });
+                
                 const doc = new docx.Document({
                     sections: [{
                         properties: {},
@@ -942,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                         ]
                     }]
                 });
+                
                 const blob = await docx.Packer.toBlob(doc);
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -954,7 +1114,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 console.error('Download error:', err);
                 showToast('Export failed', 'error');
             } finally {
-                downloadBtn.innerHTML = original;
+                downloadBtn.innerHTML = originalHTML;
             }
         });
     }
@@ -966,8 +1126,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                 showToast('PDF library not loaded', 'error');
                 return;
             }
-            const original = pdfBtn.innerHTML;
-            pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+            
+            const originalHTML = pdfBtn.innerHTML;
+            pdfBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Generating PDF...</span>';
+            
             const element = document.getElementById('editorContent');
             const opt = {
                 margin: [0.5, 0.5, 0.5, 0.5],
@@ -976,11 +1138,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                 html2canvas: { scale: 2, letterRendering: true },
                 jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
             };
+            
             html2pdf().set(opt).from(element).save()
                 .then(() => showToast('PDF generated successfully', 'success'))
-                .catch((err) => { console.error('PDF error:', err);
-                    showToast('PDF generation failed', 'error'); })
-                .finally(() => { pdfBtn.innerHTML = original; });
+                .catch((err) => {
+                    console.error('PDF error:', err);
+                    showToast('PDF generation failed', 'error');
+                })
+                .finally(() => {
+                    pdfBtn.innerHTML = originalHTML;
+                });
         });
     }
 
@@ -991,13 +1158,32 @@ document.addEventListener('DOMContentLoaded', async function() {
             printWindow.document.write(`
                 <!DOCTYPE html>
                 <html>
-                <head><title>rehablix Document</title>
-                <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; padding: 2rem; max-width: 800px; margin: 0 auto; }
-                    h1 { color: #00695c; border-bottom: 2px solid #00695c; padding-bottom: 0.5rem; }
-                    h2 { color: #00695c; margin-top: 1.5rem; }
-                    @media print { body { margin: 0; padding: 0.5in; } }
-                </style>
+                <head>
+                    <title>${documentData?.title || 'rehablix Document'}</title>
+                    <style>
+                        body { 
+                            font-family: Arial, sans-serif; 
+                            line-height: 1.6; 
+                            padding: 2rem; 
+                            max-width: 800px; 
+                            margin: 0 auto; 
+                        }
+                        h1 { 
+                            color: #00695c; 
+                            border-bottom: 2px solid #00695c; 
+                            padding-bottom: 0.5rem; 
+                        }
+                        h2 { 
+                            color: #00695c; 
+                            margin-top: 1.5rem; 
+                        }
+                        @media print { 
+                            body { 
+                                margin: 0; 
+                                padding: 0.5in; 
+                            } 
+                        }
+                    </style>
                 </head>
                 <body>
                     <h1>${documentData?.title || 'rehablix Document'}</h1>
@@ -1017,8 +1203,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Save Edit
     if (saveEditBtn) {
         saveEditBtn.addEventListener('click', () => {
-            if (currentIsOwner) saveToFirebase();
-            else showToast('Read-only mode: cannot save', 'error');
+            if (currentIsOwner) {
+                saveToFirebase();
+            } else {
+                showToast('Read-only mode: cannot save', 'error');
+            }
         });
     }
 
@@ -1029,36 +1218,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 showToast('Read-only mode: cannot regenerate', 'error');
                 return;
             }
-            regenerateInstructions.value = '';
-            regenerateModal.style.display = 'flex';
-        });
-    }
-
-    // Close Regenerate Modal
-    if (closeRegenerateModal) {
-        closeRegenerateModal.addEventListener('click', () => {
-            regenerateModal.style.display = 'none';
-        });
-    }
-
-    if (cancelRegenerate) {
-        cancelRegenerate.addEventListener('click', () => {
-            regenerateModal.style.display = 'none';
-        });
-    }
-
-    if (regenerateModal) {
-        regenerateModal.addEventListener('click', (e) => {
-            if (e.target === regenerateModal) regenerateModal.style.display = 'none';
-        });
-    }
-
-    // Confirm Regenerate
-    if (confirmRegenerate) {
-        confirmRegenerate.addEventListener('click', async () => {
-            const instructions = regenerateInstructions.value.trim();
-            regenerateModal.style.display = 'none';
-            await regenerateDocument(instructions);
+            regenerateDocument();
         });
     }
 
@@ -1078,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Share Modal Handlers
     // =========================================================================
     function closeShareModal() {
-        shareModal.classList.remove('show');
+        if (shareModal) shareModal.classList.remove('show');
     }
 
     document.querySelectorAll('.share-close, .modal-close').forEach(btn => {
@@ -1094,7 +1254,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (copyLinkBtn) {
         copyLinkBtn.addEventListener('click', async () => {
             try {
-                await navigator.clipboard.writeText(shareLink.value);
+                await navigator.clipboard.writeText(shareLink?.value || '');
                 showToast('Link copied to clipboard', 'success');
             } catch (err) {
                 showToast('Failed to copy link', 'error');
@@ -1105,21 +1265,21 @@ document.addEventListener('DOMContentLoaded', async function() {
     if (shareEmailBtn) {
         shareEmailBtn.addEventListener('click', () => {
             const subject = encodeURIComponent(`rehablix Document: ${documentData?.title || 'Document'}`);
-            const body = encodeURIComponent(`Check out this document: ${shareLink.value}`);
+            const body = encodeURIComponent(`Check out this document: ${shareLink?.value || ''}`);
             window.location.href = `mailto:?subject=${subject}&body=${body}`;
         });
     }
 
     if (shareWhatsAppBtn) {
         shareWhatsAppBtn.addEventListener('click', () => {
-            const text = encodeURIComponent(`Check out this rehablix document: ${shareLink.value}`);
+            const text = encodeURIComponent(`Check out this rehablix document: ${shareLink?.value || ''}`);
             window.open(`https://wa.me/?text=${text}`, '_blank');
         });
     }
 
     if (shareTwitterBtn) {
         shareTwitterBtn.addEventListener('click', () => {
-            const text = encodeURIComponent(`Check out this rehablix document: ${shareLink.value}`);
+            const text = encodeURIComponent(`Check out this rehablix document: ${shareLink?.value || ''}`);
             window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank');
         });
     }
@@ -1140,7 +1300,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     // =========================================================================
     firebase.auth().onAuthStateChanged(async (user) => {
         currentUser = user;
-        await fetchTokens();
-        await loadDocument();
+        if (user) {
+            await fetchTokens();
+            await loadDocument();
+        } else {
+            editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> Please log in to access documents.</div>';
+            showToast('Please log in to access documents', 'error');
+        }
     });
 });
