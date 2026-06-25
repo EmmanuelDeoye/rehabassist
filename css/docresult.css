@@ -148,6 +148,36 @@
     color: #dc2626;
 }
 
+
+/* ===== Regenerate Inline Input ===== */
+.regenerate-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.regenerate-input {
+    padding: 0.45rem 0.8rem;
+    border: 1px solid var(--border-light);
+    border-radius: 2rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    width: 220px;
+    transition: border-color 0.2s;
+}
+
+.regenerate-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.regenerate-input::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.8;
+}
+
 /* ===== Formatting Toolbar ===== */
 .formatting-toolbar {
     display: flex;
