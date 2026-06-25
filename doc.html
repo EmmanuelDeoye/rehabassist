@@ -210,31 +210,37 @@
                                 <div class="form-group"><label class="form-label">Category (Specialty)</label>
                                     <select class="form-select" id="intakeCategory">
                                         <option value="">Select</option>
-                                        <option value="Physiotherapy">Physiotherapy</option>
-                                        <option value="Occupational Therapy">Occupational Therapy</option>
-                                        <option value="Speech Therapy">Speech Therapy</option>
-                                        <option value="Psychology">Psychology</option>
-                                        <option value="Orthopaedics">Orthopaedics</option>
-                                        <option value="Neurology">Neurology</option>
-                                        <option value="Paediatrics">Paediatrics</option>
                                         <option value="Psychiatry">Psychiatry</option>
-                                        <option value="General Medicine">General Medicine</option>
+                                        <option value="Neurology">Neurology</option>
+                                        <option value="Orthopaedics">Orthopaedics</option>
+                                        <option value="Paediatrics">Paediatrics</option>
+                                        <option value="Other">Other</option>
                                     </select>
                                 </div>
-                                <div class="form-group"><label class="form-label">Department</label>
-                                    <select class="form-select" id="intakeDepartment">
+                                <div class="form-group"><label class="form-label">Profession</label>
+                                    <select class="form-select" id="intakeProfession">
                                         <option value="">Select</option>
-                                        <option value="Outpatient">Outpatient</option>
-                                        <option value="Inpatient">Inpatient</option>
-                                        <option value="Home Service">Home Service</option>
-                                        <option value="Telehealth">Telehealth</option>
+                                        <option value="Occupational Therapy">Occupational Therapy</option>
+                                        <option value="Physiotherapy">Physiotherapy</option>
+                                        <option value="Consultant">Consultant</option>
+                                        <option value="Registrar">Registrar</option>
+                                        <option value="Nurse">Nurse</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="form-row">
+                                <div class="form-group"><label class="form-label">State</label>
+                                    <select class="form-select" id="intakeState">
+                                        <option value="">Select</option>
+                                        <option value="Inpatient">Inpatient</option>
+                                        <option value="Outpatient">Outpatient</option>
+                                        <option value="Home Service">Home Service</option>
+                                        <option value="Telehealth">Telehealth</option>
+                                    </select>
+                                </div>
                                 <div class="form-group"><label class="form-label">Referring Physician</label><input class="form-input" id="intakeReferring" placeholder="Dr. Name" /></div>
-                                <div class="form-group"><label class="form-label">Insurance</label><input class="form-input" id="intakeInsurance" placeholder="Provider" /></div>
                             </div>
+                            <div class="form-group"><label class="form-label">Insurance</label><input class="form-input" id="intakeInsurance" placeholder="Provider" /></div>
                             <div class="form-group"><label class="form-label">Functional Goals</label><textarea class="form-textarea" id="intakeGoals" rows="2" placeholder="Patient's goals…"></textarea></div>
                         </div>
                     </div>
@@ -275,7 +281,8 @@
                             <div class="patient-meta" id="patientHeroMeta">
                                 <span class="patient-meta-item">Age <strong id="patientHeroAge">—</strong></span>
                                 <span class="patient-meta-item">Category <strong id="patientHeroCategory">—</strong></span>
-                                <span class="patient-meta-item">Dept <strong id="patientHeroDept">—</strong></span>
+                                <span class="patient-meta-item">Profession <strong id="patientHeroProfession">—</strong></span>
+                                <span class="patient-meta-item">State <strong id="patientHeroState">—</strong></span>
                                 <span class="patient-meta-item">Sessions <strong id="patientHeroSession">0</strong></span>
                                 <span class="patient-meta-item">Status <span class="status-badge status-active" id="patientHeroStatus">Active</span></span>
                             </div>
@@ -295,7 +302,7 @@
                         <div class="emr-tab" data-tab="sessions">Sessions</div>
                         <div class="emr-tab" data-tab="nextsession">Next Session</div>
                         <div class="emr-tab" data-tab="progress">Progress</div>
-                        <div class="emr-tab" data-tab="reports">Reports</div>
+                        <div class="emr-tab" data-tab="discharge">Discharge Summary</div>
                     </div>
 
                     <!-- Tab Content -->
@@ -385,13 +392,16 @@
                             </div>
                         </div>
 
-                        <!-- Reports (historical) -->
-                        <div class="patient-tab-pane" data-pane="reports">
+                        <!-- Discharge Summary -->
+                        <div class="patient-tab-pane" data-pane="discharge">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                                <div><div style="font-weight:600;font-size:14px;">Saved Reports</div></div>
-                                <button class="btn btn-amber" id="paneReportsNew"><i class="bx bx-magic"></i> Generate Report</button>
+                                <div><div style="font-weight:600;font-size:14px;">Discharge Summary</div></div>
+                                <div style="display:flex;gap:0.5rem;">
+                                    <button class="btn btn-amber" id="paneDischargeNew"><i class="bx bx-magic"></i> Generate Discharge Summary</button>
+                                    <button class="btn btn-danger" id="dischargePatientBtn"><i class="bx bx-exit"></i> Discharge Patient</button>
+                                </div>
                             </div>
-                            <div id="paneReportsList">Loading…</div>
+                            <div id="paneDischargeList">Loading…</div>
                         </div>
 
                     </div>
