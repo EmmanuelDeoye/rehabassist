@@ -160,7 +160,240 @@ function initializeAuth() {
     return 'Something went wrong. Please try again.';
   }
 
-  // Update hero title based on auth state
+  // ==============================================================
+  // USER VISIT TRACKING
+  // ==============================================================
+  
+  /**
+   * Records a user's visit with timestamp and page URL
+   * @param {string} userId - The Firebase user ID
+   * @param {string} email - User's email (for fallback)
+   * @param {string} pageUrl - The current page URL
+   */
+  function recordUserVisit(userId, email, pageUrl) {
+    if (!userId) return;
+    
+    const now = Date.now();
+    const visitData = {
+      timestamp: now,
+      date: new Date().toISOString(),
+      page: pageUrl || window.location.pathname,
+      userAgent: navigator.userAgent.substring(0, 200) // Truncate to avoid storage limits
+    };
+    
+    // Use a push operation to add to visits array (keeps history)
+    const visitRef = database.ref(`users/${userId}/visits`).push();
+    visitRef.set(visitData)
+      .then(() => {
+        console.log('✅ Visit recorded for user:', email);
+      })
+      .catch((error) => {
+        console.error('❌ Error recording visit:', error);
+      });
+    
+    // Also update a "lastVisit" field for quick access
+    const lastVisitRef = database.ref(`users/${userId}/lastVisit`);
+    lastVisitRef.set({
+      timestamp: now,
+      date: new Date().toISOString(),
+      page: pageUrl || window.location.pathname
+    }).catch((error) => {
+      console.error('❌ Error updating lastVisit:', error);
+    });
+    
+    // Update last page URL
+    const lastPageRef = database.ref(`users/${userId}/lastPage`);
+    lastPageRef.set({
+      url: pageUrl || window.location.href,
+      timestamp: now,
+      date: new Date().toISOString()
+    }).catch((error) => {
+      console.error('❌ Error updating lastPage:', error);
+    });
+  }
+
+  /**
+   * Records a page view for the current user
+   * This should be called on every page navigation
+   */
+  function recordPageView() {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    const pageUrl = window.location.href;
+    const pagePath = window.location.pathname;
+    
+    // Record as a page view (lighter than full visit)
+    const pageViewRef = database.ref(`users/${user.uid}/pageViews`).push();
+    pageViewRef.set({
+      timestamp: Date.now(),
+      date: new Date().toISOString(),
+      page: pagePath,
+      url: pageUrl,
+      referrer: document.referrer || ''
+    }).catch((error) => {
+      console.error('❌ Error recording page view:', error);
+    });
+    
+    // Also update last page
+    database.ref(`users/${user.uid}/lastPage`).set({
+      url: pageUrl,
+      page: pagePath,
+      timestamp: Date.now(),
+      date: new Date().toISOString()
+    }).catch((error) => {
+      console.error('❌ Error updating lastPage:', error);
+    });
+  }
+
+  // ==============================================================
+  // ANONYMOUS VISIT TRACKING
+  // ==============================================================
+  
+  /**
+   * Records a visit from an anonymous (non-logged-in) user
+   * Uses a combination of localStorage and session data to track unique visitors
+   */
+  function recordAnonymousVisit() {
+    try {
+      // Generate or retrieve anonymous visitor ID
+      let visitorId = localStorage.getItem('rehab_visitor_id');
+      if (!visitorId) {
+        visitorId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('rehab_visitor_id', visitorId);
+      }
+
+      // Check if we've already recorded a visit for this session
+      const sessionKey = 'rehab_visit_' + visitorId;
+      const lastVisitTime = sessionStorage.getItem(sessionKey);
+      const now = Date.now();
+      
+      // Only record if more than 30 minutes have passed since last visit in this session
+      // This prevents counting every page reload as a new visit
+      const shouldRecord = !lastVisitTime || (now - parseInt(lastVisitTime) > 30 * 60 * 1000);
+      
+      if (shouldRecord) {
+        // Update session storage
+        sessionStorage.setItem(sessionKey, now.toString());
+        
+        // Build visit data
+        const visitData = {
+          timestamp: now,
+          date: new Date().toISOString(),
+          page: window.location.pathname,
+          url: window.location.href,
+          referrer: document.referrer || 'direct',
+          userAgent: navigator.userAgent.substring(0, 200),
+          visitorId: visitorId,
+          isAnonymous: true,
+          screenSize: `${window.innerWidth}x${window.innerHeight}`,
+          language: navigator.language || 'unknown'
+        };
+
+        // Store in Firebase under anonymous-visits
+        const visitRef = database.ref('anonymous-visits').push();
+        visitRef.set(visitData)
+          .then(() => {
+            console.log('✅ Anonymous visit recorded:', visitorId);
+          })
+          .catch((error) => {
+            console.error('❌ Error recording anonymous visit:', error);
+          });
+
+        // Also update daily stats for quick access
+        updateDailyAnonymousStats(now);
+      }
+    } catch (error) {
+      console.error('❌ Error in anonymous visit tracking:', error);
+    }
+  }
+
+  /**
+   * Updates daily anonymous visit statistics
+   * @param {number} timestamp - The current timestamp
+   */
+  function updateDailyAnonymousStats(timestamp) {
+    try {
+      const date = new Date(timestamp);
+      const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Get or create daily stats
+      const statsRef = database.ref(`anonymous-stats/${dateKey}`);
+      statsRef.transaction((currentData) => {
+        if (currentData === null) {
+          return {
+            count: 1,
+            date: dateKey,
+            firstVisit: timestamp,
+            lastVisit: timestamp,
+            pages: {}
+          };
+        }
+        
+        // Increment count
+        currentData.count = (currentData.count || 0) + 1;
+        currentData.lastVisit = timestamp;
+        
+        // Track page visits
+        const page = window.location.pathname;
+        if (!currentData.pages) currentData.pages = {};
+        if (!currentData.pages[page]) {
+          currentData.pages[page] = 0;
+        }
+        currentData.pages[page] = (currentData.pages[page] || 0) + 1;
+        
+        return currentData;
+      }).catch((error) => {
+        console.error('❌ Error updating daily stats:', error);
+      });
+    } catch (error) {
+      console.error('❌ Error in daily stats update:', error);
+    }
+  }
+
+  /**
+   * Gets anonymous visitor count for the current day
+   * @returns {Promise<number>} - Number of anonymous visits today
+   */
+  async function getAnonymousVisitsToday() {
+    try {
+      const dateKey = new Date().toISOString().split('T')[0];
+      const snapshot = await database.ref(`anonymous-stats/${dateKey}/count`).once('value');
+      return snapshot.val() || 0;
+    } catch (error) {
+      console.error('❌ Error getting anonymous visits:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Gets total anonymous visitor count (all time)
+   * @returns {Promise<number>} - Total anonymous visits
+   */
+  async function getTotalAnonymousVisits() {
+    try {
+      const snapshot = await database.ref('anonymous-visits').once('value');
+      const data = snapshot.val();
+      if (!data) return 0;
+      
+      // Count all anonymous visits
+      let count = 0;
+      for (const key in data) {
+        if (data[key] && data[key].isAnonymous !== false) {
+          count++;
+        }
+      }
+      return count;
+    } catch (error) {
+      console.error('❌ Error getting total anonymous visits:', error);
+      return 0;
+    }
+  }
+
+  // ==============================================================
+  // UPDATE HERO TITLE
+  // ==============================================================
+  
   function updateHeroTitle(user) {
     if (!heroTitle) return;
     
@@ -191,7 +424,10 @@ function initializeAuth() {
     }
   }
 
-  // Update UI based on auth state
+  // ==============================================================
+  // UPDATE AUTH UI
+  // ==============================================================
+  
   function updateAuthUI(user) {
     if (!loginBtn || !profileDropdown) return;
     
@@ -224,7 +460,10 @@ function initializeAuth() {
     }
   }
 
-  // ============= GOOGLE SIGN-IN =============
+  // ==============================================================
+  // GOOGLE SIGN-IN
+  // ==============================================================
+  
   if (googleSignInBtn) {
     googleSignInBtn.addEventListener('click', async () => {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -257,6 +496,9 @@ function initializeAuth() {
           showToast(`👋 Welcome back, ${displayName}!`);
         }
         
+        // Record visit after successful login
+        recordUserVisit(user.uid, user.email, window.location.pathname);
+        
         closeModal();
       } catch (error) {
         console.error('Google sign-in error:', error);
@@ -265,20 +507,77 @@ function initializeAuth() {
     });
   }
 
-  // Listen for auth state changes
+  // ==============================================================
+  // AUTH STATE LISTENER
+  // ==============================================================
+  
   auth.onAuthStateChanged((user) => {
     updateAuthUI(user);
-    // Show/hide the history navigation button based on authentication status
     updateHistoryButtonVisibility(user);
     
     if (user) {
       console.log('User logged in:', user.email);
+      
+      // Record visit when user is detected (on page load)
+      setTimeout(() => {
+        recordUserVisit(user.uid, user.email, window.location.pathname);
+      }, 500);
+      
+      // Also record a page view
+      setTimeout(() => {
+        recordPageView();
+      }, 600);
+      
     } else {
       console.log('User logged out');
     }
   });
 
-  // Event Listeners
+  // ==============================================================
+  // PAGE VIEW TRACKING ON NAVIGATION
+  // ==============================================================
+  
+  // Track page views when the page loads (for SPA-like behavior)
+  // This uses the History API to detect navigation
+  let lastPageUrl = window.location.href;
+  
+  function handlePageChange() {
+    const user = auth.currentUser;
+    if (user && window.location.href !== lastPageUrl) {
+      lastPageUrl = window.location.href;
+      recordPageView();
+      // Also record a visit (less frequent, but good for tracking)
+      recordUserVisit(user.uid, user.email, window.location.pathname);
+    }
+    
+    // Also record anonymous page view
+    recordAnonymousVisit();
+  }
+  
+  // Listen for popstate (back/forward navigation)
+  window.addEventListener('popstate', handlePageChange);
+  
+  // Override pushState and replaceState to detect SPA navigation
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  
+  history.pushState = function() {
+    originalPushState.apply(this, arguments);
+    handlePageChange();
+  };
+  
+  history.replaceState = function() {
+    originalReplaceState.apply(this, arguments);
+    handlePageChange();
+  };
+  
+  // Also listen for hash changes
+  window.addEventListener('hashchange', handlePageChange);
+
+  // ==============================================================
+  // EVENT LISTENERS
+  // ==============================================================
+  
   if (loginBtn) {
     loginBtn.addEventListener('click', () => {
       modal.classList.add('show');
@@ -332,6 +631,14 @@ function initializeAuth() {
     logoutMenuItem.addEventListener('click', async () => {
       if (dropdownMenu) dropdownMenu.classList.remove('show');
       try {
+        // Record logout time
+        const user = auth.currentUser;
+        if (user) {
+          await database.ref(`users/${user.uid}/lastLogout`).set({
+            timestamp: Date.now(),
+            date: new Date().toISOString()
+          });
+        }
         await auth.signOut();
         showToast('👋 Logged out successfully!');
       } catch (error) {
@@ -379,7 +686,10 @@ function initializeAuth() {
     }
   });
 
-  // LOGIN FORM HANDLER WITH TERMS VALIDATION
+  // ==============================================================
+  // LOGIN FORM HANDLER
+  // ==============================================================
+  
   if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -404,7 +714,12 @@ function initializeAuth() {
         }
         if (loginError) loginError.textContent = '';
         
-        await auth.signInWithEmailAndPassword(email, password);
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        // Record visit on login
+        recordUserVisit(user.uid, user.email, window.location.pathname);
+        
         closeModal();
         showToast(`👋 Welcome back!`);
         
@@ -420,7 +735,10 @@ function initializeAuth() {
     });
   }
 
-  // REGISTER FORM HANDLER WITH TERMS VALIDATION
+  // ==============================================================
+  // REGISTER FORM HANDLER
+  // ==============================================================
+  
   if (registerForm) {
     registerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -474,6 +792,9 @@ function initializeAuth() {
           provider: 'email'
         });
         
+        // Record first visit
+        recordUserVisit(user.uid, user.email, window.location.pathname);
+        
         closeModal();
         showWelcomeAnimation();
         
@@ -489,6 +810,10 @@ function initializeAuth() {
     });
   }
 
+  // ==============================================================
+  // FORGOT PASSWORD
+  // ==============================================================
+  
   if (forgotPassword) {
     forgotPassword.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -516,6 +841,29 @@ function initializeAuth() {
       document.body.style.overflow = '';
     });
   }
+
+  // ==============================================================
+  // ANONYMOUS VISIT TRACKING - INITIALIZATION
+  // ==============================================================
+  
+  // Record anonymous visit when page loads
+  setTimeout(() => {
+    recordAnonymousVisit();
+  }, 300);
+
+  // Also record on visibility change (when user comes back to tab)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // User returned to the page - record a visit
+      setTimeout(() => {
+        recordAnonymousVisit();
+      }, 500);
+    }
+  });
+
+  // Expose anonymous visit functions globally for debugging or dashboard use
+  window.getAnonymousVisitsToday = getAnonymousVisitsToday;
+  window.getTotalAnonymousVisits = getTotalAnonymousVisits;
 
   console.log('Auth.js initialization complete');
 }
