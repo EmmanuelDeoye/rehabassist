@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
-  
+
   <!-- Inline script to set theme before paint -->
   <script>
     (function() {
@@ -14,27 +14,103 @@
       } else if (stored === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
       } else {
-        // No preference saved or set to "system" → follow device setting
         document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
       }
     })();
   </script>
 
-  <!-- rest of head -->
-  <title>rehablix · AI tools for rehabilitation</title>
-  
+  <!-- ============ PRIMARY SEO ============ -->
+  <title>rehablix | AI Clinical Tools for Physiotherapists, OTs &amp; Rehab Students</title>
+  <meta name="description" content="rehablix is an AI clinical co-pilot for rehabilitation professionals and students. Generate assessment formats, analyze ROM and gait from video, transcribe clinical notes, and build academic projects — all in one platform.">
+  <meta name="keywords" content="rehabilitation AI tools, physiotherapy software, ROM analyzer, gait analysis AI, clinical documentation assistant, occupational therapy tools, physiotherapy students app, standardized assessment generator, MMSE, Berg Balance Scale">
+  <meta name="author" content="rehablix">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://rehablix.com/">
+
+  <!-- ============ OPEN GRAPH / FACEBOOK ============ -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://rehablix.com/">
+  <meta property="og:site_name" content="rehablix">
+  <meta property="og:title" content="rehablix | AI Clinical Tools for Rehab Professionals & Students">
+  <meta property="og:description" content="Assessment generation, Presentation maker, ROM & gait analysis, clinical documentation, and academic project tools — powered by AI, built for rehab professionals and students.">
+  <meta property="og:image" content="https://rehablix.com/assets/img/logo.png">
+  <meta property="og:locale" content="en_US">
+
+  <!-- ============ TWITTER CARD ============ -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="rehablix | AI Clinical Tools for Rehab Professionals & Students">
+  <meta name="twitter:description" content="Your clinical co-pilot: AI-powered ROM analysis, gait monitoring, documentation, and assessment tools for rehab pros and students.">
+  <meta name="twitter:image" content="https://rehablix.com/assets/img/logo.png">
+
+  <!-- ============ PWA / THEME ============ -->
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/assets/img/logo.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/img/logo.png">
+
+  <!-- ============ PERFORMANCE (helps Core Web Vitals -> SEO) ============ -->
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://js.paystack.co">
+  <link rel="preconnect" href="https://checkout.flutterwave.com">
+
+  <!-- ============ STRUCTURED DATA (JSON-LD) ============ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "rehablix",
+    "url": "https://rehablix.com/",
+    "applicationCategory": "HealthApplication",
+    "operatingSystem": "Web, iOS, Android (PWA)",
+    "description": "AI clinical co-pilot for rehabilitation professionals and students: assessment format generation, ROM and gait video analysis, clinical documentation, and academic project tools.",
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Free Plan",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      {
+        "@type": "Offer",
+        "name": "Student Plan"
+      },
+      {
+        "@type": "Offer",
+        "name": "Pro Plan"
+      }
+    ],
+    "audience": {
+      "@type": "Audience",
+      "audienceType": "Physiotherapists, Occupational Therapists, Rehabilitation Students, Clinical Researchers"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "url": "https://rehablix.com/",
+    "name": "rehablix",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://rehablix.com/?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/auth.css">
-  <link rel="manifest" href="/manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/service-worker.js');
-  }
-</script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service-worker.js');
+    }
+  </script>
 </head>
 <body>
   <nav class="navbar">
@@ -67,7 +143,7 @@
   <main>
     <header class="hero">
       <div class="hero-content">
-        <h1 id="heroTitle">Welcome to <span class="hero-accent">rehablix</span></h1>
+        <h1 id="heroTitle">AI Clinical Tools for Rehabilitation Professionals — <span class="hero-accent">rehablix</span></h1>
         <p class="hero-sub">Your clinical co-pilot, powered by AI</p>
       </div>
     </header>
@@ -75,18 +151,19 @@
     <!-- Search bar -->
     <section class="search-section">
       <div class="search-wrapper">
-        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="search" id="searchInput" class="search-bar" placeholder="Search tools by name or description…" aria-label="search tools">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="searchInput" class="search-bar" placeholder="Search tools by name or description…" aria-label="Search rehablix tools">
       </div>
     </section>
 
     <!-- Card grid - Static HTML cards -->
-    <section class="tool-grid-section">
+    <section class="tool-grid-section" aria-labelledby="toolsHeading">
+      <h2 id="toolsHeading" class="visually-hidden">Clinical AI Tools</h2>
       <div id="toolGrid" class="tool-grid">
         <!-- Assessment Format Generator Card -->
         <a href="format.html" class="tool-card-link" data-tool="assessment">
           <article class="tool-card">
-            <div class="tool-icon">📋</div>
+            <div class="tool-icon" aria-hidden="true">📋</div>
             <h3 class="tool-title">Assessment Format Generator</h3>
             <p class="tool-description">Automatically create structured assessment formats based on patient data and clinical guidelines.</p>
             <div class="tool-meta">
@@ -94,22 +171,22 @@
             </div>
           </article>
         </a>
-        
+
         <a href="standardized.html" class="tool-card-link">
-          <div class="tool-card">
-            <div class="tool-icon">⚖️</div>
-            <h2 class="tool-title">Standardized Tools</h2>
+          <article class="tool-card">
+            <div class="tool-icon" aria-hidden="true">⚖️</div>
+            <h3 class="tool-title">Standardized Tools</h3>
             <p class="tool-description">Generate complete copies of standardized assessments like MMSE, Berg Balance Scale, and more.</p>
             <div class="tool-meta">
               <span>⚕️ PDF download</span>
             </div>
-          </div>
+          </article>
         </a>
 
         <!-- Documentation Assistant Card -->
         <a href="doc.html" class="tool-card-link" data-tool="documentation">
           <article class="tool-card">
-            <div class="tool-icon">🎙️</div>
+            <div class="tool-icon" aria-hidden="true">🎙️</div>
             <h3 class="tool-title">Documentation Assistant</h3>
             <p class="tool-description">Dictate, upload files, or upload record sessions – AI transcribes and organizes your clinical notes effortlessly.</p>
             <div class="tool-meta">
@@ -117,11 +194,11 @@
             </div>
           </article>
         </a>
-        
+
         <!-- ROM Analyzer Card -->
         <a href="rom.html" class="tool-card-link" data-tool="rom">
           <article class="tool-card">
-            <div class="tool-icon">🦵</div>
+            <div class="tool-icon" aria-hidden="true">🦵</div>
             <h3 class="tool-title">ROM Analyzer</h3>
             <p class="tool-description">
               Analyze joint range of motion from images or videos. Get angle measurements, movement limitations, and clinical insights instantly.
@@ -135,7 +212,7 @@
         <!-- Gait Monitor Card -->
         <a href="gait.html" class="tool-card-link" data-tool="gait">
           <article class="tool-card">
-            <div class="tool-icon">🎥</div>
+            <div class="tool-icon" aria-hidden="true">🎥</div>
             <h3 class="tool-title">Gait Monitor</h3>
             <p class="tool-description">Upload a video of a patient's gait for AI‑powered analysis and feedback on movement patterns.</p>
             <div class="tool-meta">
@@ -147,7 +224,7 @@
         <!-- Presentation Maker Card -->
         <a href="presentation.html" class="tool-card-link" data-tool="presentation">
           <article class="tool-card">
-            <div class="tool-icon">📊</div>
+            <div class="tool-icon" aria-hidden="true">📊</div>
             <h3 class="tool-title">Presentation Maker</h3>
             <p class="tool-description">Turn your notes or research into professional presentations with AI‑generated slides and visuals.</p>
             <div class="tool-meta">
@@ -156,324 +233,332 @@
           </article>
         </a>
       </div>
-      
-      
-<!-- End of existing tool grid -->
 
-<!-- ===== FOR HEALTHCARE STUDENTS SECTION ===== -->
-<div class="students-section-header">
-  <h2 class="students-heading">For Healthcare Students</h2>
-  <p class="students-subtitle">AI-powered academic tools designed for your coursework, assignments, and research projects</p>
-</div>
 
-<div class="tool-grid" id="studentToolGrid">
-  <!-- Assignment Maker Card -->
-  <a href="assignment.html" class="tool-card-link" data-tool="assignment">
-    <article class="tool-card">
-      <div class="tool-icon">📝</div>
-      <h3 class="tool-title">Assignment Maker</h3>
-      <p class="tool-description">Generate human-like assignments that pass AI detection. Upload references, set the tone, and get professionally formatted results.</p>
-      <div class="tool-meta">
-        <span>⚡ AI · Assignments · Export</span>
+      <!-- ===== FOR HEALTHCARE STUDENTS SECTION ===== -->
+      <div class="students-section-header">
+        <h2 class="students-heading">For Healthcare Students</h2>
+        <p class="students-subtitle">AI-powered academic tools designed for your coursework, assignments, and research projects</p>
       </div>
-    </article>
-  </a>
 
-  <!-- Project Maker Card -->
-  <a href="project.html" class="tool-card-link" data-tool="project">
-    <article class="tool-card">
-      <div class="tool-icon">📚</div>
-      <h3 class="tool-title">Project Maker</h3>
-      <p class="tool-description">Build your academic project from Chapter 1 to 5 with AI assistance. Literature review, methodology, references, and defense prep all in one workspace.</p>
-      <div class="tool-meta">
-        <span>⚡ AI · Chapters · Export</span>
-      </div>
-    </article>
-  </a>
+      <div class="tool-grid" id="studentToolGrid">
+        <!-- Assignment Maker Card -->
+        <a href="assignment.html" class="tool-card-link" data-tool="assignment">
+          <article class="tool-card">
+            <div class="tool-icon" aria-hidden="true">📝</div>
+            <h3 class="tool-title">Assignment Maker</h3>
+            <p class="tool-description">Generate human-like assignments that pass AI detection. Upload references, set the tone, and get professionally formatted results.</p>
+            <div class="tool-meta">
+              <span>⚡ AI · Assignments · Export</span>
+            </div>
+          </article>
+        </a>
 
-  <!-- Study Buddy Card -->
-  <a href="study.html" class="tool-card-link" data-tool="study">
-    <article class="tool-card">
-      <div class="tool-icon">📖</div>
-      <h3 class="tool-title">Study Buddy</h3>
-      <p class="tool-description">Upload your notes, textbooks, or slides and let AI generate flashcards, summaries, and quizzes to help you study smarter.</p>
-      <div class="tool-meta">
-        <span>⚡ AI · Flashcards · Quizzes</span>
-      </div>
-    </article>
-  </a>
+        <!-- Project Maker Card -->
+        <a href="project.html" class="tool-card-link" data-tool="project">
+          <article class="tool-card">
+            <div class="tool-icon" aria-hidden="true">📚</div>
+            <h3 class="tool-title">Project Maker</h3>
+            <p class="tool-description">Build your academic project from Chapter 1 to 5 with AI assistance. Literature review, methodology, references, and defense prep all in one workspace.</p>
+            <div class="tool-meta">
+              <span>⚡ AI · Chapters · Export</span>
+            </div>
+          </article>
+        </a>
 
-  <!-- Exam Simulator Card -->
-  <a href="exam.html" class="tool-card-link" data-tool="exam">
-    <article class="tool-card">
-      <div class="tool-icon">📝</div>
-      <h3 class="tool-title">Exam Simulator</h3>
-      <p class="tool-description">Practice with timed, AI-generated exam questions from your course materials. Get instant feedback and performance analytics.</p>
-      <div class="tool-meta">
-        <span>⚡ AI · Timed · Analytics</span>
+        <!-- Study Buddy Card -->
+        <a href="study.html" class="tool-card-link" data-tool="study">
+          <article class="tool-card">
+            <div class="tool-icon" aria-hidden="true">📖</div>
+            <h3 class="tool-title">Study Buddy</h3>
+            <p class="tool-description">Upload your notes, textbooks, or slides and let AI generate flashcards, summaries, and quizzes to help you study smarter.</p>
+            <div class="tool-meta">
+              <span>⚡ AI · Flashcards · Quizzes</span>
+            </div>
+          </article>
+        </a>
+
+        <!-- Exam Simulator Card -->
+        <a href="exam.html" class="tool-card-link" data-tool="exam">
+          <article class="tool-card">
+            <div class="tool-icon" aria-hidden="true">📝</div>
+            <h3 class="tool-title">Exam Simulator</h3>
+            <p class="tool-description">Practice with timed, AI-generated exam questions from your course materials. Get instant feedback and performance analytics.</p>
+            <div class="tool-meta">
+              <span>⚡ AI · Timed · Analytics</span>
+            </div>
+          </article>
+        </a>
       </div>
-    </article>
-  </a>
-</div>
 
       <div id="emptyMessage" class="empty-state hidden">No matching tools found.</div>
     </section>
-    
-    <!-- Subscription Plans Section -->
-<!-- Current Plan Card Section -->
-<!-- Current Plan Card Section -->
-<section class="current-plan-section" id="currentPlanSection">
-  <div class="plan-glass-card" id="planGlassCard">
-    <!-- Shimmer overlay -->
-    <div class="plan-shimmer"></div>
-    
-    <!-- Glow orb -->
-    <div class="plan-glow-orb"></div>
-    
-    <!-- Card content -->
-    <div class="plan-card-inner">
-      <!-- Left: Plan icon & name -->
-      <div class="plan-info-side">
-        <div class="plan-icon-wrapper" id="planIconWrapper">
-          <span class="plan-icon-large">🚀</span>
+
+    <!-- Current Plan Card Section -->
+    <section class="current-plan-section" id="currentPlanSection">
+      <div class="plan-glass-card" id="planGlassCard">
+        <div class="plan-shimmer"></div>
+        <div class="plan-glow-orb"></div>
+
+        <div class="plan-card-inner">
+          <div class="plan-info-side">
+            <div class="plan-icon-wrapper" id="planIconWrapper">
+              <span class="plan-icon-large" aria-hidden="true">🚀</span>
+            </div>
+          </div>
+
+          <div class="plan-details-side">
+            <div class="plan-badge-row">
+              <span class="plan-status-badge free" id="planStatusBadge">Free Plan</span>
+              <span class="plan-renewal-badge" id="planRenewalBadge" style="display:none;">
+                <i class="fas fa-sync-alt"></i> Auto-renews
+              </span>
+            </div>
+
+            <h3 class="plan-name-display" id="planNameDisplay">Free Plan</h3>
+            <p class="plan-description-display" id="planDescriptionDisplay">
+              Basic access with monthly usage limits
+            </p>
+
+            <div class="plan-expiry" id="planExpiry" style="display:none;">
+              <i class="fas fa-calendar-alt"></i>
+              <span>Expires: <strong id="planExpiryDate">--</strong></span>
+              <span class="expiry-days" id="planExpiryDays"></span>
+            </div>
+          </div>
+
+          <div class="plan-action-side">
+            <a href="sub.html" class="plan-upgrade-btn" id="planUpgradeBtn">
+              <span class="btn-text">Upgrade Plan</span>
+              <span class="btn-arrow">→</span>
+            </a>
+            <p class="plan-manage-link">
+              <a href="sub.html">Manage subscription</a>
+            </p>
+          </div>
         </div>
       </div>
-      
-      <!-- Center: Plan details -->
-      <div class="plan-details-side">
-        <div class="plan-badge-row">
-          <span class="plan-status-badge free" id="planStatusBadge">Free Plan</span>
-          <span class="plan-renewal-badge" id="planRenewalBadge" style="display:none;">
-            <i class="fas fa-sync-alt"></i> Auto-renews
-          </span>
-        </div>
-        
-        <h3 class="plan-name-display" id="planNameDisplay">Free Plan</h3>
-        <p class="plan-description-display" id="planDescriptionDisplay">
-          Basic access with monthly usage limits
-        </p>
-        
-        <!-- Expiry Date (for paid plans) -->
-        <div class="plan-expiry" id="planExpiry" style="display:none;">
-          <i class="fas fa-calendar-alt"></i>
-          <span>Expires: <strong id="planExpiryDate">--</strong></span>
-          <span class="expiry-days" id="planExpiryDays"></span>
-        </div>
-      </div>
-      
-      <!-- Right: CTA -->
-      <div class="plan-action-side">
-        <a href="sub.html" class="plan-upgrade-btn" id="planUpgradeBtn">
-          <span class="btn-text">Upgrade Plan</span>
-          <span class="btn-arrow">→</span>
-        </a>
-        <p class="plan-manage-link">
-          <a href="sub.html">Manage subscription</a>
-        </p>
+    </section>
+
+    <!-- Subscription Payment Modal -->
+    <div class="modal" id="subscriptionModal">
+      <div class="modal-content" id="subscriptionModalContent">
+        <!-- Content injected by sub.js -->
       </div>
     </div>
-  </div>
-</section>
 
-<!-- Subscription Payment Modal -->
-<div class="modal" id="subscriptionModal">
-  <div class="modal-content" id="subscriptionModalContent">
-    <!-- Content injected by sub.js -->
-  </div>
-</div>
-    
     <!-- FAQ Section -->
-<section class="faq-section" id="faq">
-  <div class="faq-container">
-    <div class="faq-header">
-      <h2 class="faq-heading">Frequently Asked Questions</h2>
-      <p class="faq-subtitle">Honest answers about pricing, plans, and what you get.</p>
-    </div>
-    
-    <div class="faq-list">
-      <details class="faq-item">
-        <summary class="faq-question">
-          What's included in the Free plan?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>The <strong>Free plan</strong> gives you access to core tools with monthly usage limits:</p>
-          <p>
-            • <strong>5 assignments</strong> per month<br>
-            • <strong>3 ROM analyses</strong> per month (Full Joint Assessment only)<br>
-            • <strong>3 gait analyses</strong> per month (video not saved)<br>
-            • <strong>1 project</strong> per month (Chapter 1 generation only)<br>
-            • Basic documentation tools<br>
-            • Report and Documentation modes<br><br>
-            No credit card required — just sign up and start using the tools.
-          </p>
+    <section class="faq-section" id="faq" itemscope itemtype="https://schema.org/FAQPage">
+      <div class="faq-container">
+        <div class="faq-header">
+          <h2 class="faq-heading">Frequently Asked Questions</h2>
+          <p class="faq-subtitle">Honest answers about pricing, plans, and what you get.</p>
         </div>
-      </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          What do I get with the Student plan?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>The <strong>Student plan</strong> is designed for healthcare students who need more:</p>
-          <p>
-            • <strong>Unlimited assignments</strong> generation<br>
-            • <strong>10 ROM analyses</strong> per month (Isolate Joint + Full Assessment)<br>
-            • <strong>10 gait analyses</strong> per month with video auto-save<br>
-            • <strong>Unlimited projects</strong> with all 5 chapters<br>
-            • <strong>AI Supervisor</strong> for guidance on your work<br>
-            • Custom outlines for reports and documentation<br>
-            • Moderate output detail level (3500 tokens)<br><br>
-            Perfect for coursework, clinical placements, and research projects.
-          </p>
-        </div>
-      </details>
+        <div class="faq-list">
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              What's included in the Free plan?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>The <strong>Free plan</strong> gives you access to core tools with monthly usage limits:</p>
+                <p>
+                  • <strong>5 assignments</strong> per month<br>
+                  • <strong>3 ROM analyses</strong> per month (Full Joint Assessment only)<br>
+                  • <strong>3 gait analyses</strong> per month (video not saved)<br>
+                  • <strong>1 project</strong> per month (Chapter 1 generation only)<br>
+                  • Basic documentation tools<br>
+                  • Report and Documentation modes<br><br>
+                  No credit card required — just sign up and start using the tools.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          Why should I upgrade to Pro?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>The <strong>Pro plan</strong> removes all limits and adds premium features:</p>
-          <p>
-            • <strong>Unlimited everything</strong> — no caps on any tool<br>
-            • <strong>Presentation Maker</strong> with export options<br>
-            • <strong>Flexible AI mode</strong> for more natural, detailed output<br>
-            • <strong>Detailed output</strong> (5000 tokens) for comprehensive results<br>
-            • <strong>Priority AI processing</strong> — faster generation times<br>
-            • <strong>Unlimited cloud storage</strong> for all your work<br>
-            • <strong>Team collaboration</strong> features<br><br>
-            Built for practicing clinicians, researchers, and power users who need the full toolkit.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              What do I get with the Student plan?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>The <strong>Student plan</strong> is designed for healthcare students who need more:</p>
+                <p>
+                  • <strong>Unlimited assignments</strong> generation<br>
+                  • <strong>10 ROM analyses</strong> per month (Isolate Joint + Full Assessment)<br>
+                  • <strong>10 gait analyses</strong> per month with video auto-save<br>
+                  • <strong>Unlimited projects</strong> with all 5 chapters<br>
+                  • <strong>AI Supervisor</strong> for guidance on your work<br>
+                  • Custom outlines for reports and documentation<br>
+                  • Moderate output detail level (3500 tokens)<br><br>
+                  Perfect for coursework, clinical placements, and research projects.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          How does billing work? Can I pay in my local currency?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>Yes! Prices are <strong>automatically converted</strong> to your local currency based on your location. We support:</p>
-          <p>
-            • <strong>Paystack</strong> — Nigeria, Ghana, South Africa (Card, Bank, USSD)<br>
-            • <strong>Flutterwave</strong> — Kenya, Tanzania, Uganda, Rwanda, Cameroon, and more<br>
-            • <strong>Google Pay</strong> — US, UK, India, Canada, Australia, and Europe<br><br>
-            Choose between <strong>monthly</strong> or <strong>yearly</strong> billing. Yearly plans save you 20%. You can cancel anytime from your account settings — no long-term contracts.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              Why should I upgrade to Pro?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>The <strong>Pro plan</strong> removes all limits and adds premium features:</p>
+                <p>
+                  • <strong>Unlimited everything</strong> — no caps on any tool<br>
+                  • <strong>Presentation Maker</strong> with export options<br>
+                  • <strong>Flexible AI mode</strong> for more natural, detailed output<br>
+                  • <strong>Detailed output</strong> (5000 tokens) for comprehensive results<br>
+                  • <strong>Priority AI processing</strong> — faster generation times<br>
+                  • <strong>Unlimited cloud storage</strong> for all your work<br>
+                  • <strong>Team collaboration</strong> features<br><br>
+                  Built for practicing clinicians, researchers, and power users who need the full toolkit.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          Can I switch between plans?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>Absolutely. You can <strong>upgrade or downgrade</strong> at any time:</p>
-          <p>
-            • <strong>Upgrading</strong> takes effect immediately — you get instant access to new features.<br>
-            • <strong>Downgrading</strong> takes effect at the end of your current billing period.<br>
-            • You won't lose any saved work when switching plans.<br>
-            • Your usage counters reset according to your new plan's limits.<br><br>
-            Manage everything from your <a href="sub.html">subscription page</a>.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              How does billing work? Can I pay in my local currency?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>Yes! Prices are <strong>automatically converted</strong> to your local currency based on your location. We support:</p>
+                <p>
+                  • <strong>Paystack</strong> — Nigeria, Ghana, South Africa (Card, Bank, USSD)<br>
+                  • <strong>Flutterwave</strong> — Kenya, Tanzania, Uganda, Rwanda, Cameroon, and more<br>
+                  • <strong>Google Pay</strong> — US, UK, India, Canada, Australia, and Europe<br><br>
+                  Choose between <strong>monthly</strong> or <strong>yearly</strong> billing. Yearly plans save you 20%. You can cancel anytime from your account settings — no long-term contracts.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          What happens when I hit my monthly limit on the Free plan?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>When you reach your monthly limit:</p>
-          <p>
-            • You'll see a <strong>friendly notification</strong> letting you know.<br>
-            • The tool will show an <strong>upgrade prompt</strong> with your remaining days until reset.<br>
-            • Your limits <strong>reset automatically every 30 days</strong> from when you first used the tool.<br>
-            • You can still access all your saved work and history.<br><br>
-            To continue working immediately, upgrade to Student or Pro for unlimited access. Your progress is never lost.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              Can I switch between plans?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>Absolutely. You can <strong>upgrade or downgrade</strong> at any time:</p>
+                <p>
+                  • <strong>Upgrading</strong> takes effect immediately — you get instant access to new features.<br>
+                  • <strong>Downgrading</strong> takes effect at the end of your current billing period.<br>
+                  • You won't lose any saved work when switching plans.<br>
+                  • Your usage counters reset according to your new plan's limits.<br><br>
+                  Manage everything from your <a href="sub.html">subscription page</a>.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          Is my data safe? What about patient confidentiality?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>Your privacy is our priority:</p>
-          <p>
-            • All data is <strong>encrypted in transit</strong> (TLS 1.3) and <strong>at rest</strong> (AES-256).<br>
-            • We <strong>never share, sell, or train AI models</strong> on your uploaded content.<br>
-            • Your work is stored securely on Firebase with strict access controls.<br>
-            • We recommend <strong>de-identifying patient information</strong> before uploading.<br>
-            • You can delete your data anytime from your account.<br><br>
-            <strong>Important:</strong> rehablix tools are <strong>assistive decision support</strong> — they are not diagnostic instruments. Every AI-generated output should be reviewed by a qualified professional before clinical use.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              What happens when I hit my monthly limit on the Free plan?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>When you reach your monthly limit:</p>
+                <p>
+                  • You'll see a <strong>friendly notification</strong> letting you know.<br>
+                  • The tool will show an <strong>upgrade prompt</strong> with your remaining days until reset.<br>
+                  • Your limits <strong>reset automatically every 30 days</strong> from when you first used the tool.<br>
+                  • You can still access all your saved work and history.<br><br>
+                  To continue working immediately, upgrade to Student or Pro for unlimited access. Your progress is never lost.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          How accurate is the AI? Should I trust the results?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>Our AI is designed to be a <strong>clinical co-pilot</strong>, not a replacement for professional judgment:</p>
-          <p>
-            • ROM analyses use <strong>multi-frame visual assessment</strong> validated against clinical measurements.<br>
-            • Gait analyses extract <strong>5 frames per video</strong> for pattern recognition.<br>
-            • Assignments and projects use <strong>multi-pass generation</strong> for natural, human-like output.<br>
-            • All content passes through a <strong>humanization engine</strong> to avoid AI detection patterns.<br>
-            • Pro users get <strong>flexible AI mode</strong> for more nuanced results.<br><br>
-            <strong>Always review</strong> AI-generated content before submission or clinical use. The AI is a starting point — your expertise makes it complete.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              Is my data safe? What about patient confidentiality?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>Your privacy is our priority:</p>
+                <p>
+                  • All data is <strong>encrypted in transit</strong> (TLS 1.3) and <strong>at rest</strong> (AES-256).<br>
+                  • We <strong>never share, sell, or train AI models</strong> on your uploaded content.<br>
+                  • Your work is stored securely on Firebase with strict access controls.<br>
+                  • We recommend <strong>de-identifying patient information</strong> before uploading.<br>
+                  • You can delete your data anytime from your account.<br><br>
+                  <strong>Important:</strong> rehablix tools are <strong>assistive decision support</strong> — they are not diagnostic instruments. Every AI-generated output should be reviewed by a qualified professional before clinical use.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          Can I use rehablix on my phone?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>Yes! rehablix is fully <strong>mobile-responsive</strong> and works on any modern browser:</p>
-          <p>
-            • All tools work on <strong>smartphones and tablets</strong>.<br>
-            • Camera-based tools (ROM, Gait) use your device camera.<br>
-            • You can <strong>install rehablix as a PWA</strong> (Progressive Web App) for quick access.<br>
-            • Look for the "Install App" button or use your browser's Add to Home Screen option.<br>
-            • An internet connection is required for AI processing.<br><br>
-            Dedicated iOS and Android apps are on our roadmap for offline capabilities.
-          </p>
-        </div>
-      </details>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              How accurate is the AI? Should I trust the results?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>Our AI is designed to be a <strong>clinical co-pilot</strong>, not a replacement for professional judgment:</p>
+                <p>
+                  • ROM analyses use <strong>multi-frame visual assessment</strong> validated against clinical measurements.<br>
+                  • Gait analyses extract <strong>5 frames per video</strong> for pattern recognition.<br>
+                  • Assignments and projects use <strong>multi-pass generation</strong> for natural, human-like output.<br>
+                  • All content passes through a <strong>humanization engine</strong> to avoid AI detection patterns.<br>
+                  • Pro users get <strong>flexible AI mode</strong> for more nuanced results.<br><br>
+                  <strong>Always review</strong> AI-generated content before submission or clinical use. The AI is a starting point — your expertise makes it complete.
+                </p>
+              </div>
+            </div>
+          </details>
 
-      <details class="faq-item">
-        <summary class="faq-question">
-          Who is rehablix built for?
-          <span class="faq-icon"></span>
-        </summary>
-        <div class="faq-answer">
-          <p>We built rehablix specifically for <strong>rehabilitation professionals and students</strong>:</p>
-          <p>
-            • <strong>Physiotherapists</strong> — ROM analysis, gait monitoring, documentation<br>
-            • <strong>Occupational Therapists</strong> — Assessment formats, progress notes<br>
-            • <strong>Students</strong> — Assignments, projects, study tools, exam prep<br>
-            • <strong>Researchers</strong> — Literature reviews, methodology, data presentation<br>
-            • <strong>Clinicians</strong> in orthopaedics, neurology, pediatrics, and psychiatry<br><br>
-            Whether you're in a teaching hospital, private clinic, or university, our tools are designed to fit into your workflow — not replace it.
-          </p>
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              Can I use rehablix on my phone?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>Yes! rehablix is fully <strong>mobile-responsive</strong> and works on any modern browser:</p>
+                <p>
+                  • All tools work on <strong>smartphones and tablets</strong>.<br>
+                  • Camera-based tools (ROM, Gait) use your device camera.<br>
+                  • You can <strong>install rehablix as a PWA</strong> (Progressive Web App) for quick access.<br>
+                  • Look for the "Install App" button or use your browser's Add to Home Screen option.<br>
+                  • An internet connection is required for AI processing.<br><br>
+                  Dedicated iOS and Android apps are on our roadmap for offline capabilities.
+                </p>
+              </div>
+            </div>
+          </details>
+
+          <details class="faq-item" itemscope itemprop="mainEntity" itemtype="https://schema.org/Question">
+            <summary class="faq-question" itemprop="name">
+              Who is rehablix built for?
+              <span class="faq-icon"></span>
+            </summary>
+            <div class="faq-answer" itemscope itemprop="acceptedAnswer" itemtype="https://schema.org/Answer">
+              <div itemprop="text">
+                <p>We built rehablix specifically for <strong>rehabilitation professionals and students</strong>:</p>
+                <p>
+                  • <strong>Physiotherapists</strong> — ROM analysis, gait monitoring, documentation<br>
+                  • <strong>Occupational Therapists</strong> — Assessment formats, progress notes<br>
+                  • <strong>Students</strong> — Assignments, projects, study tools, exam prep<br>
+                  • <strong>Researchers</strong> — Literature reviews, methodology, data presentation<br>
+                  • <strong>Clinicians</strong> in orthopaedics, neurology, pediatrics, and psychiatry<br><br>
+                  Whether you're in a teaching hospital, private clinic, or university, our tools are designed to fit into your workflow — not replace it.
+                </p>
+              </div>
+            </div>
+          </details>
         </div>
-      </details>
-    </div>
-  </div>
-</section>
+      </div>
+    </section>
   </main>
 
   <footer class="site-footer">
@@ -481,26 +566,19 @@
   </footer>
 
   <!-- Floating AI Button -->
-  <a href="ask.html" class="floating-ai-btn" id="floatingAiBtn" aria-label="AI Assistant">
+  <a href="ask.html" class="floating-ai-btn" id="floatingAiBtn" aria-label="Ask the rehablix AI Assistant">
     <div class="ai-btn-content">
-     <span class="ai-icon">💬</span>
-  <span class="ask-text">Ask Me</span>
+      <span class="ai-icon" aria-hidden="true">💬</span>
+      <span class="ask-text">Ask Me</span>
     </div>
     <div class="ai-pulse"></div>
   </a>
 
-  <!-- Subscription Payment Modal -->
-  <div class="modal" id="subscriptionModal">
-    <div class="modal-content" id="subscriptionModalContent">
-      <!-- Content will be injected dynamically by sub.js -->
-    </div>
-  </div>
-  
   <!-- Ask Me floating button -->
-<a href="ask.html" class="floating-ask-btn" id="floatingAskBtn" aria-label="Ask AI" style="display:none">
-  <span class="ask-icon">💬</span>
-  <span class="ask-text">Ask Me</span>
-</a>
+  <a href="ask.html" class="floating-ask-btn" id="floatingAskBtn" aria-label="Ask AI" style="display:none">
+    <span class="ask-icon" aria-hidden="true">💬</span>
+    <span class="ask-text">Ask Me</span>
+  </a>
 
   <!-- Payment Gateway SDKs -->
   <script src="https://js.paystack.co/v1/inline.js"></script>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Inline script to set theme before paint -->
+    <script>
+        (function() {
+            var stored = localStorage.getItem('rehab-theme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (stored === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else if (stored === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+            }
+        })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
+    <title>rehablix · Export to PowerPoint</title>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet" />
+    <!-- PptxGenJS -->
+    <script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js">
+    </script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/ppt.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="ppt-header">
+            <h1><i class="fas fa-file-powerpoint"></i> Export to PowerPoint</h1>
+            <a href="caseresult.html" class="back-btn">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to Document</span>
+            </a>
+        </header>
+
+        <!-- Steps Indicator - Horizontal linked tree -->
+        <div class="steps-indicator">
+            <div class="step-item active" data-step="1">
+                <div class="step-circle">
+                    <span class="step-num">1</span>
+                    <i class="fas fa-palette step-icon"></i>
+                </div>
+                <span class="step-label">Theme</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="2">
+                <div class="step-circle">
+                    <span class="step-num">2</span>
+                    <i class="fas fa-brush step-icon"></i>
+                </div>
+                <span class="step-label">Style</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="3">
+                <div class="step-circle">
+                    <span class="step-num">3</span>
+                    <i class="fas fa-layer-group step-icon"></i>
+                </div>
+                <span class="step-label">Layout</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="4">
+                <div class="step-circle">
+                    <span class="step-num">4</span>
+                    <i class="fas fa-magic step-icon"></i>
+                </div>
+                <span class="step-label">Generate</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             STEP 1: THEME
+             ============================================================ -->
+        <div class="ppt-card" id="stepTheme">
+            <h2><i class="fas fa-palette"></i> Pick a theme</h2>
+            <p class="sub">Choose a color palette and visual style for your presentation.</p>
+            <div class="theme-carousel-wrapper">
+                <div class="theme-carousel" id="themeCarousel">
+                    <!-- Themes injected by JS -->
+                </div>
+                <button class="carousel-nav carousel-prev" id="themePrev" aria-label="Previous theme">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="carousel-nav carousel-next" id="themeNext" aria-label="Next theme">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             STEP 2: STYLE & FORMAT
+             ============================================================ -->
+        <div class="ppt-card" id="stepStyle">
+            <h2><i class="fas fa-brush"></i> Style &amp; Format</h2>
+            <p class="sub">Choose the art style for your slides.</p>
+            <div class="style-options" id="styleOptions">
+                <label class="style-option selected">
+                    <input type="radio" name="artStyle" value="photo" checked /> Photo
+                </label>
+                <label class="style-option">
+                    <input type="radio" name="artStyle" value="illustration" /> Illustration
+                </label>
+                <label class="style-option">
+                    <input type="radio" name="artStyle" value="abstract" /> Abstract
+                </label>
+                <label class="style-option">
+                    <input type="radio" name="artStyle" value="minimal" /> Minimal
+                </label>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             STEP 3: LAYOUT & CONTENT STRUCTURE
+             ============================================================ -->
+        <div class="ppt-card" id="stepLayout">
+            <h2><i class="fas fa-layer-group"></i> Layout &amp; Content</h2>
+            <p class="sub">How should the slides be organised and structured?</p>
+            
+            <div style="margin-bottom: 1.2rem;">
+                <label style="display:block; font-weight:600; margin-bottom:0.5rem; font-size:0.95rem;">
+                    <i class="fas fa-columns"></i> Slide Layout
+                </label>
+                <div class="layout-options" id="layoutOptions">
+                    <label class="layout-option selected">
+                        <input type="radio" name="layoutType" value="freeform" checked /> Freeform
+                    </label>
+                    <label class="layout-option">
+                        <input type="radio" name="layoutType" value="card" /> Card-by-card
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:0.5rem; font-size:0.95rem;">
+                    <i class="fas fa-sitemap"></i> Content Structure
+                </label>
+                <div class="structure-options" id="structureOptions">
+                    <label class="structure-option selected">
+                        <input type="radio" name="slideStructure" value="headings" checked /> One slide per heading
+                    </label>
+                    <label class="structure-option">
+                        <input type="radio" name="slideStructure" value="paragraphs" /> One slide per paragraph
+                    </label>
+                    <label class="structure-option">
+                        <input type="radio" name="slideStructure" value="auto" /> Auto‑detect
+                    </label>
+                </div>
+            </div>
+
+            <div style="margin-top:1.5rem;">
+                <label style="display:block; font-weight:500; margin-bottom:0.5rem;">
+                    <i class="fas fa-pen"></i> Additional instructions (optional)
+                </label>
+                <textarea class="additional-textarea" id="pptInstructions" 
+                    placeholder="e.g., Include a title slide with the patient name, add a summary slide at the end, use professional medical terminology..."></textarea>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             STEP 4: GENERATE
+             ============================================================ -->
+        <div class="ppt-card" id="stepGenerate">
+            <h2><i class="fas fa-magic"></i> Ready to generate</h2>
+            <p class="sub">
+                Your presentation will include 
+                <span class="slide-count-badge">
+                    <i class="fas fa-file-powerpoint"></i>
+                    <span id="slideCount">0</span> slides
+                </span>
+                based on the selected theme, style, and layout.
+            </p>
+            <button class="generate-ppt-btn" id="generatePptBtn">
+                <i class="fas fa-magic"></i> Generate PowerPoint
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Script -->
+    <script src="js/ppt.js"></script>
+</body>
+</html>
