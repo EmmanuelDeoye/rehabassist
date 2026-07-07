@@ -1,62 +1,21 @@
-/* css/ppt.css - PowerPoint Export Styles */
+/* Add to css/ppt.css */
 
 /* ==============================================================
-   GLOBAL
+   MAIN CONTENT AREA
    ============================================================== */
-:root {
-    --bg-page: #f5f7f9;
-    --surface: #ffffff;
-    --border-light: #e3e6ea;
-    --text-primary: #1f2933;
-    --text-secondary: #6b7280;
-    --accent: #009688;
-    --accent-soft: #00968820;
-    --shadow-sm: 0 8px 20px rgba(0,0,0,0.02), 0 4px 8px rgba(0,0,0,0.03);
-    --shadow-hover: 0 20px 30px -10px rgba(0,150,136,0.15), 0 8px 18px rgba(0,0,0,0.05);
-    --card-bg: rgba(255,255,255,0.75);
-    --glass-bg: rgba(255,255,255,0.6);
-    --glass-border: rgba(255,255,255,0.3);
-    --radius: 1.5rem;
-    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-[data-theme="dark"] {
-    --bg-page: #12181c;
-    --surface: #1e2a32;
-    --border-light: #2e3b45;
-    --text-primary: #eef2f6;
-    --text-secondary: #a0aec0;
-    --accent: #14b8a6;
-    --accent-soft: #14b8a620;
-    --shadow-sm: 0 8px 20px rgba(0,0,0,0.4);
-    --shadow-hover: 0 20px 30px -10px #14b8a640, 0 8px 18px #00000050;
-    --card-bg: rgba(30,42,50,0.8);
-    --glass-bg: rgba(30,42,50,0.6);
-    --glass-border: rgba(255,255,255,0.08);
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-body {
+.ppt-main {
+    padding: 1.5rem 1rem 2rem;
+    min-height: calc(100vh - 140px);
     background: var(--bg-page);
-    color: var(--text-primary);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    line-height: 1.5;
-    min-height: 100vh;
-    padding: 1.5rem 1rem;
 }
 
-.container {
+.ppt-main .container {
     max-width: 1000px;
     margin: 0 auto;
 }
 
 /* ==============================================================
-   HEADER
+   HEADER (within main)
    ============================================================== */
 .ppt-header {
     display: flex;
@@ -104,15 +63,16 @@ body {
    STEPS INDICATOR - Horizontal Linked Tree
    ============================================================== */
 .steps-indicator {
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     gap: 0;
     margin-bottom: 2rem;
     padding: 0.5rem 1rem;
-    background: none;
+    background: var(--surface);
     border-radius: 3rem;
-    box-shadow: none;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -455,6 +415,47 @@ body {
 }
 
 /* ==============================================================
+   CHART STYLE OPTIONS (NEW)
+   ============================================================== */
+#chartStyleOptions .style-option {
+    min-width: 80px;
+    justify-content: center;
+}
+
+#chartStyleOptions .style-option[data-chart-style="modern"] {
+    border-color: #6366f1;
+}
+#chartStyleOptions .style-option[data-chart-style="modern"].selected {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: #6366f1;
+    color: #6366f1;
+}
+#chartStyleOptions .style-option[data-chart-style="classic"] {
+    border-color: #f59e0b;
+}
+#chartStyleOptions .style-option[data-chart-style="classic"].selected {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: #f59e0b;
+    color: #f59e0b;
+}
+#chartStyleOptions .style-option[data-chart-style="minimal"] {
+    border-color: #6b7280;
+}
+#chartStyleOptions .style-option[data-chart-style="minimal"].selected {
+    background: rgba(107, 114, 128, 0.15);
+    border-color: #6b7280;
+    color: #6b7280;
+}
+#chartStyleOptions .style-option[data-chart-style="vibrant"] {
+    border-color: #ec4899;
+}
+#chartStyleOptions .style-option[data-chart-style="vibrant"].selected {
+    background: rgba(236, 72, 153, 0.15);
+    border-color: #ec4899;
+    color: #ec4899;
+}
+
+/* ==============================================================
    ADDITIONAL INSTRUCTIONS
    ============================================================== */
 .additional-textarea {
@@ -544,6 +545,67 @@ body {
 }
 
 /* ==============================================================
+   ADVANCED OPTIONS (NEW)
+   ============================================================== */
+details {
+    transition: all 0.3s ease;
+}
+
+details summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    user-select: none;
+}
+
+details summary::-webkit-details-marker {
+    color: var(--accent);
+}
+
+details[open] summary {
+    margin-bottom: 0.5rem;
+}
+
+details select {
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+details select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ==============================================================
+   GENERATION STATUS (NEW)
+   ============================================================== */
+#generationStatus {
+    padding: 0.8rem;
+    border-radius: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    transition: all 0.3s ease;
+}
+
+#generationStatus .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+#generationStatus.success {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+#generationStatus.error {
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+}
+
+/* ==============================================================
    TOAST
    ============================================================== */
 #toast-container {
@@ -590,10 +652,322 @@ body {
 }
 
 /* ==============================================================
+   PREVIEW MODAL (ENHANCED)
+   ============================================================== */
+.ppt-preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    animation: fadeIn 0.3s ease;
+}
+
+.ppt-preview-modal {
+    background: var(--surface);
+    border-radius: 1.5rem;
+    max-width: 1000px;
+    width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+
+.ppt-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--surface);
+}
+
+.ppt-preview-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ppt-preview-close {
+    background: transparent;
+    border: none;
+    font-size: 1.8rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0 0.5rem;
+    transition: all 0.2s;
+}
+
+.ppt-preview-close:hover {
+    color: var(--text-primary);
+    transform: rotate(90deg);
+}
+
+.ppt-preview-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+    background: var(--bg-page);
+}
+
+/* NEW: Preview slide enhancements */
+.preview-slide {
+    background: var(--surface);
+    border-radius: 0.8rem;
+    padding: 1.5rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid var(--border-light);
+    position: relative;
+}
+
+.preview-slide h4 {
+    font-size: 1.3rem;
+    margin: 0 0 0.3rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* NEW: Layout badge */
+.preview-layout-badge {
+    font-size: 0.6rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 12px;
+    background: var(--accent);
+    color: white;
+    display: inline-block;
+    margin-left: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+/* NEW: Chart preview */
+.preview-chart {
+    background: var(--accent-soft);
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    border-left: 3px solid var(--accent);
+}
+
+.preview-chart i {
+    font-size: 1.5rem;
+    color: var(--accent);
+}
+
+.preview-chart .chart-type {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+/* NEW: Image preview */
+.preview-image {
+    background: var(--border-light);
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    border: 1px dashed var(--border-light);
+}
+
+.preview-image i {
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.preview-image .image-prompt {
+    font-style: italic;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    flex: 1;
+}
+
+/* NEW: Speaker notes preview */
+.preview-notes {
+    margin-top: 0.8rem;
+    padding: 0.6rem 1rem;
+    background: var(--bg-page);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border-left: 3px solid var(--border-light);
+}
+
+.preview-notes i {
+    margin-right: 0.5rem;
+    color: var(--accent);
+}
+
+/* NEW: Comparison layout preview */
+.preview-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 0.5rem 0;
+}
+
+.preview-comparison .col {
+    padding: 0.8rem;
+    border-radius: 6px;
+    background: var(--bg-page);
+    border: 1px solid var(--border-light);
+}
+
+.preview-comparison .col h5 {
+    margin: 0 0 0.3rem 0;
+    font-size: 0.9rem;
+    color: var(--accent);
+}
+
+/* NEW: Timeline preview */
+.preview-timeline {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+    padding: 0.5rem 0;
+    overflow-x: auto;
+}
+
+.preview-timeline .item {
+    flex: 1;
+    min-width: 80px;
+    padding: 0.5rem;
+    background: var(--bg-page);
+    border-radius: 6px;
+    text-align: center;
+    font-size: 0.8rem;
+    border-top: 3px solid var(--accent);
+    position: relative;
+}
+
+.preview-timeline .item .time {
+    font-weight: 600;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 0.2rem;
+}
+
+.preview-slide p {
+    margin: 0.3rem 0;
+    line-height: 1.5;
+}
+
+.ppt-preview-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-light);
+    background: var(--surface);
+}
+
+.ppt-preview-btn {
+    padding: 0.6rem 1.5rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: inherit;
+}
+
+.ppt-preview-btn.primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,150,136,0.3);
+}
+
+.ppt-preview-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,150,136,0.4);
+}
+
+.ppt-preview-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--border-light);
+    color: var(--text-primary);
+}
+
+.ppt-preview-btn.secondary:hover {
+    background: var(--border-light);
+}
+
+@media (max-width: 768px) {
+    .ppt-preview-overlay {
+        padding: 0.5rem;
+    }
+    .ppt-preview-modal {
+        max-height: 95vh;
+        border-radius: 1rem;
+    }
+    .ppt-preview-body {
+        padding: 1rem;
+    }
+    .preview-slide {
+        padding: 1rem;
+    }
+    .preview-comparison {
+        grid-template-columns: 1fr;
+    }
+    .preview-timeline .item {
+        min-width: 60px;
+    }
+    .ppt-preview-footer {
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+    .ppt-preview-btn {
+        flex: 1;
+        text-align: center;
+        padding: 0.6rem 1rem;
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ==============================================================
+   IMAGE GENERATION TOGGLE (NEW)
+   ============================================================== */
+#enableImageGeneration {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#enableImageGeneration:checked {
+    accent-color: var(--accent);
+}
+
+/* ==============================================================
    RESPONSIVE
    ============================================================== */
 @media (max-width: 768px) {
-    body { padding: 1rem 0.75rem; }
+    body { padding: 0; }
+    .ppt-main { padding: 1rem 0.75rem; }
     .ppt-card { padding: 1.2rem; }
     .theme-option { flex: 0 0 160px; min-width: 140px; }
     .ppt-header h1 { font-size: 1.4rem; }
@@ -609,11 +983,12 @@ body {
     .step-label { font-size: 0.7rem; }
     .step-line { width: 16px; }
     
-    .steps-indicator {
-        display: none;
-    }
-    
     .theme-option { flex: 0 0 40%; min-width: 45%; }
+    
+    #chartStyleOptions .style-option {
+        flex: 1 1 auto;
+        min-width: 60px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -641,6 +1016,15 @@ body {
     .theme-option { flex: 0 0 70%; min-width: 75%; }
     .generate-ppt-btn { font-size: 1rem; padding: 0.8rem; }
     .ppt-card { padding: 1rem; border-radius: 1.2rem; }
+    
+    #chartStyleOptions .style-option {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    
+    details[open] > div {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 @media (max-width: 360px) {
@@ -710,4 +1094,150 @@ body {
 
 [data-theme="dark"] .carousel-nav:hover {
     background: var(--accent);
+}
+
+/* Dark mode for new elements */
+[data-theme="dark"] .preview-chart {
+    background: rgba(20,184,166,0.1);
+}
+
+[data-theme="dark"] .preview-image {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] .preview-notes {
+    background: #2e3b45;
+}
+
+[data-theme="dark"] .preview-comparison .col {
+    background: #2e3b45;
+}
+
+[data-theme="dark"] .preview-timeline .item {
+    background: #2e3b45;
+}
+
+[data-theme="dark"] #chartStyleOptions .style-option[data-chart-style="modern"].selected {
+    background: rgba(99, 102, 241, 0.15);
+}
+[data-theme="dark"] #chartStyleOptions .style-option[data-chart-style="classic"].selected {
+    background: rgba(245, 158, 11, 0.15);
+}
+[data-theme="dark"] #chartStyleOptions .style-option[data-chart-style="minimal"].selected {
+    background: rgba(107, 114, 128, 0.15);
+}
+[data-theme="dark"] #chartStyleOptions .style-option[data-chart-style="vibrant"].selected {
+    background: rgba(236, 72, 153, 0.15);
+}
+
+[data-theme="dark"] details select {
+    background: #2e3b45;
+    border-color: #3e4b55;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] #generationStatus {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] #generationStatus.success {
+    background: rgba(20,184,166,0.1);
+    border-color: var(--accent);
+}
+
+[data-theme="dark"] #generationStatus.error {
+    background: rgba(220, 38, 38, 0.1);
+    border-color: #dc2626;
+}
+
+/* ==============================================================
+   RESPONSIVE FIXES FOR GENERATE BUTTON AND RADIO SELECTIONS
+   ============================================================== */
+
+/* Generate button – ensure full width on all devices */
+.generate-ppt-btn {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    min-height: 56px;
+}
+
+@media (max-width: 480px) {
+    .generate-ppt-btn {
+        font-size: 0.95rem;
+        padding: 0.8rem 1.2rem;
+        min-height: 50px;
+        border-radius: 2.5rem;
+    }
+}
+
+/* Radio selections – ensure they are easily clickable and visible on touch devices */
+.style-option,
+.layout-option,
+.structure-option {
+    min-height: 44px; /* touch-friendly */
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 80px;
+}
+
+.style-option input[type="radio"],
+.layout-option input[type="radio"],
+.structure-option input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .style-option,
+    .layout-option,
+    .structure-option {
+        width: 100%;
+        justify-content: flex-start;
+        padding: 0.7rem 1rem;
+        min-height: 50px;
+    }
+}
+
+/* Ensure the carousel works on touch devices */
+.theme-carousel {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+}
+
+.theme-option {
+    scroll-snap-align: start;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Ensure preview modal scrolls properly on small screens */
+.ppt-preview-body {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Toast position on mobile */
+@media (max-width: 480px) {
+    #toast-container {
+        bottom: 10px;
+        right: 10px;
+        left: 10px;
+    }
+    .toast {
+        max-width: 100%;
+        font-size: 0.9rem;
+        padding: 10px 16px;
+    }
 }
