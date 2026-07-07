@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     const downloadBtn = document.getElementById('downloadBtn');
     const pdfBtn = document.getElementById('pdfBtn');
     const printBtn = document.getElementById('printBtn');
+    const pptExportBtn = document.getElementById('pptExportBtn');
     const saveEditBtn = document.getElementById('saveEditBtn');
     const closeCaseBtn = document.getElementById('closeCaseBtn');
     
@@ -642,6 +643,39 @@ document.addEventListener('DOMContentLoaded', async function() {
             `);
             printWindow.document.close();
             printWindow.print();
+        });
+    }
+    
+    // =========================================================================
+    // PowerPoint Export Handler
+    // =========================================================================
+    if (pptExportBtn) {
+        pptExportBtn.addEventListener('click', function() {
+            if (!analysisData) {
+                showToast('No content to export.', 'error');
+                return;
+            }
+            
+            // Get the HTML content and metadata
+            const content = editor.innerHTML;
+            const patientName = analysisData?.patientName || 'Patient';
+            const profession = analysisData?.profession || '';
+            const diagnosis = analysisData?.diagnosis || '';
+            const mode = analysisData?.contentType || 'presentation';
+            const modeLabel = getModeLabel(mode);
+            
+            // Store in localStorage to pass to ppt-export.html
+            localStorage.setItem('pptExportData', JSON.stringify({
+                content: content,
+                patientName: patientName,
+                profession: profession,
+                diagnosis: diagnosis,
+                modeLabel: modeLabel,
+                mode: mode
+            }));
+            
+            // Open the export page in a new tab
+            window.open('ppt-export.html', '_blank');
         });
     }
     
