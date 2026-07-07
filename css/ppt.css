@@ -1,0 +1,713 @@
+/* css/ppt.css - PowerPoint Export Styles */
+
+/* ==============================================================
+   GLOBAL
+   ============================================================== */
+:root {
+    --bg-page: #f5f7f9;
+    --surface: #ffffff;
+    --border-light: #e3e6ea;
+    --text-primary: #1f2933;
+    --text-secondary: #6b7280;
+    --accent: #009688;
+    --accent-soft: #00968820;
+    --shadow-sm: 0 8px 20px rgba(0,0,0,0.02), 0 4px 8px rgba(0,0,0,0.03);
+    --shadow-hover: 0 20px 30px -10px rgba(0,150,136,0.15), 0 8px 18px rgba(0,0,0,0.05);
+    --card-bg: rgba(255,255,255,0.75);
+    --glass-bg: rgba(255,255,255,0.6);
+    --glass-border: rgba(255,255,255,0.3);
+    --radius: 1.5rem;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+    --bg-page: #12181c;
+    --surface: #1e2a32;
+    --border-light: #2e3b45;
+    --text-primary: #eef2f6;
+    --text-secondary: #a0aec0;
+    --accent: #14b8a6;
+    --accent-soft: #14b8a620;
+    --shadow-sm: 0 8px 20px rgba(0,0,0,0.4);
+    --shadow-hover: 0 20px 30px -10px #14b8a640, 0 8px 18px #00000050;
+    --card-bg: rgba(30,42,50,0.8);
+    --glass-bg: rgba(30,42,50,0.6);
+    --glass-border: rgba(255,255,255,0.08);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: 1.5rem 1rem;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* ==============================================================
+   HEADER
+   ============================================================== */
+.ppt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.ppt-header h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ppt-header h1 i {
+    color: var(--accent);
+}
+
+.ppt-header .back-btn {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    padding: 0.5rem 1.2rem;
+    border-radius: 2rem;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: all var(--transition);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ppt-header .back-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ==============================================================
+   STEPS INDICATOR - Horizontal Linked Tree
+   ============================================================== */
+.steps-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 2rem;
+    padding: 0.5rem 1rem;
+    background: none;
+    border-radius: 3rem;
+    box-shadow: none;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.steps-indicator::-webkit-scrollbar {
+    display: none;
+}
+
+.step-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    flex-shrink: 0;
+    opacity: 0.5;
+}
+
+.step-item.active {
+    opacity: 1;
+}
+
+.step-item.active .step-circle {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 4px 12px rgba(0,150,136,0.3);
+}
+
+.step-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--border-light);
+    color: var(--text-secondary);
+    border: 2px solid transparent;
+    transition: all var(--transition);
+    position: relative;
+}
+
+.step-num {
+    font-size: 0.7rem;
+    font-weight: 700;
+    display: block;
+}
+
+.step-icon {
+    display: none;
+    font-size: 0.9rem;
+}
+
+.step-item.active .step-num {
+    display: none;
+}
+
+.step-item.active .step-icon {
+    display: block;
+}
+
+.step-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.step-item.active .step-label {
+    color: var(--text-primary);
+}
+
+.step-line {
+    width: 24px;
+    height: 2px;
+    background: var(--border-light);
+    flex-shrink: 0;
+}
+
+.step-item.completed .step-circle {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* ==============================================================
+   CARDS
+   ============================================================== */
+.ppt-card {
+    background: var(--card-bg);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow var(--transition);
+    animation: fadeSlideUp 0.4s ease forwards;
+    opacity: 0;
+}
+
+.ppt-card:hover {
+    box-shadow: var(--shadow-hover);
+}
+
+.ppt-card:nth-child(1) { animation-delay: 0.05s; }
+.ppt-card:nth-child(2) { animation-delay: 0.1s; }
+.ppt-card:nth-child(3) { animation-delay: 0.15s; }
+.ppt-card:nth-child(4) { animation-delay: 0.2s; }
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ppt-card h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ppt-card h2 i {
+    color: var(--accent);
+}
+
+.ppt-card .sub {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 0.95rem;
+}
+
+/* ==============================================================
+   THEME CAROUSEL
+   ============================================================== */
+.theme-carousel-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-carousel {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding: 0.5rem 0.25rem 1rem;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.theme-carousel::-webkit-scrollbar {
+    display: none;
+}
+
+.theme-option {
+    flex: 0 0 200px;
+    min-width: 180px;
+    background: var(--surface);
+    border: 2px solid var(--border-light);
+    border-radius: 1.2rem;
+    padding: 1.2rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    text-align: center;
+    position: relative;
+}
+
+.theme-option:hover {
+    border-color: var(--accent);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,150,136,0.12);
+}
+
+.theme-option.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.theme-option .theme-preview {
+    width: 100%;
+    height: 80px;
+    border-radius: 0.75rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #fff;
+    gap: 0.5rem;
+}
+
+.theme-option .theme-preview .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-block;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.theme-option .theme-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.theme-option .theme-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+}
+
+.theme-option .check-mark {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--accent);
+    color: #fff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 8px rgba(0,150,136,0.3);
+}
+
+.theme-option.selected .check-mark {
+    display: flex;
+}
+
+/* Carousel Navigation */
+.carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+    z-index: 2;
+}
+
+.carousel-nav:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+.carousel-prev {
+    left: -12px;
+}
+
+.carousel-next {
+    right: -12px;
+}
+
+@media (max-width: 768px) {
+    .carousel-nav {
+        display: none;
+    }
+}
+
+/* ==============================================================
+   STYLE OPTIONS
+   ============================================================== */
+.style-options,
+.layout-options,
+.structure-options {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.style-option,
+.layout-option,
+.structure-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1.2rem;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: 2rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    font-weight: 500;
+    font-size: 0.9rem;
+    user-select: none;
+}
+
+.style-option:hover,
+.layout-option:hover,
+.structure-option:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+}
+
+.style-option.selected,
+.layout-option.selected,
+.structure-option.selected {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.style-option input[type="radio"],
+.layout-option input[type="radio"],
+.structure-option input[type="radio"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    margin: 0;
+}
+
+/* ==============================================================
+   ADDITIONAL INSTRUCTIONS
+   ============================================================== */
+.additional-textarea {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border-light);
+    border-radius: 1rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    min-height: 80px;
+    transition: border-color var(--transition);
+}
+
+.additional-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ==============================================================
+   SLIDE COUNT BADGE
+   ============================================================== */
+.slide-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    background: var(--accent-soft);
+    border-radius: 2rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.slide-count-badge i {
+    font-size: 1rem;
+}
+
+/* ==============================================================
+   GENERATE BUTTON
+   ============================================================== */
+.generate-ppt-btn {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, var(--accent), #0d9488);
+    color: white;
+    border: none;
+    border-radius: 3rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+    font-family: inherit;
+    box-shadow: 0 4px 16px rgba(0,150,136,0.3);
+}
+
+.generate-ppt-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0,150,136,0.4);
+    filter: brightness(1.05);
+}
+
+.generate-ppt-btn:active {
+    transform: scale(0.98);
+}
+
+.generate-ppt-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.generate-ppt-btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ==============================================================
+   TOAST
+   ============================================================== */
+#toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    padding: 12px 20px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideUp 0.3s ease;
+    color: var(--text-primary);
+    max-width: 400px;
+}
+
+.toast.error {
+    border-left-color: #dc2626;
+}
+
+.toast.warning {
+    border-left-color: #f59e0b;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==============================================================
+   RESPONSIVE
+   ============================================================== */
+@media (max-width: 768px) {
+    body { padding: 1rem 0.75rem; }
+    .ppt-card { padding: 1.2rem; }
+    .theme-option { flex: 0 0 160px; min-width: 140px; }
+    .ppt-header h1 { font-size: 1.4rem; }
+    .ppt-header .back-btn span { display: none; }
+    
+    .steps-indicator {
+        padding: 0.3rem 0.5rem;
+        border-radius: 2rem;
+        gap: 0;
+    }
+    .step-item { padding: 0.3rem 0.5rem; }
+    .step-circle { width: 30px; height: 30px; }
+    .step-label { font-size: 0.7rem; }
+    .step-line { width: 16px; }
+    
+    .steps-indicator {
+        display: none;
+    }
+    
+    .theme-option { flex: 0 0 40%; min-width: 45%; }
+}
+
+@media (max-width: 480px) {
+    .steps-indicator {
+        justify-content: flex-start;
+        padding: 0.3rem 0.8rem;
+    }
+    .step-item { padding: 0.2rem 0.4rem; }
+    .step-circle { width: 26px; height: 26px; }
+    .step-label { display: none; }
+    .step-line { width: 12px; }
+    
+    .style-options,
+    .layout-options,
+    .structure-options {
+        flex-direction: column;
+        width: 100%;
+    }
+    .style-option,
+    .layout-option,
+    .structure-option {
+        width: 100%;
+        justify-content: center;
+    }
+    .theme-option { flex: 0 0 70%; min-width: 75%; }
+    .generate-ppt-btn { font-size: 1rem; padding: 0.8rem; }
+    .ppt-card { padding: 1rem; border-radius: 1.2rem; }
+}
+
+@media (max-width: 360px) {
+    .theme-option { flex: 0 0 70%; min-width: 75%; }
+    .theme-option .theme-preview { height: 60px; }
+    .theme-option .theme-name { font-size: 0.8rem; }
+    .theme-option .theme-desc { font-size: 0.7rem; }
+}
+
+/* ==============================================================
+   DARK MODE SPECIFIC
+   ============================================================== */
+[data-theme="dark"] .ppt-card {
+    background: rgba(30,42,50,0.7);
+}
+
+[data-theme="dark"] .theme-option {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] .theme-option:hover {
+    border-color: var(--accent);
+}
+
+[data-theme="dark"] .theme-option.selected {
+    border-color: var(--accent);
+    background: rgba(20,184,166,0.2);
+}
+
+[data-theme="dark"] .style-option,
+[data-theme="dark"] .layout-option,
+[data-theme="dark"] .structure-option {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] .style-option.selected,
+[data-theme="dark"] .layout-option.selected,
+[data-theme="dark"] .structure-option.selected {
+    background: rgba(20,184,166,0.2);
+    border-color: var(--accent);
+}
+
+[data-theme="dark"] .steps-indicator {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] .step-item.active .step-circle {
+    background: var(--accent);
+}
+
+[data-theme="dark"] .step-circle {
+    background: #3e4b55;
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .generate-ppt-btn {
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+}
+
+[data-theme="dark"] .carousel-nav {
+    background: #2e3b45;
+    border-color: #3e4b55;
+}
+
+[data-theme="dark"] .carousel-nav:hover {
+    background: var(--accent);
+}
