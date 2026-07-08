@@ -1,40 +1,44 @@
 // js/ppt.js - AI-Powered PowerPoint Export with DeepSeek Integration
-// Enhanced version with charts, layouts, images, and speaker notes
+// Fixed: richer theme palettes (3–4 colors) + download button no longer regenerates
 
 // =====================================================================
-// THEME DEFINITIONS (only if not already defined)
+// THEME DEFINITIONS (Enhanced with 3-4 distinct colors)
 // =====================================================================
 if (typeof THEMES === 'undefined') {
     var THEMES = [{
         id: 'tranquil',
         name: 'Tranquil',
-        desc: 'Soft greens and blues, calming vibe',
+        desc: 'Teal, coral & gold – calm yet vibrant',
         colors: {
             primary: '#009688',
             primaryDark: '#00796b',
             secondary: '#4db6ac',
             accent: '#e0f2f1',
+            accent2: '#ff6b6b',
+            accent3: '#feca57',
             background: '#ffffff',
             text: '#1f2933',
             slideBg: '#f5f9f8',
             titleColor: '#009688',
             headingColor: '#00796b',
-            bulletColor: '#009688',
+            bulletColor: '#ff6b6b',
             accentBar: '#009688',
             gradientStart: '#009688',
             gradientEnd: '#4db6ac',
-            chartColors: ['#009688', '#4db6ac', '#26a69a', '#80cbc4', '#b2dfdb']
+            chartColors: ['#009688', '#ff6b6b', '#feca57', '#4db6ac', '#80cbc4']
         },
-        previewColors: ['#009688', '#4db6ac', '#e0f2f1']
+        previewColors: ['#009688', '#ff6b6b', '#feca57']
     }, {
         id: 'cigar',
         name: 'Cigar',
-        desc: 'Warm browns and golds, sophisticated',
+        desc: 'Warm browns, gold & cream – sophisticated',
         colors: {
             primary: '#8d6e63',
             primaryDark: '#6d4c41',
             secondary: '#d7ccc8',
             accent: '#f5e6d3',
+            accent2: '#d4a373',
+            accent3: '#cc8e6e',
             background: '#ffffff',
             text: '#3e2723',
             slideBg: '#faf0e6',
@@ -44,81 +48,89 @@ if (typeof THEMES === 'undefined') {
             accentBar: '#8d6e63',
             gradientStart: '#8d6e63',
             gradientEnd: '#d7ccc8',
-            chartColors: ['#8d6e63', '#a1887f', '#bcaaa4', '#d7ccc8', '#efebe9']
+            chartColors: ['#8d6e63', '#d4a373', '#cc8e6e', '#bcaaa4', '#efebe9']
         },
-        previewColors: ['#8d6e63', '#d7ccc8', '#f5e6d3']
+        previewColors: ['#8d6e63', '#d4a373', '#cc8e6e']
     }, {
         id: 'ocean',
         name: 'Ocean',
-        desc: 'Deep blues and teals, professional',
+        desc: 'Deep blue, teal & coral – professional with pop',
         colors: {
-            primary: '#0277bd',
-            primaryDark: '#01579b',
-            secondary: '#4fc3f7',
-            accent: '#e1f5fe',
+            primary: '#0d47a1',
+            primaryDark: '#0d47a1',
+            secondary: '#64b5f6',
+            accent: '#e3f2fd',
+            accent2: '#26c6da',
+            accent3: '#ff6b6b',
             background: '#ffffff',
-            text: '#01579b',
-            slideBg: '#f0f8ff',
-            titleColor: '#0277bd',
-            headingColor: '#01579b',
-            bulletColor: '#0277bd',
-            accentBar: '#0277bd',
-            gradientStart: '#0277bd',
-            gradientEnd: '#4fc3f7',
-            chartColors: ['#0277bd', '#0288d1', '#039be5', '#4fc3f7', '#81d4fa']
+            text: '#0d1b2a',
+            slideBg: '#f5f9ff',
+            titleColor: '#0d47a1',
+            headingColor: '#0d47a1',
+            bulletColor: '#26c6da',
+            accentBar: '#0d47a1',
+            gradientStart: '#0d47a1',
+            gradientEnd: '#64b5f6',
+            chartColors: ['#0d47a1', '#26c6da', '#ff6b6b', '#4fc3f7', '#81d4fa']
         },
-        previewColors: ['#0277bd', '#4fc3f7', '#e1f5fe']
+        previewColors: ['#0d47a1', '#26c6da', '#ff6b6b']
     }, {
         id: 'forest',
         name: 'Forest',
-        desc: 'Earthy greens, natural and fresh',
+        desc: 'Green, yellow & brown – natural and fresh',
         colors: {
             primary: '#2e7d32',
             primaryDark: '#1b5e20',
             secondary: '#81c784',
             accent: '#e8f5e9',
+            accent2: '#fdd835',
+            accent3: '#8d6e63',
             background: '#ffffff',
             text: '#1b3a1b',
             slideBg: '#f5faf5',
             titleColor: '#2e7d32',
             headingColor: '#1b5e20',
-            bulletColor: '#2e7d32',
+            bulletColor: '#fdd835',
             accentBar: '#2e7d32',
             gradientStart: '#2e7d32',
             gradientEnd: '#81c784',
-            chartColors: ['#2e7d32', '#388e3c', '#43a047', '#66bb6a', '#a5d6a7']
+            chartColors: ['#2e7d32', '#fdd835', '#8d6e63', '#66bb6a', '#a5d6a7']
         },
-        previewColors: ['#2e7d32', '#81c784', '#e8f5e9']
+        previewColors: ['#2e7d32', '#fdd835', '#8d6e63']
     }, {
         id: 'sunset',
         name: 'Sunset',
-        desc: 'Warm oranges and pinks, energetic',
+        desc: 'Orange, pink & yellow – energetic and warm',
         colors: {
             primary: '#e65100',
             primaryDark: '#bf360c',
             secondary: '#ffab91',
             accent: '#fbe9e7',
+            accent2: '#ff6b6b',
+            accent3: '#feca57',
             background: '#ffffff',
             text: '#4e2a1a',
             slideBg: '#fff5f0',
             titleColor: '#d84315',
             headingColor: '#bf360c',
-            bulletColor: '#e65100',
+            bulletColor: '#ff6b6b',
             accentBar: '#e65100',
             gradientStart: '#e65100',
             gradientEnd: '#ffab91',
-            chartColors: ['#e65100', '#f57c00', '#fb8c00', '#ffab91', '#ffccbc']
+            chartColors: ['#e65100', '#ff6b6b', '#feca57', '#ffab91', '#ffccbc']
         },
-        previewColors: ['#e65100', '#ffab91', '#fbe9e7']
+        previewColors: ['#e65100', '#ff6b6b', '#feca57']
     }, {
         id: 'monochrome',
         name: 'Monochrome',
-        desc: 'Black, white, and grays, timeless',
+        desc: 'Black, gray & white – timeless elegance',
         colors: {
             primary: '#424242',
             primaryDark: '#212121',
             secondary: '#bdbdbd',
             accent: '#f5f5f5',
+            accent2: '#9e9e9e',
+            accent3: '#616161',
             background: '#ffffff',
             text: '#212121',
             slideBg: '#fafafa',
@@ -128,51 +140,55 @@ if (typeof THEMES === 'undefined') {
             accentBar: '#424242',
             gradientStart: '#424242',
             gradientEnd: '#bdbdbd',
-            chartColors: ['#424242', '#616161', '#757575', '#9e9e9e', '#bdbdbd']
+            chartColors: ['#424242', '#9e9e9e', '#bdbdbd', '#e0e0e0', '#f5f5f5']
         },
-        previewColors: ['#424242', '#bdbdbd', '#f5f5f5']
+        previewColors: ['#424242', '#9e9e9e', '#bdbdbd']
     }, {
         id: 'royal',
         name: 'Royal',
-        desc: 'Deep purples and golds, elegant',
+        desc: 'Purple, gold & pink – regal and elegant',
         colors: {
             primary: '#6a1b9a',
             primaryDark: '#4a148c',
             secondary: '#ce93d8',
             accent: '#f3e5f5',
+            accent2: '#fbbf24',
+            accent3: '#f472b6',
             background: '#ffffff',
             text: '#311b92',
             slideBg: '#f8f4fc',
             titleColor: '#6a1b9a',
             headingColor: '#4a148c',
-            bulletColor: '#6a1b9a',
+            bulletColor: '#fbbf24',
             accentBar: '#6a1b9a',
             gradientStart: '#6a1b9a',
             gradientEnd: '#ce93d8',
-            chartColors: ['#6a1b9a', '#7b1fa2', '#8e24aa', '#ab47bc', '#ce93d8']
+            chartColors: ['#6a1b9a', '#fbbf24', '#f472b6', '#ab47bc', '#ce93d8']
         },
-        previewColors: ['#6a1b9a', '#ce93d8', '#f3e5f5']
+        previewColors: ['#6a1b9a', '#fbbf24', '#f472b6']
     }, {
         id: 'clinical',
         name: 'Clinical',
-        desc: 'Clean whites and medical blues',
+        desc: 'Clean blue, teal & gray – medical clarity',
         colors: {
             primary: '#0d47a1',
             primaryDark: '#0d47a1',
             secondary: '#64b5f6',
             accent: '#e3f2fd',
+            accent2: '#26c6da',
+            accent3: '#78909c',
             background: '#ffffff',
             text: '#0d1b2a',
             slideBg: '#f5f9ff',
             titleColor: '#0d47a1',
             headingColor: '#0d47a1',
-            bulletColor: '#1565c0',
+            bulletColor: '#26c6da',
             accentBar: '#0d47a1',
             gradientStart: '#0d47a1',
             gradientEnd: '#64b5f6',
-            chartColors: ['#0d47a1', '#1565c0', '#1e88e5', '#42a5f5', '#64b5f6']
+            chartColors: ['#0d47a1', '#26c6da', '#78909c', '#64b5f6', '#e3f2fd']
         },
-        previewColors: ['#0d47a1', '#64b5f6', '#e3f2fd']
+        previewColors: ['#0d47a1', '#26c6da', '#78909c']
     }];
 }
 
@@ -195,8 +211,12 @@ let structuredSlides = null;
 let currentUser = null;
 let isInitialized = false;
 
+// Store generated PPTX for direct download from preview
+let currentPptx = null;
+let currentFileName = '';
+
 // =====================================================================
-// DOM REFS (with null checks)
+// DOM REFS
 // =====================================================================
 let themeCarousel = null;
 let generateBtn = null;
@@ -208,10 +228,9 @@ let themeNext = null;
 let generationStatus = null;
 let statusText = null;
 let enableImageGenCheckbox = null;
-let chartStyleRadios = null;
 
 // =====================================================================
-// GET DOM ELEMENTS SAFELY
+// GET DOM ELEMENTS
 // =====================================================================
 function getDOMElements() {
     themeCarousel = document.getElementById('themeCarousel');
@@ -240,7 +259,7 @@ function waitForDOM() {
 }
 
 // =====================================================================
-// WAIT FOR FIREBASE (from config.js)
+// WAIT FOR FIREBASE
 // =====================================================================
 function waitForFirebase() {
     return new Promise((resolve) => {
@@ -322,7 +341,7 @@ function renderThemes() {
     getDOMElements();
     
     if (!themeCarousel) {
-        console.error('Theme carousel element not found! Check HTML for id="themeCarousel"');
+        console.error('Theme carousel element not found!');
         const wrapper = document.querySelector('.theme-carousel-wrapper');
         if (wrapper) {
             const carousel = document.createElement('div');
@@ -477,7 +496,6 @@ async function structureContentWithAI(rawContent, modeLabel, patientName, diagno
         if (!ok) throw new Error('AI service not available. Please check your connection.');
     }
 
-    // Get user preferences
     const layoutPreference = selectedLayout === 'dynamic' ? 'dynamic' : selectedLayout;
     const structurePreference = selectedStructure;
     const densityMap = { sparse: '3-4', balanced: '5-6', dense: '7-8' };
@@ -496,7 +514,7 @@ async function structureContentWithAI(rawContent, modeLabel, patientName, diagno
 **OUTPUT FORMAT**: Return ONLY a JSON array of slide objects. Each slide object has:
 
 {
-  "title": string (concise, informative slide title),
+  "title": string,
   "type": "title" | "content" | "chart" | "table" | "image" | "comparison" | "timeline" | "big-number" | "thankyou",
   "bullets": array of strings (EXACT original text, max ${density} per slide),
   "layout": "single" | "two-column" | "comparison" | "big-number" | "timeline",
@@ -507,7 +525,7 @@ async function structureContentWithAI(rawContent, modeLabel, patientName, diagno
   },
   "imagePrompt": string (detailed DALL-E/Midjourney prompt if image would help),
   "notes": string (speaker notes with presentation guidance),
-  "designHint": string (suggestions for visual emphasis),
+  "designHint": string,
   "comparisonData": { "left": [string], "right": [string] },
   "timelineData": [{ "time": string, "event": string }],
   "bigNumber": { "number": string, "label": string }
@@ -625,7 +643,6 @@ function createFallbackStructure(rawContent, modeLabel, patientName) {
             const text = child.textContent.trim();
             if (text) currentBullets.push(text);
         } else if (tag === 'table') {
-            // Try to extract table data for charts
             const rows = child.querySelectorAll('tr');
             const tableData = [];
             rows.forEach(row => {
@@ -706,11 +723,22 @@ function showPreview(slidesHtml) {
         if (e.target === overlay) close();
     });
 
+    // FIX: Download directly from stored pptx, no regeneration
     const downloadBtn = overlay.querySelector('#pptPreviewDownloadBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', async () => {
-            close();
-            await generatePPTX(true);
+            if (!currentPptx) {
+                showToast('No presentation data available. Please generate again.', 'error');
+                return;
+            }
+            try {
+                await currentPptx.writeFile({ fileName: currentFileName });
+                showToast('✅ PowerPoint downloaded successfully!');
+                close();
+            } catch (err) {
+                console.error('Download error:', err);
+                showToast('Error downloading: ' + err.message, 'error');
+            }
         });
     }
 }
@@ -749,7 +777,7 @@ function addTableToSlide(slide, data, colors, x, y, w, h) {
 }
 
 // =====================================================================
-// GENERATE CHART (ENHANCED - Uses PptxGenJS Native Charts)
+// GENERATE CHART (ENHANCED)
 // =====================================================================
 function addChartToSlide(slide, slideData, colors) {
     if (!slideData.chartData) return;
@@ -757,28 +785,21 @@ function addChartToSlide(slide, slideData, colors) {
     const { type, labels, datasets } = slideData.chartData;
     if (!labels || !datasets || datasets.length === 0) return;
     
-    // Prepare chart data for PptxGenJS
     const chartData = [];
-    
-    // Header row
     const headerRow = ['Category'];
     labels.forEach(label => headerRow.push(String(label)));
     chartData.push(headerRow);
     
-    // Data rows
     datasets.forEach(dataset => {
         const row = [dataset.label || 'Series'];
         dataset.data.forEach(val => {
-            // Ensure numbers for charts
             row.push(typeof val === 'number' ? val : parseFloat(val) || 0);
         });
         chartData.push(row);
     });
     
-    // Chart options based on user preference
-    const chartColors = colors.chartColors || [colors.primary, colors.secondary, colors.accentBar, '#f59e0b', '#ec4899'];
+    const chartColors = colors.chartColors || [colors.primary, colors.secondary, colors.accent2 || colors.accentBar, colors.accent3 || '#f59e0b', '#ec4899'];
     
-    // Apply chart style preferences
     let chartOptions = {
         x: 1.0,
         y: 2.0,
@@ -796,7 +817,6 @@ function addChartToSlide(slide, slideData, colors) {
         valGridLine: { color: '#e0e0e0', style: 'dash' }
     };
     
-    // Style-specific options
     switch(selectedChartStyle) {
         case 'modern':
             chartOptions.chartColors = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'];
@@ -819,7 +839,6 @@ function addChartToSlide(slide, slideData, colors) {
             chartOptions.border = { color: '#ffffff', pt: 1 };
             break;
         default:
-            // Use theme colors
             break;
     }
     
@@ -827,7 +846,6 @@ function addChartToSlide(slide, slideData, colors) {
         slide.addChart(type, chartData, chartOptions);
     } catch (e) {
         console.warn('Chart generation failed, using fallback:', e);
-        // Fallback: show data as text
         slide.addText('📊 ' + slideData.title, {
             x: 1, y: 2, w: 9, h: 0.8,
             fontSize: 20,
@@ -847,13 +865,12 @@ function addChartToSlide(slide, slideData, colors) {
 }
 
 // =====================================================================
-// GENERATE COMPARISON SLIDE (FIXED - using strings for shape types)
+// GENERATE COMPARISON SLIDE
 // =====================================================================
 function addComparisonSlide(slide, slideData, colors) {
     const left = slideData.comparisonData?.left || [];
     const right = slideData.comparisonData?.right || [];
     
-    // Left column
     slide.addShape('rect', {
         x: 0.6, y: 1.8, w: 5.5, h: 4.2,
         fill: { color: colors.accent },
@@ -876,7 +893,6 @@ function addComparisonSlide(slide, slideData, colors) {
         });
     });
     
-    // Right column
     slide.addShape('rect', {
         x: 6.8, y: 1.8, w: 5.5, h: 4.2,
         fill: { color: colors.accent },
@@ -901,7 +917,7 @@ function addComparisonSlide(slide, slideData, colors) {
 }
 
 // =====================================================================
-// GENERATE TIMELINE SLIDE (FIXED - using strings for shape types)
+// GENERATE TIMELINE SLIDE
 // =====================================================================
 function addTimelineSlide(slide, slideData, colors) {
     const timeline = slideData.timelineData || [];
@@ -911,7 +927,6 @@ function addTimelineSlide(slide, slideData, colors) {
     const spacing = 9 / numItems;
     const yPos = 3.5;
     
-    // Draw line
     slide.addShape('rect', {
         x: 1.5, y: yPos, w: 10, h: 0.04,
         fill: { color: colors.accentBar }
@@ -920,13 +935,11 @@ function addTimelineSlide(slide, slideData, colors) {
     timeline.forEach((item, idx) => {
         const xPos = 1.8 + idx * spacing;
         
-        // Circle marker
         slide.addShape('oval', {
             x: xPos - 0.15, y: yPos - 0.15, w: 0.3, h: 0.3,
             fill: { color: colors.primary }
         });
         
-        // Time
         slide.addText(item.time || '', {
             x: xPos - 0.8, y: yPos - 1.0, w: 1.6, h: 0.6,
             fontSize: 14,
@@ -935,7 +948,6 @@ function addTimelineSlide(slide, slideData, colors) {
             bold: true
         });
         
-        // Event
         slide.addText(item.event || '', {
             x: xPos - 1.2, y: yPos + 0.3, w: 2.4, h: 0.8,
             fontSize: 11,
@@ -952,7 +964,6 @@ function addTimelineSlide(slide, slideData, colors) {
 function addBigNumberSlide(slide, slideData, colors) {
     const bigNum = slideData.bigNumber || { number: 'N/A', label: 'Statistic' };
     
-    // Big number
     slide.addText(bigNum.number, {
         x: 0, y: 1.8, w: 13.33, h: 2.5,
         fontSize: 80,
@@ -961,7 +972,6 @@ function addBigNumberSlide(slide, slideData, colors) {
         bold: true
     });
     
-    // Label
     slide.addText(bigNum.label, {
         x: 0, y: 4.5, w: 13.33, h: 0.8,
         fontSize: 28,
@@ -969,7 +979,6 @@ function addBigNumberSlide(slide, slideData, colors) {
         align: 'center'
     });
     
-    // Optional bullets
     if (slideData.bullets && slideData.bullets.length > 0) {
         let yPos = 5.5;
         slideData.bullets.slice(0, 3).forEach(bullet => {
@@ -995,7 +1004,6 @@ async function generatePPTX(skipPreview = false) {
 
     getDOMElements();
     
-    // Update status
     if (generationStatus) {
         generationStatus.style.display = 'block';
         generationStatus.className = '';
@@ -1020,7 +1028,6 @@ async function generatePPTX(skipPreview = false) {
         let slides = await structureContentWithAI(rawContent, modeLabel, patientDisplay, diagnosis);
         structuredSlides = slides;
 
-        // Extract tables from content
         const extractedTables = [];
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = rawContent;
@@ -1059,19 +1066,19 @@ async function generatePPTX(skipPreview = false) {
                 });
                 slide.addShape('rect', {
                     x: 0, y: 0.35, w: 13.33, h: 0.04,
-                    fill: { color: colors.secondary },
+                    fill: { color: colors.accent2 || colors.secondary },
                     rectRadius: 0
                 });
             } else if (type === 'side') {
                 slide.addShape('rect', {
                     x: 0, y: 0.4, w: 0.15, h: 6.6,
-                    fill: { color: colors.accentBar },
+                    fill: { color: colors.accent3 || colors.accentBar },
                     rectRadius: 0
                 });
             } else if (type === 'bottom') {
                 slide.addShape('rect', {
                     x: 0, y: 7.0, w: 13.33, h: 0.08,
-                    fill: { color: colors.accentBar },
+                    fill: { color: colors.accent2 || colors.accentBar },
                     rectRadius: 0
                 });
             }
@@ -1088,7 +1095,7 @@ async function generatePPTX(skipPreview = false) {
         });
         slideTitle.addShape('rect', {
             x: 0, y: 6.7, w: 13.33, h: 0.8,
-            fill: { color: colors.secondary },
+            fill: { color: colors.accent2 || colors.secondary },
             rectRadius: 0
         });
         slideTitle.addShape('rect', {
@@ -1161,7 +1168,6 @@ async function generatePPTX(skipPreview = false) {
             addDeco(slide, 'side');
             addDeco(slide, 'bottom');
 
-            // Title
             slide.addText(slideData.title, {
                 x: 0.6, y: 0.5, w: 11.73, h: 0.9,
                 fontSize: 32,
@@ -1177,16 +1183,13 @@ async function generatePPTX(skipPreview = false) {
                 rectRadius: 0
             });
 
-            // Handle different slide types
             const type = slideData.type || 'content';
             
             switch(type) {
                 case 'chart':
-                    // Add chart
                     if (slideData.chartData) {
                         addChartToSlide(slide, slideData, colors);
                     }
-                    // Also add bullets if present
                     if (slideData.bullets && slideData.bullets.length > 0) {
                         let yPos = 2.5;
                         slideData.bullets.slice(0, 4).forEach(bullet => {
@@ -1214,7 +1217,6 @@ async function generatePPTX(skipPreview = false) {
                     break;
                     
                 case 'table':
-                    // Find table data
                     let tableData = null;
                     if (extractedTables.length > 0) {
                         tableData = extractedTables[0];
@@ -1241,7 +1243,6 @@ async function generatePPTX(skipPreview = false) {
                     break;
                     
                 case 'image':
-                    // Image placeholder
                     slide.addShape('rect', {
                         x: 7.0, y: 1.8, w: 5.5, h: 4.5,
                         fill: { color: colors.accent },
@@ -1264,7 +1265,6 @@ async function generatePPTX(skipPreview = false) {
                             valign: 'top'
                         });
                     }
-                    // Bullets on left
                     if (slideData.bullets && slideData.bullets.length > 0) {
                         let yPos = 2.0;
                         slideData.bullets.slice(0, 5).forEach(bullet => {
@@ -1279,7 +1279,7 @@ async function generatePPTX(skipPreview = false) {
                     }
                     break;
                     
-                default: // content
+                default:
                     if (slideData.bullets && slideData.bullets.length > 0) {
                         let yPos = 2.0;
                         const maxBullets = slideDensity === 'sparse' ? 4 : 
@@ -1309,12 +1309,10 @@ async function generatePPTX(skipPreview = false) {
                     break;
             }
 
-            // Speaker notes
             if (includeSpeakerNotes && slideData.notes) {
                 slide.addNotes(slideData.notes);
             }
 
-            // Page number
             const pageNum = slideIndex + 1;
             slide.addText(`Page ${pageNum} of ${totalSlides}`, {
                 x: 0, y: 7.1, w: 13.33, h: 0.4,
@@ -1467,7 +1465,7 @@ async function generatePPTX(skipPreview = false) {
         thankSlide.background = { color: colors.primary };
         thankSlide.addShape('rect', {
             x: 0, y: 6.7, w: 13.33, h: 0.8,
-            fill: { color: colors.secondary },
+            fill: { color: colors.accent2 || colors.secondary },
             rectRadius: 0
         });
         thankSlide.addShape('rect', {
@@ -1507,7 +1505,12 @@ async function generatePPTX(skipPreview = false) {
             </div>
         `);
 
-        // --- PREVIEW OR DOWNLOAD ---
+        // --- Build final filename and store PPTX for later download ---
+        const fileName = `${patientDisplay.replace(/\s+/g, '_')}_${modeLabel.replace(/\s+/g, '_')}_${Date.now()}.pptx`;
+        currentPptx = pptx;
+        currentFileName = fileName;
+
+        // --- PREVIEW OR DIRECT DOWNLOAD ---
         if (!skipPreview) {
             const fullPreviewHtml = `
                 <div style="max-width: 900px; margin: 0 auto; padding: 10px;">
@@ -1525,14 +1528,13 @@ async function generatePPTX(skipPreview = false) {
             return;
         }
 
-        const fileName = `${patientDisplay.replace(/\s+/g, '_')}_${modeLabel.replace(/\s+/g, '_')}_${Date.now()}.pptx`;
+        // If skipPreview = true, download directly
         await pptx.writeFile({ fileName: fileName });
-        
         if (statusText) statusText.textContent = '✅ PowerPoint generated successfully!';
         if (generationStatus) {
             generationStatus.className = 'success';
         }
-        showToast('✅ PowerPoint generated successfully!');
+        showToast('✅ PowerPoint downloaded successfully!');
 
     } catch (err) {
         console.error('Generation error:', err);
@@ -1560,7 +1562,6 @@ async function generatePPTX(skipPreview = false) {
 function setupEventListeners() {
     getDOMElements();
     
-    // Art Style
     document.querySelectorAll('input[name="artStyle"]').forEach(el => {
         el.addEventListener('change', (e) => {
             selectedArtStyle = e.target.value;
@@ -1570,7 +1571,6 @@ function setupEventListeners() {
         });
     });
 
-    // Chart Style
     document.querySelectorAll('input[name="chartStyle"]').forEach(el => {
         el.addEventListener('change', (e) => {
             selectedChartStyle = e.target.value;
@@ -1583,7 +1583,6 @@ function setupEventListeners() {
         });
     });
 
-    // Layout Type
     document.querySelectorAll('input[name="layoutType"]').forEach(el => {
         el.addEventListener('change', (e) => {
             selectedLayout = e.target.value;
@@ -1593,7 +1592,6 @@ function setupEventListeners() {
         });
     });
 
-    // Slide Structure
     document.querySelectorAll('input[name="slideStructure"]').forEach(el => {
         el.addEventListener('change', (e) => {
             selectedStructure = e.target.value;
@@ -1604,14 +1602,12 @@ function setupEventListeners() {
         });
     });
 
-    // Image Generation
     if (enableImageGenCheckbox) {
         enableImageGenCheckbox.addEventListener('change', (e) => {
             enableImageGeneration = e.target.checked;
         });
     }
 
-    // Advanced Options
     const fontSizeSelect = document.getElementById('fontSizeSelect');
     if (fontSizeSelect) {
         fontSizeSelect.addEventListener('change', (e) => {
@@ -1641,12 +1637,10 @@ function setupEventListeners() {
         });
     }
 
-    // Generate Button
     if (generateBtn) {
         generateBtn.addEventListener('click', () => generatePPTX(false));
     }
 
-    // Step items scroll
     document.querySelectorAll('.step-item').forEach((item, index) => {
         item.addEventListener('click', () => {
             const cards = document.querySelectorAll('.ppt-card');
@@ -1706,7 +1700,6 @@ async function init() {
     updateStepIndicator(1);
     await fetchTokens();
 
-    // Set initial chart style selection
     document.querySelectorAll('#chartStyleOptions .style-option').forEach(opt => {
         const radio = opt.querySelector('input[type="radio"]');
         if (radio && radio.checked) {
@@ -1715,7 +1708,6 @@ async function init() {
     });
 
     isInitialized = true;
-    
     console.log('[PPT] Ready!');
     console.log('[PPT] Content loaded:', contentData ? 'Yes' : 'No');
     console.log('[PPT] Selected theme:', selectedTheme.name);
