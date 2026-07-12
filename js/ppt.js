@@ -1,8 +1,8 @@
-// js/ppt.js - AI-Powered PowerPoint Export with DeepSeek Integration
-// Fixed: richer theme palettes (3–4 colors) + download button no longer regenerates
+// js/ppt.js - AI-Powered PowerPoint Export with OpenAI (GPT-4)
+// FIXED: color-format corruption bugs + full visual redesign
 
 // =====================================================================
-// THEME DEFINITIONS (Enhanced with 3-4 distinct colors)
+// THEME DEFINITIONS (kept with '#' — the UI/CSS layer needs it)
 // =====================================================================
 if (typeof THEMES === 'undefined') {
     var THEMES = [{
@@ -12,13 +12,12 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#009688',
             primaryDark: '#00796b',
-            secondary: '#4db6ac',
-            accent: '#e0f2f1',
-            accent2: '#ff6b6b',
-            accent3: '#feca57',
+            primaryLight: '#4db6ac',
+            secondary: '#ff6b6b',
+            accent: '#feca57',
             background: '#ffffff',
             text: '#1f2933',
-            slideBg: '#f5f9f8',
+            slideBg: '#ffffff',
             titleColor: '#009688',
             headingColor: '#00796b',
             bulletColor: '#ff6b6b',
@@ -35,13 +34,12 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#8d6e63',
             primaryDark: '#6d4c41',
-            secondary: '#d7ccc8',
-            accent: '#f5e6d3',
-            accent2: '#d4a373',
-            accent3: '#cc8e6e',
+            primaryLight: '#d7ccc8',
+            secondary: '#d4a373',
+            accent: '#cc8e6e',
             background: '#ffffff',
             text: '#3e2723',
-            slideBg: '#faf0e6',
+            slideBg: '#ffffff',
             titleColor: '#6d4c41',
             headingColor: '#5d4037',
             bulletColor: '#8d6e63',
@@ -57,14 +55,13 @@ if (typeof THEMES === 'undefined') {
         desc: 'Deep blue, teal & coral – professional with pop',
         colors: {
             primary: '#0d47a1',
-            primaryDark: '#0d47a1',
-            secondary: '#64b5f6',
-            accent: '#e3f2fd',
-            accent2: '#26c6da',
-            accent3: '#ff6b6b',
+            primaryDark: '#0a3d8a',
+            primaryLight: '#64b5f6',
+            secondary: '#26c6da',
+            accent: '#ff6b6b',
             background: '#ffffff',
             text: '#0d1b2a',
-            slideBg: '#f5f9ff',
+            slideBg: '#ffffff',
             titleColor: '#0d47a1',
             headingColor: '#0d47a1',
             bulletColor: '#26c6da',
@@ -81,13 +78,12 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#2e7d32',
             primaryDark: '#1b5e20',
-            secondary: '#81c784',
-            accent: '#e8f5e9',
-            accent2: '#fdd835',
-            accent3: '#8d6e63',
+            primaryLight: '#81c784',
+            secondary: '#fdd835',
+            accent: '#8d6e63',
             background: '#ffffff',
             text: '#1b3a1b',
-            slideBg: '#f5faf5',
+            slideBg: '#ffffff',
             titleColor: '#2e7d32',
             headingColor: '#1b5e20',
             bulletColor: '#fdd835',
@@ -104,13 +100,12 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#e65100',
             primaryDark: '#bf360c',
-            secondary: '#ffab91',
-            accent: '#fbe9e7',
-            accent2: '#ff6b6b',
-            accent3: '#feca57',
+            primaryLight: '#ffab91',
+            secondary: '#ff6b6b',
+            accent: '#feca57',
             background: '#ffffff',
             text: '#4e2a1a',
-            slideBg: '#fff5f0',
+            slideBg: '#ffffff',
             titleColor: '#d84315',
             headingColor: '#bf360c',
             bulletColor: '#ff6b6b',
@@ -127,20 +122,19 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#424242',
             primaryDark: '#212121',
-            secondary: '#bdbdbd',
-            accent: '#f5f5f5',
-            accent2: '#9e9e9e',
-            accent3: '#616161',
+            primaryLight: '#bdbdbd',
+            secondary: '#9e9e9e',
+            accent: '#616161',
             background: '#ffffff',
             text: '#212121',
-            slideBg: '#fafafa',
+            slideBg: '#ffffff',
             titleColor: '#424242',
             headingColor: '#424242',
             bulletColor: '#616161',
             accentBar: '#424242',
             gradientStart: '#424242',
             gradientEnd: '#bdbdbd',
-            chartColors: ['#424242', '#9e9e9e', '#bdbdbd', '#e0e0e0', '#f5f5f5']
+            chartColors: ['#424242', '#9e9e9e', '#bdbdbd', '#757575', '#616161']
         },
         previewColors: ['#424242', '#9e9e9e', '#bdbdbd']
     }, {
@@ -150,13 +144,12 @@ if (typeof THEMES === 'undefined') {
         colors: {
             primary: '#6a1b9a',
             primaryDark: '#4a148c',
-            secondary: '#ce93d8',
-            accent: '#f3e5f5',
-            accent2: '#fbbf24',
-            accent3: '#f472b6',
+            primaryLight: '#ce93d8',
+            secondary: '#fbbf24',
+            accent: '#f472b6',
             background: '#ffffff',
             text: '#311b92',
-            slideBg: '#f8f4fc',
+            slideBg: '#ffffff',
             titleColor: '#6a1b9a',
             headingColor: '#4a148c',
             bulletColor: '#fbbf24',
@@ -172,21 +165,20 @@ if (typeof THEMES === 'undefined') {
         desc: 'Clean blue, teal & gray – medical clarity',
         colors: {
             primary: '#0d47a1',
-            primaryDark: '#0d47a1',
-            secondary: '#64b5f6',
-            accent: '#e3f2fd',
-            accent2: '#26c6da',
-            accent3: '#78909c',
+            primaryDark: '#0a3d8a',
+            primaryLight: '#64b5f6',
+            secondary: '#26c6da',
+            accent: '#78909c',
             background: '#ffffff',
             text: '#0d1b2a',
-            slideBg: '#f5f9ff',
+            slideBg: '#ffffff',
             titleColor: '#0d47a1',
             headingColor: '#0d47a1',
             bulletColor: '#26c6da',
             accentBar: '#0d47a1',
             gradientStart: '#0d47a1',
             gradientEnd: '#64b5f6',
-            chartColors: ['#0d47a1', '#26c6da', '#78909c', '#64b5f6', '#e3f2fd']
+            chartColors: ['#0d47a1', '#26c6da', '#78909c', '#64b5f6', '#90a4ae']
         },
         previewColors: ['#0d47a1', '#26c6da', '#78909c']
     }];
@@ -196,24 +188,12 @@ if (typeof THEMES === 'undefined') {
 // STATE
 // =====================================================================
 let selectedTheme = THEMES[0];
-let selectedArtStyle = 'photo';
-let selectedLayout = 'freeform';
-let selectedStructure = 'headings';
-let selectedChartStyle = 'modern';
-let enableImageGeneration = false;
-let fontSizePreference = 'medium';
-let slideDensity = 'balanced';
-let includeSpeakerNotes = true;
-let includeCharts = 'auto';
+let selectedArtStyle = 'professional';
 let contentData = null;
-let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+let aiConfig = { token: null, endpoint: 'https://api.openai.com/v1', model: 'gpt-4' };
 let structuredSlides = null;
 let currentUser = null;
 let isInitialized = false;
-
-// Store generated PPTX for direct download from preview
-let currentPptx = null;
-let currentFileName = '';
 
 // =====================================================================
 // DOM REFS
@@ -227,11 +207,7 @@ let themePrev = null;
 let themeNext = null;
 let generationStatus = null;
 let statusText = null;
-let enableImageGenCheckbox = null;
 
-// =====================================================================
-// GET DOM ELEMENTS
-// =====================================================================
 function getDOMElements() {
     themeCarousel = document.getElementById('themeCarousel');
     generateBtn = document.getElementById('generatePptBtn');
@@ -242,12 +218,8 @@ function getDOMElements() {
     themeNext = document.getElementById('themeNext');
     generationStatus = document.getElementById('generationStatus');
     statusText = document.getElementById('statusText');
-    enableImageGenCheckbox = document.getElementById('enableImageGeneration');
 }
 
-// =====================================================================
-// WAIT FOR DOM
-// =====================================================================
 function waitForDOM() {
     return new Promise((resolve) => {
         if (document.readyState === 'loading') {
@@ -258,9 +230,6 @@ function waitForDOM() {
     });
 }
 
-// =====================================================================
-// WAIT FOR FIREBASE
-// =====================================================================
 function waitForFirebase() {
     return new Promise((resolve) => {
         if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
@@ -282,9 +251,6 @@ function waitForFirebase() {
     });
 }
 
-// =====================================================================
-// TOAST
-// =====================================================================
 function showToast(msg, type = 'success', duration = 4000) {
     if (!toastContainer) {
         console.warn('Toast container not found');
@@ -303,9 +269,6 @@ function showToast(msg, type = 'success', duration = 4000) {
     }, duration);
 }
 
-// =====================================================================
-// FETCH AI TOKEN
-// =====================================================================
 async function fetchTokens() {
     try {
         await waitForFirebase();
@@ -313,20 +276,21 @@ async function fetchTokens() {
             console.warn('Firebase not available, using fallback token');
             if (window.aiConfig && window.aiConfig.token) {
                 aiConfig.token = window.aiConfig.token;
-                console.log('Using fallback token from window');
                 return true;
             }
             return false;
         }
         const database = firebase.database();
-        const snapshot = await database.ref('tokens/deepseek').once('value');
+        const snapshot = await database.ref('tokens/openAI').once('value');
         const data = snapshot.val();
-        if (data?.api_key) {
-            aiConfig.token = data.api_key;
-            console.log('DeepSeek API loaded from Firebase');
+        if (data?.openai_token) {
+            aiConfig.token = data.openai_token;
+            aiConfig.endpoint = (data.github_endpoint && data.github_endpoint.startsWith('http'))
+                ? data.github_endpoint : 'https://api.openai.com/v1';
+            aiConfig.model = 'gpt-4';
             return true;
         }
-        console.warn('DeepSeek API key missing');
+        console.warn('OpenAI API key missing. Using fallback local structuring.');
         return false;
     } catch (error) {
         console.error('Token fetch error:', error);
@@ -335,13 +299,12 @@ async function fetchTokens() {
 }
 
 // =====================================================================
-// RENDER THEMES (Carousel)
+// RENDER THEMES (UI carousel — uses '#' hex, this is CSS not PptxGenJS)
 // =====================================================================
 function renderThemes() {
     getDOMElements();
-    
+
     if (!themeCarousel) {
-        console.error('Theme carousel element not found!');
         const wrapper = document.querySelector('.theme-carousel-wrapper');
         if (wrapper) {
             const carousel = document.createElement('div');
@@ -349,18 +312,9 @@ function renderThemes() {
             carousel.className = 'theme-carousel';
             wrapper.prepend(carousel);
             themeCarousel = carousel;
-            console.log('Created fallback theme carousel');
         } else {
-            const container = document.querySelector('.ppt-card:first-child .theme-grid');
-            if (container) {
-                container.id = 'themeCarousel';
-                container.className = 'theme-carousel';
-                themeCarousel = container;
-                console.log('Converted existing container to theme carousel');
-            } else {
-                console.error('Cannot find or create theme carousel');
-                return;
-            }
+            console.error('Cannot find or create theme carousel');
+            return;
         }
     }
 
@@ -392,9 +346,6 @@ function renderThemes() {
     });
 }
 
-// =====================================================================
-// STEP INDICATOR
-// =====================================================================
 function updateStepIndicator(step) {
     const stepItems = document.querySelectorAll('.step-item');
     if (!stepItems.length) return;
@@ -411,33 +362,19 @@ function updateStepIndicator(step) {
     });
 }
 
-// =====================================================================
-// CAROUSEL NAVIGATION
-// =====================================================================
 function scrollCarousel(direction) {
     getDOMElements();
     if (!themeCarousel) return;
     const scrollAmount = 220;
-    if (direction === 'next') {
-        themeCarousel.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    } else {
-        themeCarousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-    }
+    themeCarousel.scrollBy({ left: direction === 'next' ? scrollAmount : -scrollAmount, behavior: 'smooth' });
 }
 
 function setupCarouselNav() {
     getDOMElements();
-    if (themePrev) {
-        themePrev.addEventListener('click', () => scrollCarousel('prev'));
-    }
-    if (themeNext) {
-        themeNext.addEventListener('click', () => scrollCarousel('next'));
-    }
+    if (themePrev) themePrev.addEventListener('click', () => scrollCarousel('prev'));
+    if (themeNext) themeNext.addEventListener('click', () => scrollCarousel('next'));
 }
 
-// =====================================================================
-// UPDATE SLIDE COUNT
-// =====================================================================
 function updateSlideCount() {
     getDOMElements();
     if (structuredSlides) {
@@ -455,9 +392,6 @@ function updateSlideCount() {
     if (slideCountSpan) slideCountSpan.textContent = count + 2;
 }
 
-// =====================================================================
-// LOAD CONTENT
-// =====================================================================
 function loadContent() {
     getDOMElements();
     const raw = localStorage.getItem('pptExportData');
@@ -488,531 +422,411 @@ function loadContent() {
 }
 
 // =====================================================================
-// AI STRUCTURING OF CONTENT (ENHANCED)
+// VALIDATE AND CLEAN SLIDE DATA
+// =====================================================================
+function validateAndCleanSlides(slides) {
+    if (!Array.isArray(slides) || slides.length === 0) return null;
+
+    const cleaned = slides.map((slide, index) => {
+        const clean = {
+            title: String(slide.title || `Slide ${index + 1}`).trim() || `Slide ${index + 1}`,
+            type: slide.type || 'content',
+            bullets: Array.isArray(slide.bullets) ? slide.bullets.slice(0, 6) : [],
+            layout: slide.layout || 'single'
+        };
+        clean.bullets = clean.bullets
+            .filter(b => b && String(b).trim().length > 0)
+            .map(b => String(b).trim())
+            .slice(0, 6);
+        if (clean.bullets.length === 0) clean.bullets = ['No content available for this section'];
+
+        if (slide.chartData && typeof slide.chartData === 'object') {
+            const allowedTypes = ['bar', 'line', 'pie', 'doughnut', 'area', 'radar'];
+            clean.chartData = {
+                type: allowedTypes.includes(slide.chartData.type) ? slide.chartData.type : 'bar',
+                labels: Array.isArray(slide.chartData.labels) ? slide.chartData.labels : [],
+                datasets: Array.isArray(slide.chartData.datasets) ? slide.chartData.datasets : []
+            };
+        }
+        if (slide.comparisonData && typeof slide.comparisonData === 'object') {
+            clean.comparisonData = {
+                left: Array.isArray(slide.comparisonData.left) ? slide.comparisonData.left : [],
+                right: Array.isArray(slide.comparisonData.right) ? slide.comparisonData.right : []
+            };
+        }
+        if (slide.timelineData && Array.isArray(slide.timelineData)) {
+            clean.timelineData = slide.timelineData.slice(0, 8);
+        }
+        if (slide.bigNumber && typeof slide.bigNumber === 'object') {
+            clean.bigNumber = {
+                number: String(slide.bigNumber.number || 'N/A'),
+                label: String(slide.bigNumber.label || 'Statistic')
+            };
+        }
+        return clean;
+    });
+
+    return cleaned.filter(s => s !== null);
+}
+
+// =====================================================================
+// AI STRUCTURING WITH OPENAI (GPT-4) - With robust fallback
 // =====================================================================
 async function structureContentWithAI(rawContent, modeLabel, patientName, diagnosis) {
     if (!aiConfig.token) {
         const ok = await fetchTokens();
-        if (!ok) throw new Error('AI service not available. Please check your connection.');
+        if (!ok) {
+            console.warn('No OpenAI token, using fallback structure');
+            return createFallbackStructure(rawContent, modeLabel, patientName);
+        }
     }
 
-    const layoutPreference = selectedLayout === 'dynamic' ? 'dynamic' : selectedLayout;
-    const structurePreference = selectedStructure;
-    const densityMap = { sparse: '3-4', balanced: '5-6', dense: '7-8' };
-    const density = densityMap[slideDensity] || '5-6';
-    const chartPreference = includeCharts;
-    const notesPreference = includeSpeakerNotes;
+    const prompt = `You are an expert presentation designer. Transform the following clinical content into a structured presentation.
 
-    const prompt = `You are an expert presentation designer for clinical case presentations. Your task is to transform the following raw clinical content into a sophisticated, well-structured presentation.
+**RULES:**
+1. NEVER change or paraphrase the original text. Preserve exact wording.
+2. Each slide should have 4-6 bullet points with EXACT original text.
+3. Split content into logical slides - each covers one clear topic.
+4. Vary slide "type" across the deck (content, chart, comparison, timeline, big-number) where the data genuinely supports it — don't make every slide type "content".
 
-**CRITICAL RULES:**
-1. NEVER change, paraphrase, or modify the original text content. Preserve exact wording.
-2. Extract key metrics, numbers, and data for charts.
-3. Identify where images, charts, tables, or illustrations would enhance understanding.
-4. Each slide should have 3-6 bullet points with EXACT original text.
+**OUTPUT FORMAT**: Return ONLY a JSON array of slide objects.
 
-**OUTPUT FORMAT**: Return ONLY a JSON array of slide objects. Each slide object has:
-
+Each slide object has:
 {
   "title": string,
-  "type": "title" | "content" | "chart" | "table" | "image" | "comparison" | "timeline" | "big-number" | "thankyou",
-  "bullets": array of strings (EXACT original text, max ${density} per slide),
-  "layout": "single" | "two-column" | "comparison" | "big-number" | "timeline",
-  "chartData": { 
-    "type": "bar" | "pie" | "line" | "doughnut" | "radar",
-    "labels": [string],
-    "datasets": [{ "label": string, "data": [number] }]
-  },
-  "imagePrompt": string (detailed DALL-E/Midjourney prompt if image would help),
-  "notes": string (speaker notes with presentation guidance),
-  "designHint": string,
+  "type": "content" | "chart" | "comparison" | "timeline" | "big-number",
+  "bullets": array of strings (EXACT original text, 4-6 per slide),
+  "chartData": { "type": "bar", "labels": [string], "datasets": [{ "label": string, "data": [number] }] },
   "comparisonData": { "left": [string], "right": [string] },
   "timelineData": [{ "time": string, "event": string }],
   "bigNumber": { "number": string, "label": string }
 }
 
-**LAYOUT RULES:**
-- For "comparison" type, provide comparisonData with left/right columns.
-- For "timeline" type, provide timelineData with time/event pairs.
-- For "big-number" type, provide bigNumber with a key statistic.
-- Use "two-column" layout when you have a chart or image to show alongside text.
-
-**CHART RULES:**
-${chartPreference === 'yes' ? '- ALWAYS include charts when numeric data is present.' : ''}
-${chartPreference === 'no' ? '- NEVER include charts.' : '- Include charts when numeric data is present (auto-detect).'}
-- Extract numbers from text like "30%", "$2.4M", "45 patients".
-- Create meaningful chart labels and datasets.
-
-**IMAGE RULES:**
-${enableImageGeneration ? '- Generate detailed image prompts for relevant slides.' : '- Do NOT generate image prompts.'}
-- Prompts should be specific, descriptive, and suitable for medical/clinical contexts.
-
-**ADDITIONAL INSTRUCTIONS:**
-- Layout preference: ${layoutPreference}
-- Structure preference: ${structurePreference}
-- ${notesPreference ? 'Include speaker notes for each slide.' : 'Do NOT include speaker notes.'}
-- ${pptInstructions ? pptInstructions.value.trim() : 'No additional instructions.'}
-
 **Raw Content:**
-Title: ${modeLabel}
-Patient: ${patientName}
-Diagnosis: ${diagnosis}
-
 ${rawContent}
 
-Return ONLY the JSON array, no other text.`;
+Return ONLY the JSON array.`;
 
     const messages = [
-        { role: 'system', content: 'You are a clinical presentation designer. Return ONLY valid JSON. NEVER change the original text content. Extract numeric data for charts.' },
+        { role: 'system', content: 'You are a presentation designer. Return ONLY valid JSON. NEVER change original text. Max 6 bullets per slide.' },
         { role: 'user', content: prompt }
     ];
 
-    const url = `${aiConfig.endpoint}/chat/completions`;
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${aiConfig.token}`
-        },
-        body: JSON.stringify({
-            model: aiConfig.model,
-            messages,
-            max_tokens: 8000,
-            temperature: 0.1,
-            top_p: 0.9
-        })
-    });
-
-    if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error?.message || `AI error ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    
     try {
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (!jsonMatch) {
-            console.warn('No JSON array found in AI response, using fallback');
+        const url = `${aiConfig.endpoint}/chat/completions`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${aiConfig.token}`
+            },
+            body: JSON.stringify({
+                model: aiConfig.model,
+                messages,
+                max_tokens: 6000,
+                temperature: 0.1
+            })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            console.warn('AI error:', errData);
             return createFallbackStructure(rawContent, modeLabel, patientName);
         }
-        const slides = JSON.parse(jsonMatch[0]);
-        if (!Array.isArray(slides) || slides.length === 0) {
-            throw new Error('Invalid slide structure');
+
+        const data = await response.json();
+        const content = data.choices[0].message.content;
+        const jsonMatch = content.match(/\[[\s\S]*\]/);
+        if (!jsonMatch) {
+            console.warn('No JSON found, using fallback');
+            return createFallbackStructure(rawContent, modeLabel, patientName);
         }
-        return slides;
-    } catch (e) {
-        console.error('Failed to parse AI response:', e);
+
+        let slides = JSON.parse(jsonMatch[0]);
+        const cleaned = validateAndCleanSlides(slides);
+        if (!cleaned || cleaned.length === 0) {
+            console.warn('Invalid slide structure, using fallback');
+            return createFallbackStructure(rawContent, modeLabel, patientName);
+        }
+        return cleaned;
+    } catch (error) {
+        console.error('AI structuring error:', error);
         return createFallbackStructure(rawContent, modeLabel, patientName);
     }
 }
 
-// =====================================================================
-// FALLBACK STRUCTURE (ENHANCED)
-// =====================================================================
 function createFallbackStructure(rawContent, modeLabel, patientName) {
+    const slides = [];
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = rawContent;
-    const slides = [];
-    const children = tempDiv.children;
-    let currentTitle = 'Clinical Information';
+
+    let currentTitle = 'Introduction';
     let currentBullets = [];
+    const children = tempDiv.children;
 
     for (let child of children) {
         const tag = child.tagName.toLowerCase();
         if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
             if (currentBullets.length > 0) {
-                slides.push({ 
-                    title: currentTitle, 
-                    type: 'content', 
-                    layout: 'single',
-                    bullets: currentBullets.slice(0, 6),
-                    notes: `Presentation of ${currentTitle}`
-                });
+                slides.push({ title: currentTitle, type: 'content', bullets: currentBullets.slice(0, 6) });
                 currentBullets = [];
             }
-            currentTitle = child.textContent.trim();
+            currentTitle = child.textContent.trim() || 'Section';
         } else if (tag === 'ul' || tag === 'ol') {
-            const items = child.querySelectorAll('li');
-            items.forEach(li => {
+            child.querySelectorAll('li').forEach(li => {
                 const text = li.textContent.trim();
                 if (text) currentBullets.push(text);
             });
         } else if (tag === 'p') {
             const text = child.textContent.trim();
-            if (text) currentBullets.push(text);
-        } else if (tag === 'table') {
-            const rows = child.querySelectorAll('tr');
-            const tableData = [];
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td, th');
-                const rowData = [];
-                cells.forEach(cell => rowData.push(cell.textContent.trim()));
-                if (rowData.length > 0) tableData.push(rowData);
-            });
-            if (tableData.length > 1) {
-                slides.push({
-                    title: 'Data Table',
-                    type: 'table',
-                    layout: 'single',
-                    bullets: [],
-                    chartData: null,
-                    notes: 'Data table from clinical content'
-                });
-            }
+            if (text && text.length > 10) currentBullets.push(text);
         }
     }
+
     if (currentBullets.length > 0) {
-        slides.push({ 
-            title: currentTitle, 
-            type: 'content', 
-            layout: 'single',
-            bullets: currentBullets.slice(0, 6),
-            notes: `Presentation of ${currentTitle}`
+        slides.push({ title: currentTitle, type: 'content', bullets: currentBullets.slice(0, 6) });
+    }
+
+    if (slides.length === 0) {
+        const paragraphs = rawContent.split(/\n\n+/).filter(p => p.trim().length > 20);
+        paragraphs.forEach((p, index) => {
+            const lines = p.split(/[.\n]+/).filter(s => s.trim().length > 10);
+            if (lines.length > 0) {
+                slides.push({ title: `Section ${index + 1}`, type: 'content', bullets: lines.slice(0, 6).map(s => s.trim()) });
+            }
         });
     }
 
     if (slides.length === 0) {
-        slides.push({
-            title: 'Clinical Presentation',
-            type: 'content',
-            layout: 'single',
-            bullets: [rawContent.substring(0, 300)],
-            notes: 'Overview of clinical case'
-        });
+        slides.push({ title: 'Clinical Presentation', type: 'content', bullets: ['Content could not be structured. Please check your document.'] });
     }
 
     return slides;
 }
 
 // =====================================================================
-// PREVIEW MODAL (ENHANCED)
+// COLOR HANDLING — THE CORE FIX
+// PptxGenJS requires 6-digit hex with NO '#' and NO alpha baked in.
+// The THEMES object above keeps '#' because it's also used as CSS for
+// the on-page theme carousel. This function produces a PptxGenJS-safe
+// copy right before we start building the deck.
 // =====================================================================
-function showPreview(slidesHtml) {
-    const existing = document.querySelector('.ppt-preview-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.className = 'ppt-preview-overlay';
-    overlay.innerHTML = `
-        <div class="ppt-preview-modal">
-            <div class="ppt-preview-header">
-                <h3><i class="fas fa-eye"></i> Preview Slides</h3>
-                <button class="ppt-preview-close" id="pptPreviewClose">&times;</button>
-            </div>
-            <div class="ppt-preview-body" id="pptPreviewBody">
-                ${slidesHtml}
-            </div>
-            <div class="ppt-preview-footer">
-                <button class="ppt-preview-btn secondary" id="pptPreviewCloseBtn">Close</button>
-                <button class="ppt-preview-btn primary" id="pptPreviewDownloadBtn">
-                    <i class="fas fa-download"></i> Download PowerPoint
-                </button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(overlay);
-
-    const close = () => overlay.remove();
-    const closeBtn = overlay.querySelector('#pptPreviewClose');
-    const closeBtn2 = overlay.querySelector('#pptPreviewCloseBtn');
-    if (closeBtn) closeBtn.addEventListener('click', close);
-    if (closeBtn2) closeBtn2.addEventListener('click', close);
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) close();
-    });
-
-    // FIX: Download directly from stored pptx, no regeneration
-    const downloadBtn = overlay.querySelector('#pptPreviewDownloadBtn');
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', async () => {
-            if (!currentPptx) {
-                showToast('No presentation data available. Please generate again.', 'error');
-                return;
-            }
-            try {
-                await currentPptx.writeFile({ fileName: currentFileName });
-                showToast('✅ PowerPoint downloaded successfully!');
-                close();
-            } catch (err) {
-                console.error('Download error:', err);
-                showToast('Error downloading: ' + err.message, 'error');
-            }
-        });
+function toPptColors(themeColors) {
+    const out = {};
+    for (const key in themeColors) {
+        const val = themeColors[key];
+        if (Array.isArray(val)) {
+            out[key] = val.map(c => String(c).replace('#', '').toUpperCase());
+        } else if (typeof val === 'string') {
+            out[key] = val.replace('#', '').toUpperCase();
+        } else {
+            out[key] = val;
+        }
     }
+    // Muted light tints for text sitting on a dark/primary background —
+    // replaces the old (invalid) rgba(255,255,255,x) approach.
+    out.onDarkMuted = 'E8E8E8';
+    out.onDarkFaint = 'C4C4C4';
+    out.onDarkSubtle = '9E9E9E';
+    return out;
 }
 
 // =====================================================================
-// GENERATE TABLE IN PPTX
+// NATIVE TABLE (replaces the old hand-drawn grid of text boxes)
 // =====================================================================
-function addTableToSlide(slide, data, colors, x, y, w, h) {
+function addNativeTable(slide, data, colors, x, y, w) {
     if (!data || !Array.isArray(data) || data.length === 0) return;
-    
-    const rows = data.length;
-    const cols = data[0].length;
-    const cellWidth = w / cols;
-    const cellHeight = Math.min(0.6, h / rows);
-    
-    let currentY = y;
-    data.forEach((row, rowIdx) => {
-        let currentX = x;
-        row.forEach((cell, colIdx) => {
-            const isHeader = rowIdx === 0;
-            slide.addText(String(cell || ''), {
-                x: currentX, y: currentY, w: cellWidth, h: cellHeight,
-                fontSize: isHeader ? 14 : 12,
-                color: isHeader ? '#ffffff' : colors.text,
-                fontFace: 'Arial',
+    const rows = data.map((row, rIdx) => {
+        const isHeader = rIdx === 0;
+        return row.map(cell => ({
+            text: String(cell || ''),
+            options: {
                 bold: isHeader,
-                align: 'center',
+                fontSize: isHeader ? 13 : 12,
+                color: isHeader ? 'FFFFFF' : colors.text,
+                fill: { color: isHeader ? colors.primary : 'FFFFFF' },
+                align: 'left',
                 valign: 'middle',
-                fill: isHeader ? { color: colors.primary } : { color: colors.slideBg },
-                border: { type: 'solid', color: '#cccccc', pt: 0.5 }
-            });
-            currentX += cellWidth;
-        });
-        currentY += cellHeight;
+                fontFace: 'Arial'
+            }
+        }));
+    });
+    slide.addTable(rows, {
+        x, y, w,
+        border: { type: 'solid', color: 'E0E0E0', pt: 0.5 },
+        autoPage: false,
+        margin: 6
     });
 }
 
 // =====================================================================
-// GENERATE CHART (ENHANCED)
+// CHART
 // =====================================================================
 function addChartToSlide(slide, slideData, colors) {
-    if (!slideData.chartData) return;
-    
-    const { type, labels, datasets } = slideData.chartData;
-    if (!labels || !datasets || datasets.length === 0) return;
-    
+    if (!slideData.chartData || !slideData.chartData.labels || !slideData.chartData.datasets) return;
+    const { labels, datasets } = slideData.chartData;
+    if (labels.length === 0 || datasets.length === 0) return;
+
     const chartData = [];
     const headerRow = ['Category'];
     labels.forEach(label => headerRow.push(String(label)));
     chartData.push(headerRow);
-    
+
     datasets.forEach(dataset => {
         const row = [dataset.label || 'Series'];
-        dataset.data.forEach(val => {
-            row.push(typeof val === 'number' ? val : parseFloat(val) || 0);
-        });
+        if (Array.isArray(dataset.data)) {
+            dataset.data.forEach(val => row.push(typeof val === 'number' ? val : parseFloat(val) || 0));
+        }
         chartData.push(row);
     });
-    
-    const chartColors = colors.chartColors || [colors.primary, colors.secondary, colors.accent2 || colors.accentBar, colors.accent3 || '#f59e0b', '#ec4899'];
-    
-    let chartOptions = {
-        x: 1.0,
-        y: 2.0,
-        w: 9.0,
-        h: 4.2,
-        chartColors: chartColors,
-        showTitle: true,
-        title: slideData.title,
-        showLegend: true,
-        legendPos: 'b',
-        catAxisLabelColor: colors.text,
-        valAxisLabelColor: colors.text,
-        catAxisLabelFontSize: 12,
-        valAxisLabelFontSize: 12,
-        valGridLine: { color: '#e0e0e0', style: 'dash' }
-    };
-    
-    switch(selectedChartStyle) {
-        case 'modern':
-            chartOptions.chartColors = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'];
-            chartOptions.catAxisLabelFontSize = 13;
-            chartOptions.valAxisLabelFontSize = 13;
-            break;
-        case 'classic':
-            chartOptions.chartColors = ['#f59e0b', '#fbbf24', '#fcd34d', '#fde68a', '#fef3c7'];
-            chartOptions.shadow = { color: '#000000', opacity: 0.1, blur: 4 };
-            break;
-        case 'minimal':
-            chartOptions.chartColors = ['#6b7280', '#9ca3af', '#d1d5db', '#e5e7eb', '#f3f4f6'];
-            chartOptions.valGridLine = { color: '#e5e7eb' };
-            chartOptions.catAxisLabelColor = '#6b7280';
-            chartOptions.valAxisLabelColor = '#6b7280';
-            break;
-        case 'vibrant':
-            chartOptions.chartColors = ['#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e'];
-            chartOptions.shadow = { color: '#000000', opacity: 0.15, blur: 6 };
-            chartOptions.border = { color: '#ffffff', pt: 1 };
-            break;
-        default:
-            break;
-    }
-    
+
+    const chartColors = colors.chartColors || [colors.primary, colors.secondary, colors.accent, colors.primaryLight, colors.primaryDark];
+
     try {
-        slide.addChart(type, chartData, chartOptions);
+        slide.addChart(slideData.chartData.type || 'bar', chartData, {
+            x: 0.7, y: 1.9, w: 7.5, h: 4.3,
+            chartColors,
+            showTitle: false,
+            showLegend: datasets.length > 1,
+            legendPos: 'b',
+            showValue: true,
+            dataLabelPosition: 'outEnd',
+            dataLabelColor: colors.text,
+            dataLabelFontSize: 11,
+            catAxisLabelColor: colors.text,
+            valAxisLabelColor: colors.text,
+            catAxisLabelFontSize: 12,
+            valAxisLabelFontSize: 11,
+            catAxisLineColor: 'E0E0E0',
+            valAxisLineColor: 'E0E0E0',
+            valGridLine: { color: 'EDEDED', style: 'solid', size: 0.75 },
+            catGridLine: { style: 'none' }
+        });
     } catch (e) {
-        console.warn('Chart generation failed, using fallback:', e);
-        slide.addText('📊 ' + slideData.title, {
-            x: 1, y: 2, w: 9, h: 0.8,
-            fontSize: 20,
-            color: colors.primary,
-            align: 'center'
-        });
-        let yPos = 3;
-        datasets.forEach(dataset => {
-            slide.addText(`${dataset.label}: ${dataset.data.join(', ')}`, {
-                x: 1.5, y: yPos, w: 8, h: 0.5,
-                fontSize: 14,
-                color: colors.text
-            });
-            yPos += 0.5;
-        });
+        console.warn('Chart generation failed:', e);
     }
 }
 
 // =====================================================================
-// GENERATE COMPARISON SLIDE
+// COMPARISON — two clean cards, no top color-bar (avoids the
+// "accent stripe" look), separated by generous whitespace instead.
 // =====================================================================
 function addComparisonSlide(slide, slideData, colors) {
     const left = slideData.comparisonData?.left || [];
     const right = slideData.comparisonData?.right || [];
-    
-    slide.addShape('rect', {
-        x: 0.6, y: 1.8, w: 5.5, h: 4.2,
-        fill: { color: colors.accent },
-        rectRadius: 8,
-        opacity: 0.3
-    });
-    slide.addText('Before', {
-        x: 0.6, y: 1.8, w: 5.5, h: 0.6,
-        fontSize: 18,
-        color: colors.primary,
-        align: 'center',
-        bold: true
-    });
-    left.forEach((item, idx) => {
-        slide.addText(`● ${item}`, {
-            x: 0.9, y: 2.5 + idx * 0.5, w: 4.8, h: 0.5,
-            fontSize: 14,
-            color: colors.text,
-            valign: 'top'
+    const colW = 5.6, gap = 0.5, startX = 0.7, top = 1.9, h = 4.6;
+
+    const drawCard = (x, heading, headingColor, items) => {
+        slide.addShape('roundRect', {
+            x, y: top, w: colW, h,
+            rectRadius: 0.12,
+            fill: { color: 'FAFAFA' },
+            line: { color: 'E5E5E5', width: 1 }
         });
-    });
-    
-    slide.addShape('rect', {
-        x: 6.8, y: 1.8, w: 5.5, h: 4.2,
-        fill: { color: colors.accent },
-        rectRadius: 8,
-        opacity: 0.3
-    });
-    slide.addText('After', {
-        x: 6.8, y: 1.8, w: 5.5, h: 0.6,
-        fontSize: 18,
-        color: colors.primary,
-        align: 'center',
-        bold: true
-    });
-    right.forEach((item, idx) => {
-        slide.addText(`● ${item}`, {
-            x: 7.1, y: 2.5 + idx * 0.5, w: 4.8, h: 0.5,
-            fontSize: 14,
-            color: colors.text,
-            valign: 'top'
+        slide.addText(heading, {
+            x: x + 0.35, y: top + 0.3, w: colW - 0.7, h: 0.5,
+            fontSize: 18, bold: true, color: headingColor, fontFace: 'Arial', margin: 0
         });
-    });
+        let yPos = top + 0.95;
+        items.slice(0, 6).forEach(item => {
+            slide.addText(item, {
+                x: x + 0.35, y: yPos, w: colW - 0.7, h: 0.55,
+                fontSize: 13.5, color: colors.text, fontFace: 'Arial',
+                valign: 'top', bullet: { code: '25CF', indent: 14 }
+            });
+            yPos += 0.62;
+        });
+    };
+
+    drawCard(startX, 'Before', colors.primary, left);
+    drawCard(startX + colW + gap, 'After', colors.secondary || colors.primary, right);
 }
 
 // =====================================================================
-// GENERATE TIMELINE SLIDE
+// TIMELINE
 // =====================================================================
 function addTimelineSlide(slide, slideData, colors) {
     const timeline = slideData.timelineData || [];
     if (timeline.length === 0) return;
-    
-    const numItems = timeline.length;
-    const spacing = 9 / numItems;
-    const yPos = 3.5;
-    
+
+    const numItems = Math.min(timeline.length, 8);
+    const usableWidth = 10.5;
+    const spacing = usableWidth / numItems;
+    const yPos = 3.6;
+    const startX = 1.4;
+
     slide.addShape('rect', {
-        x: 1.5, y: yPos, w: 10, h: 0.04,
-        fill: { color: colors.accentBar }
+        x: startX, y: yPos, w: numItems * spacing, h: 0.03,
+        fill: { color: 'D8D8D8' }, line: { type: 'none' }
     });
-    
-    timeline.forEach((item, idx) => {
-        const xPos = 1.8 + idx * spacing;
-        
-        slide.addShape('oval', {
-            x: xPos - 0.15, y: yPos - 0.15, w: 0.3, h: 0.3,
-            fill: { color: colors.primary }
+
+    timeline.slice(0, 8).forEach((item, idx) => {
+        const xPos = startX + idx * spacing + spacing / 2 - 0.15;
+
+        slide.addShape('ellipse', {
+            x: xPos, y: yPos - 0.12, w: 0.3, h: 0.3,
+            fill: { color: colors.primary },
+            line: { color: 'FFFFFF', width: 1.5 }
         });
-        
         slide.addText(item.time || '', {
-            x: xPos - 0.8, y: yPos - 1.0, w: 1.6, h: 0.6,
-            fontSize: 14,
-            color: colors.primary,
-            align: 'center',
-            bold: true
+            x: xPos - 0.75, y: yPos - 0.85, w: spacing, h: 0.45,
+            fontSize: 13, color: colors.primary, align: 'center', bold: true, fontFace: 'Arial'
         });
-        
-        slide.addText(item.event || '', {
-            x: xPos - 1.2, y: yPos + 0.3, w: 2.4, h: 0.8,
-            fontSize: 11,
-            color: colors.text,
-            align: 'center',
-            valign: 'top'
+        const eventText = String(item.event || '');
+        slide.addText(eventText, {
+            x: xPos - 0.85 - (spacing - 0.3) / 2, y: yPos + 0.35, w: spacing + 0.3, h: 0.9,
+            fontSize: 11, color: colors.text, align: 'center', valign: 'top', fontFace: 'Arial', shrinkText: true
         });
     });
 }
 
 // =====================================================================
-// GENERATE BIG NUMBER SLIDE
+// BIG NUMBER
 // =====================================================================
 function addBigNumberSlide(slide, slideData, colors) {
     const bigNum = slideData.bigNumber || { number: 'N/A', label: 'Statistic' };
-    
-    slide.addText(bigNum.number, {
-        x: 0, y: 1.8, w: 13.33, h: 2.5,
-        fontSize: 80,
-        color: colors.primary,
-        align: 'center',
-        bold: true
+
+    slide.addText(String(bigNum.number), {
+        x: 0.7, y: 1.7, w: 11.93, h: 2.2,
+        fontSize: 96, color: colors.primary, align: 'center', bold: true, fontFace: 'Arial'
     });
-    
-    slide.addText(bigNum.label, {
-        x: 0, y: 4.5, w: 13.33, h: 0.8,
-        fontSize: 28,
-        color: colors.text,
-        align: 'center'
+    slide.addText(String(bigNum.label), {
+        x: 0.7, y: 3.9, w: 11.93, h: 0.7,
+        fontSize: 24, color: colors.text, align: 'center', fontFace: 'Arial'
     });
-    
+
     if (slideData.bullets && slideData.bullets.length > 0) {
-        let yPos = 5.5;
+        let yPos = 4.9;
         slideData.bullets.slice(0, 3).forEach(bullet => {
-            slide.addText(`● ${bullet}`, {
-                x: 0.8, y: yPos, w: 11.73, h: 0.5,
-                fontSize: 16,
-                color: colors.text,
-                valign: 'top'
+            slide.addText(bullet, {
+                x: 1.5, y: yPos, w: 10.33, h: 0.5,
+                fontSize: 14, color: colors.text, fontFace: 'Arial',
+                align: 'center', valign: 'top'
             });
-            yPos += 0.6;
+            yPos += 0.55;
         });
     }
 }
 
 // =====================================================================
-// ENHANCED PPTX GENERATION
+// GENERATE PPTX
 // =====================================================================
-async function generatePPTX(skipPreview = false) {
+async function generatePPTX() {
     if (!contentData) {
         showToast('No content to export.', 'error');
         return;
     }
 
     getDOMElements();
-    
+
     if (generationStatus) {
         generationStatus.style.display = 'block';
         generationStatus.className = '';
-        if (statusText) statusText.textContent = 'Preparing your presentation with AI...';
+        if (statusText) statusText.textContent = 'Preparing your presentation...';
     }
-    
     if (generateBtn) {
         generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Structuring content with AI...';
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
     }
 
     try {
@@ -1022,526 +836,203 @@ async function generatePPTX(skipPreview = false) {
         const diagnosis = contentData.diagnosis || 'N/A';
         const profession = contentData.profession || 'N/A';
 
-        if (statusText) statusText.textContent = '🧠 AI is structuring your presentation...';
-        showToast('🧠 AI is structuring your presentation...', 'info', 3000);
+        if (statusText) statusText.textContent = 'Structuring content...';
+        showToast('Structuring content...', 'info', 3000);
 
         let slides = await structureContentWithAI(rawContent, modeLabel, patientDisplay, diagnosis);
+        if (!slides || !Array.isArray(slides) || slides.length === 0) {
+            slides = createFallbackStructure(rawContent, modeLabel, patientDisplay);
+        }
         structuredSlides = slides;
 
+        // Extract tables from content
         const extractedTables = [];
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = rawContent;
-        const allTables = tempDiv.querySelectorAll('table');
-        allTables.forEach(table => {
+        tempDiv.querySelectorAll('table').forEach(table => {
             const rows = [];
-            const trs = table.querySelectorAll('tr');
-            trs.forEach(tr => {
+            table.querySelectorAll('tr').forEach(tr => {
                 const cells = [];
-                tr.querySelectorAll('td, th').forEach(td => {
-                    cells.push(td.textContent.trim());
-                });
+                tr.querySelectorAll('td, th').forEach(td => cells.push(td.textContent.trim()));
                 if (cells.length > 0) rows.push(cells);
             });
             if (rows.length > 0) extractedTables.push(rows);
         });
 
         updateSlideCount();
-
-        if (statusText) statusText.textContent = '📊 Building PowerPoint with charts and layouts...';
+        if (statusText) statusText.textContent = 'Building PowerPoint...';
 
         const pptx = new PptxGenJS();
         pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
         pptx.layout = 'WIDE';
 
-        const colors = selectedTheme.colors;
+        // PptxGenJS-safe colors (no '#', no rgba) — this is the fix.
+        const colors = toPptColors(selectedTheme.colors);
         const totalSlides = slides.length + 2 + (extractedTables.length > 0 ? 1 : 0);
-        const previewHtml = [];
 
-        function addDeco(slide, type = 'top') {
-            if (type === 'top') {
-                slide.addShape('rect', {
-                    x: 0, y: 0, w: 13.33, h: 0.25,
-                    fill: { color: colors.accentBar },
-                    rectRadius: 0
-                });
-                slide.addShape('rect', {
-                    x: 0, y: 0.35, w: 13.33, h: 0.04,
-                    fill: { color: colors.accent2 || colors.secondary },
-                    rectRadius: 0
-                });
-            } else if (type === 'side') {
-                slide.addShape('rect', {
-                    x: 0, y: 0.4, w: 0.15, h: 6.6,
-                    fill: { color: colors.accent3 || colors.accentBar },
-                    rectRadius: 0
-                });
-            } else if (type === 'bottom') {
-                slide.addShape('rect', {
-                    x: 0, y: 7.0, w: 13.33, h: 0.08,
-                    fill: { color: colors.accent2 || colors.accentBar },
-                    rectRadius: 0
-                });
-            }
-        }
-
-        // --- TITLE SLIDE ---
+        // -----------------------------------------------------------
+        // TITLE SLIDE — solid dark background, no duplicate overlay,
+        // no accent bars. Dark/light "sandwich" bookends the deck.
+        // -----------------------------------------------------------
         const slideTitle = pptx.addSlide();
-        slideTitle.background = { color: colors.primary };
-        slideTitle.addShape('rect', {
-            x: 0, y: 0, w: 13.33, h: 7.5,
-            fill: { color: colors.primary },
-            rectRadius: 0,
-            opacity: 0.8
-        });
-        slideTitle.addShape('rect', {
-            x: 0, y: 6.7, w: 13.33, h: 0.8,
-            fill: { color: colors.accent2 || colors.secondary },
-            rectRadius: 0
-        });
-        slideTitle.addShape('rect', {
-            x: 0, y: 6.5, w: 13.33, h: 0.05,
-            fill: { color: '#ffffff' },
-            rectRadius: 0,
-            opacity: 0.3
-        });
+        slideTitle.background = { color: colors.primaryDark || colors.primary };
 
-        slideTitle.addText(`rehablix · ${modeLabel}`, {
-            x: 0.8, y: 1.3, w: 11.73, h: 1.5,
-            fontSize: 44,
-            color: '#ffffff',
-            fontFace: 'Arial',
-            bold: true,
-            align: 'center'
+        slideTitle.addText(modeLabel, {
+            x: 0.9, y: 1.5, w: 11.53, h: 1.6,
+            fontSize: 42, color: 'FFFFFF', fontFace: 'Arial', bold: true, align: 'center'
         });
         slideTitle.addText(patientDisplay, {
-            x: 0.8, y: 3.0, w: 11.73, h: 1.0,
-            fontSize: 34,
-            color: '#ffffff',
-            fontFace: 'Arial',
-            bold: true,
-            align: 'center'
+            x: 0.9, y: 3.1, w: 11.53, h: 0.9,
+            fontSize: 30, color: 'FFFFFF', fontFace: 'Arial', bold: true, align: 'center'
         });
-        slideTitle.addText('Patient Presentation', {
-            x: 0.8, y: 4.0, w: 11.73, h: 0.6,
-            fontSize: 18,
-            color: '#e0e0e0',
-            fontFace: 'Arial',
-            align: 'center',
-            italic: true
+        slideTitle.addText('Clinical Presentation', {
+            x: 0.9, y: 4.0, w: 11.53, h: 0.55,
+            fontSize: 17, color: colors.onDarkFaint, fontFace: 'Arial', italic: true, align: 'center'
         });
-        const meta = [
-            `Clinician: ${profession}`,
-            `Diagnosis: ${diagnosis}`,
-            `Date: ${new Date().toLocaleDateString()}`
-        ];
-        slideTitle.addText(meta.join('  |  '), {
-            x: 0.8, y: 4.7, w: 11.73, h: 0.7,
-            fontSize: 16,
-            color: '#e0e0e0',
-            fontFace: 'Arial',
-            align: 'center',
-            italic: true
+        const meta = [`Clinician: ${profession}`, `Diagnosis: ${diagnosis}`, `Date: ${new Date().toLocaleDateString()}`];
+        slideTitle.addText(meta.join('   |   '), {
+            x: 0.9, y: 4.75, w: 11.53, h: 0.5,
+            fontSize: 13, color: colors.onDarkMuted, fontFace: 'Arial', align: 'center'
         });
         slideTitle.addText('Generated by rehablix', {
-            x: 0, y: 7.2, w: 13.33, h: 0.5,
-            fontSize: 12,
-            color: '#ffffff',
-            align: 'center',
-            fontFace: 'Arial'
+            x: 0, y: 6.95, w: 13.33, h: 0.4,
+            fontSize: 10, color: colors.onDarkSubtle, align: 'center', fontFace: 'Arial'
         });
 
-        previewHtml.push(`
-            <div class="preview-slide" style="background: ${colors.primary}; color: #fff; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-                <div style="font-size: 0.8rem; opacity: 0.7;">rehablix · ${modeLabel}</div>
-                <h2 style="margin: 10px 0; font-size: 2.2rem;">${patientDisplay}</h2>
-                <p style="font-size: 1.1rem; opacity: 0.9;">${meta.join('  |  ')}</p>
-                <div style="margin-top: 10px; font-size: 0.8rem; opacity: 0.6;">Generated by rehablix</div>
-            </div>
-        `);
-
-        // --- CONTENT SLIDES ---
+        // -----------------------------------------------------------
+        // CONTENT SLIDES
+        // -----------------------------------------------------------
         let slideIndex = 1;
-        slides.forEach((slideData, idx) => {
+        for (const slideData of slides) {
             const slide = pptx.addSlide();
-            slide.background = { color: colors.slideBg };
-            addDeco(slide, 'top');
-            addDeco(slide, 'side');
-            addDeco(slide, 'bottom');
+            slide.background = { color: 'FFFFFF' };
 
-            slide.addText(slideData.title, {
-                x: 0.6, y: 0.5, w: 11.73, h: 0.9,
-                fontSize: 32,
-                color: colors.headingColor || colors.primary,
-                fontFace: 'Arial',
-                bold: true,
-                valign: 'middle'
-            });
-
-            slide.addShape('rect', {
-                x: 0.6, y: 1.4, w: 2.5, h: 0.08,
-                fill: { color: colors.accentBar },
-                rectRadius: 0
+            slide.addText(slideData.title || 'Section', {
+                x: 0.7, y: 0.55, w: 11.93, h: 0.85,
+                fontSize: 28, color: colors.headingColor || colors.primary,
+                fontFace: 'Arial', bold: true, valign: 'middle', margin: 0
             });
 
             const type = slideData.type || 'content';
-            
-            switch(type) {
+            const bullets = slideData.bullets || [];
+
+            switch (type) {
                 case 'chart':
-                    if (slideData.chartData) {
-                        addChartToSlide(slide, slideData, colors);
-                    }
-                    if (slideData.bullets && slideData.bullets.length > 0) {
-                        let yPos = 2.5;
-                        slideData.bullets.slice(0, 4).forEach(bullet => {
-                            slide.addText(`● ${bullet}`, {
-                                x: 0.8, y: yPos, w: 11.53, h: 0.5,
-                                fontSize: 16,
-                                color: colors.text,
-                                valign: 'top'
+                    if (slideData.chartData) addChartToSlide(slide, slideData, colors);
+                    if (bullets.length > 0) {
+                        let yPos = 1.9;
+                        bullets.slice(0, 5).forEach(bullet => {
+                            slide.addText(bullet, {
+                                x: 8.5, y: yPos, w: 4.1, h: 0.7,
+                                fontSize: 13, color: colors.text, fontFace: 'Arial',
+                                valign: 'top', bullet: { code: '25CF', indent: 12 }
                             });
-                            yPos += 0.6;
+                            yPos += 0.78;
                         });
                     }
                     break;
-                    
+
                 case 'comparison':
                     addComparisonSlide(slide, slideData, colors);
                     break;
-                    
+
                 case 'timeline':
                     addTimelineSlide(slide, slideData, colors);
                     break;
-                    
+
                 case 'big-number':
                     addBigNumberSlide(slide, slideData, colors);
                     break;
-                    
-                case 'table':
-                    let tableData = null;
-                    if (extractedTables.length > 0) {
-                        tableData = extractedTables[0];
-                    } else if (slideData.bullets && slideData.bullets.length > 0) {
-                        const rows = slideData.bullets.map(b => b.split('|').map(s => s.trim()));
-                        if (rows.length > 0 && rows[0].length > 1) {
-                            tableData = rows;
-                        }
-                    }
-                    if (tableData && tableData.length > 1) {
-                        addTableToSlide(slide, tableData, colors, 1.0, 1.9, 11.33, 4.8);
-                    } else if (slideData.bullets && slideData.bullets.length > 0) {
-                        let yPos = 2.0;
-                        slideData.bullets.forEach(bullet => {
-                            slide.addText(`● ${bullet}`, {
-                                x: 0.8, y: yPos, w: 11.53, h: 0.5,
-                                fontSize: 16,
-                                color: colors.text,
-                                valign: 'top'
+
+                default: {
+                    const bulletCount = Math.min(bullets.length, 6);
+                    if (bulletCount > 0) {
+                        let yPos = 1.85;
+                        const rowH = Math.min(0.85, 4.9 / bulletCount);
+                        bullets.slice(0, bulletCount).forEach(bullet => {
+                            slide.addText(bullet, {
+                                x: 0.9, y: yPos, w: 11.53, h: rowH,
+                                fontSize: 16, color: colors.text, fontFace: 'Arial',
+                                valign: 'top', bullet: { code: '25CF', indent: 16 },
+                                paraSpaceAfter: 8
                             });
-                            yPos += 0.6;
-                        });
-                    }
-                    break;
-                    
-                case 'image':
-                    slide.addShape('rect', {
-                        x: 7.0, y: 1.8, w: 5.5, h: 4.5,
-                        fill: { color: colors.accent },
-                        rectRadius: 8,
-                        opacity: 0.3
-                    });
-                    slide.addText('🖼️', {
-                        x: 7.0, y: 3.0, w: 5.5, h: 1.0,
-                        fontSize: 40,
-                        color: colors.primary,
-                        align: 'center'
-                    });
-                    if (slideData.imagePrompt) {
-                        slide.addText(slideData.imagePrompt, {
-                            x: 7.2, y: 4.2, w: 5.1, h: 1.5,
-                            fontSize: 11,
-                            color: colors.text,
-                            align: 'center',
-                            italic: true,
-                            valign: 'top'
-                        });
-                    }
-                    if (slideData.bullets && slideData.bullets.length > 0) {
-                        let yPos = 2.0;
-                        slideData.bullets.slice(0, 5).forEach(bullet => {
-                            slide.addText(`● ${bullet}`, {
-                                x: 0.8, y: yPos, w: 5.8, h: 0.5,
-                                fontSize: 16,
-                                color: colors.text,
-                                valign: 'top'
-                            });
-                            yPos += 0.6;
-                        });
-                    }
-                    break;
-                    
-                default:
-                    if (slideData.bullets && slideData.bullets.length > 0) {
-                        let yPos = 2.0;
-                        const maxBullets = slideDensity === 'sparse' ? 4 : 
-                                          slideDensity === 'dense' ? 8 : 6;
-                        slideData.bullets.slice(0, maxBullets).forEach(bullet => {
-                            slide.addText(`● ${bullet}`, {
-                                x: 0.8, y: yPos, w: 11.53, h: 0.5,
-                                fontSize: 17,
-                                color: colors.text,
-                                fontFace: 'Arial',
-                                valign: 'top',
-                                lineSpacing: 24,
-                                autoFit: true
-                            });
-                            yPos += 0.65;
+                            yPos += rowH;
                         });
                     } else {
-                        slide.addText('(No content)', {
-                            x: 0.8, y: 2.0, w: 11.53, h: 0.6,
-                            fontSize: 16,
-                            color: colors.secondary,
-                            fontFace: 'Arial',
-                            italic: true,
-                            valign: 'top'
+                        slide.addText('(No content available)', {
+                            x: 0.9, y: 2.0, w: 11.53, h: 0.6,
+                            fontSize: 15, color: colors.secondary || '999999',
+                            fontFace: 'Arial', italic: true, valign: 'top'
                         });
                     }
                     break;
-            }
-
-            if (includeSpeakerNotes && slideData.notes) {
-                slide.addNotes(slideData.notes);
+                }
             }
 
             const pageNum = slideIndex + 1;
-            slide.addText(`Page ${pageNum} of ${totalSlides}`, {
-                x: 0, y: 7.1, w: 13.33, h: 0.4,
-                fontSize: 10,
-                color: colors.secondary,
-                align: 'center',
-                fontFace: 'Arial'
+            slide.addText(`${pageNum} / ${totalSlides}`, {
+                x: 0, y: 7.15, w: 13.33, h: 0.3,
+                fontSize: 9, color: '999999', align: 'center', fontFace: 'Arial'
             });
-
-            // Build preview HTML
-            let previewExtra = '';
-            const layoutBadge = slideData.layout ? 
-                `<span class="preview-layout-badge">${slideData.layout}</span>` : '';
-            
-            if (type === 'chart' && slideData.chartData) {
-                previewExtra = `
-                    <div class="preview-chart">
-                        <i class="fas fa-chart-${slideData.chartData.type || 'bar'}"></i>
-                        <span class="chart-type">${slideData.chartData.type || 'Chart'}</span>
-                        <span style="font-size:0.8rem; color:var(--text-secondary);">
-                            ${slideData.chartData.labels ? slideData.chartData.labels.join(', ') : ''}
-                        </span>
-                    </div>
-                `;
-            } else if (type === 'image' && slideData.imagePrompt) {
-                previewExtra = `
-                    <div class="preview-image">
-                        <i class="fas fa-image"></i>
-                        <span class="image-prompt">${slideData.imagePrompt}</span>
-                    </div>
-                `;
-            } else if (type === 'comparison') {
-                previewExtra = `
-                    <div class="preview-comparison">
-                        <div class="col">
-                            <h5>Before</h5>
-                            ${(slideData.comparisonData?.left || []).map(item => 
-                                `<p style="font-size:0.85rem;">• ${item}</p>`
-                            ).join('')}
-                        </div>
-                        <div class="col">
-                            <h5>After</h5>
-                            ${(slideData.comparisonData?.right || []).map(item => 
-                                `<p style="font-size:0.85rem;">• ${item}</p>`
-                            ).join('')}
-                        </div>
-                    </div>
-                `;
-            } else if (type === 'timeline') {
-                previewExtra = `
-                    <div class="preview-timeline">
-                        ${(slideData.timelineData || []).map(item => 
-                            `<div class="item">
-                                <span class="time">${item.time || ''}</span>
-                                ${item.event || ''}
-                            </div>`
-                        ).join('')}
-                    </div>
-                `;
-            } else if (type === 'big-number') {
-                previewExtra = `
-                    <div style="text-align:center; padding:10px; background:var(--bg-page); border-radius:8px; margin:5px 0;">
-                        <span style="font-size:2.5rem; font-weight:700; color:${colors.primary};">${slideData.bigNumber?.number || 'N/A'}</span>
-                        <p style="font-size:1rem; color:var(--text-secondary);">${slideData.bigNumber?.label || ''}</p>
-                    </div>
-                `;
-            }
-
-            const bulletHtml = (slideData.bullets || []).map(b => 
-                `<p style="margin:4px 0; font-size:0.9rem; color:${colors.text};">
-                    <span style="color:${colors.bulletColor}; font-weight:bold;">●</span> ${b}
-                </p>`
-            ).join('');
-
-            const notesHtml = (includeSpeakerNotes && slideData.notes) ? 
-                `<div class="preview-notes"><i class="fas fa-comment"></i> ${slideData.notes}</div>` : '';
-
-            previewHtml.push(`
-                <div class="preview-slide" style="background: ${colors.slideBg}; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                    <div style="height: 4px; background: ${colors.accentBar}; border-radius: 2px; margin-bottom: 10px;"></div>
-                    <h4 style="color: ${colors.headingColor || colors.primary}; font-size: 1.3rem; margin: 0 0 4px 0;">
-                        ${slideData.title}
-                        ${layoutBadge}
-                    </h4>
-                    <hr style="width: 60px; border: 2px solid ${colors.accentBar}; margin: 0 0 10px 0;">
-                    ${previewExtra}
-                    ${bulletHtml || '<p style="color: ' + colors.secondary + '; font-style: italic;">No content</p>'}
-                    ${notesHtml}
-                    <div style="margin-top: 10px; font-size: 0.7rem; color: ${colors.secondary}; text-align: right;">Page ${pageNum} of ${totalSlides}</div>
-                </div>
-            `);
-
             slideIndex++;
-        });
+        }
 
-        // --- TABLE SLIDE ---
+        // -----------------------------------------------------------
+        // TABLE SLIDE (native table, not hand-drawn text boxes)
+        // -----------------------------------------------------------
         if (extractedTables.length > 0) {
             const tableSlide = pptx.addSlide();
-            tableSlide.background = { color: colors.slideBg };
-            addDeco(tableSlide, 'top');
-            addDeco(tableSlide, 'side');
-            addDeco(tableSlide, 'bottom');
+            tableSlide.background = { color: 'FFFFFF' };
 
             tableSlide.addText('Data Table', {
-                x: 0.6, y: 0.5, w: 11.73, h: 0.9,
-                fontSize: 32,
-                color: colors.headingColor || colors.primary,
-                fontFace: 'Arial',
-                bold: true,
-                valign: 'middle'
-            });
-            tableSlide.addShape('rect', {
-                x: 0.6, y: 1.4, w: 2.5, h: 0.08,
-                fill: { color: colors.accentBar },
-                rectRadius: 0
+                x: 0.7, y: 0.55, w: 11.93, h: 0.85,
+                fontSize: 28, color: colors.headingColor || colors.primary,
+                fontFace: 'Arial', bold: true, valign: 'middle', margin: 0
             });
 
-            const tableData = extractedTables[0];
-            if (tableData && tableData.length > 0) {
-                addTableToSlide(tableSlide, tableData, colors, 1.0, 1.9, 11.33, 4.8);
-            }
+            addNativeTable(tableSlide, extractedTables[0], colors, 0.9, 1.85, 11.53);
 
             const pageNum = slideIndex + 1;
-            tableSlide.addText(`Page ${pageNum} of ${totalSlides}`, {
-                x: 0, y: 7.1, w: 13.33, h: 0.4,
-                fontSize: 10,
-                color: colors.secondary,
-                align: 'center',
-                fontFace: 'Arial'
+            tableSlide.addText(`${pageNum} / ${totalSlides}`, {
+                x: 0, y: 7.15, w: 13.33, h: 0.3,
+                fontSize: 9, color: '999999', align: 'center', fontFace: 'Arial'
             });
-
-            previewHtml.push(`
-                <div class="preview-slide" style="background: ${colors.slideBg}; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                    <div style="height: 4px; background: ${colors.accentBar}; border-radius: 2px; margin-bottom: 10px;"></div>
-                    <h4 style="color: ${colors.headingColor || colors.primary}; font-size: 1.3rem; margin: 0 0 4px 0;">Data Table</h4>
-                    <hr style="width: 60px; border: 2px solid ${colors.accentBar}; margin: 0 0 10px 0;">
-                    <div style="background: ${colors.accent}; opacity: 0.15; padding: 20px; border-radius: 8px; text-align: center;">
-                        <span style="font-size: 2rem;">📊</span>
-                        <p style="color: ${colors.text};">Table with ${tableData.length} rows</p>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 0.7rem; color: ${colors.secondary}; text-align: right;">Page ${pageNum} of ${totalSlides}</div>
-                </div>
-            `);
-
             slideIndex++;
         }
 
-        // --- THANK YOU SLIDE ---
+        // -----------------------------------------------------------
+        // CLOSING SLIDE
+        // -----------------------------------------------------------
         const thankSlide = pptx.addSlide();
-        thankSlide.background = { color: colors.primary };
-        thankSlide.addShape('rect', {
-            x: 0, y: 6.7, w: 13.33, h: 0.8,
-            fill: { color: colors.accent2 || colors.secondary },
-            rectRadius: 0
-        });
-        thankSlide.addShape('rect', {
-            x: 0, y: 6.5, w: 13.33, h: 0.05,
-            fill: { color: '#ffffff' },
-            rectRadius: 0,
-            opacity: 0.3
-        });
+        thankSlide.background = { color: colors.primaryDark || colors.primary };
+
         thankSlide.addText('Thank You', {
-            x: 0.8, y: 2.0, w: 11.73, h: 1.5,
-            fontSize: 48,
-            color: '#ffffff',
-            fontFace: 'Arial',
-            bold: true,
-            align: 'center'
+            x: 0.9, y: 2.3, w: 11.53, h: 1.6,
+            fontSize: 50, color: 'FFFFFF', fontFace: 'Arial', bold: true, align: 'center'
         });
         thankSlide.addText(patientDisplay, {
-            x: 0.8, y: 3.8, w: 11.73, h: 0.7,
-            fontSize: 24,
-            color: '#e0e0e0',
-            fontFace: 'Arial',
-            align: 'center'
+            x: 0.9, y: 4.0, w: 11.53, h: 0.7,
+            fontSize: 22, color: colors.onDarkMuted, fontFace: 'Arial', align: 'center'
         });
         thankSlide.addText('Generated with rehablix', {
-            x: 0.8, y: 4.7, w: 11.73, h: 0.6,
-            fontSize: 16,
-            color: '#e0e0e0',
-            fontFace: 'Arial',
-            align: 'center'
+            x: 0.9, y: 4.75, w: 11.53, h: 0.5,
+            fontSize: 13, color: colors.onDarkSubtle, fontFace: 'Arial', align: 'center'
         });
 
-        previewHtml.push(`
-            <div class="preview-slide" style="background: ${colors.primary}; color: #fff; padding: 30px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
-                <h2 style="margin: 0; font-size: 2.5rem;">Thank You</h2>
-                <p style="margin: 10px 0; font-size: 1.2rem;">${patientDisplay}</p>
-                <p style="font-size: 0.9rem; opacity: 0.8;">Generated with rehablix</p>
-            </div>
-        `);
-
-        // --- Build final filename and store PPTX for later download ---
+        // -----------------------------------------------------------
+        // DOWNLOAD
+        // -----------------------------------------------------------
         const fileName = `${patientDisplay.replace(/\s+/g, '_')}_${modeLabel.replace(/\s+/g, '_')}_${Date.now()}.pptx`;
-        currentPptx = pptx;
-        currentFileName = fileName;
+        await pptx.writeFile({ fileName });
 
-        // --- PREVIEW OR DIRECT DOWNLOAD ---
-        if (!skipPreview) {
-            const fullPreviewHtml = `
-                <div style="max-width: 900px; margin: 0 auto; padding: 10px;">
-                    ${previewHtml.join('')}
-                </div>
-            `;
-            showPreview(fullPreviewHtml);
-            if (generateBtn) {
-                generateBtn.disabled = false;
-                generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate & Download';
-            }
-            if (generationStatus) {
-                generationStatus.style.display = 'none';
-            }
-            return;
-        }
-
-        // If skipPreview = true, download directly
-        await pptx.writeFile({ fileName: fileName });
-        if (statusText) statusText.textContent = '✅ PowerPoint generated successfully!';
-        if (generationStatus) {
-            generationStatus.className = 'success';
-        }
-        showToast('✅ PowerPoint downloaded successfully!');
+        if (statusText) statusText.textContent = 'PowerPoint downloaded successfully!';
+        if (generationStatus) generationStatus.className = 'success';
+        showToast('PowerPoint downloaded successfully!');
 
     } catch (err) {
         console.error('Generation error:', err);
-        if (statusText) statusText.textContent = '❌ Error: ' + err.message;
-        if (generationStatus) {
-            generationStatus.className = 'error';
-        }
+        if (statusText) statusText.textContent = 'Error: ' + err.message;
+        if (generationStatus) generationStatus.className = 'error';
         showToast('Error generating PowerPoint: ' + err.message, 'error');
     } finally {
         if (generateBtn) {
@@ -1549,9 +1040,7 @@ async function generatePPTX(skipPreview = false) {
             generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate & Download';
         }
         setTimeout(() => {
-            if (generationStatus) {
-                generationStatus.style.display = 'none';
-            }
+            if (generationStatus) generationStatus.style.display = 'none';
         }, 5000);
     }
 }
@@ -1561,7 +1050,7 @@ async function generatePPTX(skipPreview = false) {
 // =====================================================================
 function setupEventListeners() {
     getDOMElements();
-    
+
     document.querySelectorAll('input[name="artStyle"]').forEach(el => {
         el.addEventListener('change', (e) => {
             selectedArtStyle = e.target.value;
@@ -1571,125 +1060,34 @@ function setupEventListeners() {
         });
     });
 
-    document.querySelectorAll('input[name="chartStyle"]').forEach(el => {
-        el.addEventListener('change', (e) => {
-            selectedChartStyle = e.target.value;
-            document.querySelectorAll('#chartStyleOptions .style-option').forEach(opt => {
-                opt.classList.remove('selected');
-                if (opt.querySelector('input[value="' + selectedChartStyle + '"]')) {
-                    opt.classList.add('selected');
-                }
-            });
-        });
-    });
-
-    document.querySelectorAll('input[name="layoutType"]').forEach(el => {
-        el.addEventListener('change', (e) => {
-            selectedLayout = e.target.value;
-            document.querySelectorAll('.layout-option').forEach(opt => opt.classList.remove('selected'));
-            e.target.closest('.layout-option').classList.add('selected');
-            updateStepIndicator(3);
-        });
-    });
-
-    document.querySelectorAll('input[name="slideStructure"]').forEach(el => {
-        el.addEventListener('change', (e) => {
-            selectedStructure = e.target.value;
-            document.querySelectorAll('.structure-option').forEach(opt => opt.classList.remove('selected'));
-            e.target.closest('.structure-option').classList.add('selected');
-            updateSlideCount();
-            updateStepIndicator(3);
-        });
-    });
-
-    if (enableImageGenCheckbox) {
-        enableImageGenCheckbox.addEventListener('change', (e) => {
-            enableImageGeneration = e.target.checked;
-        });
-    }
-
-    const fontSizeSelect = document.getElementById('fontSizeSelect');
-    if (fontSizeSelect) {
-        fontSizeSelect.addEventListener('change', (e) => {
-            fontSizePreference = e.target.value;
-        });
-    }
-
-    const densitySelect = document.getElementById('densitySelect');
-    if (densitySelect) {
-        densitySelect.addEventListener('change', (e) => {
-            slideDensity = e.target.value;
-            updateSlideCount();
-        });
-    }
-
-    const notesSelect = document.getElementById('notesSelect');
-    if (notesSelect) {
-        notesSelect.addEventListener('change', (e) => {
-            includeSpeakerNotes = e.target.value === 'yes';
-        });
-    }
-
-    const chartsSelect = document.getElementById('chartsSelect');
-    if (chartsSelect) {
-        chartsSelect.addEventListener('change', (e) => {
-            includeCharts = e.target.value;
-        });
-    }
-
-    if (generateBtn) {
-        generateBtn.addEventListener('click', () => generatePPTX(false));
-    }
+    if (generateBtn) generateBtn.addEventListener('click', () => generatePPTX());
 
     document.querySelectorAll('.step-item').forEach((item, index) => {
         item.addEventListener('click', () => {
             const cards = document.querySelectorAll('.ppt-card');
-            if (cards[index]) {
-                cards[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            if (cards[index]) cards[index].scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
 }
 
-// =====================================================================
-// KEYBOARD SHORTCUTS
-// =====================================================================
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && document.activeElement === generateBtn) {
-        generatePPTX(false);
-    }
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.toast').forEach(t => t.remove());
-        const preview = document.querySelector('.ppt-preview-overlay');
-        if (preview) preview.remove();
-    }
+    if (e.key === 'Enter' && document.activeElement === generateBtn) generatePPTX();
 });
 
-// =====================================================================
-// AUTH LISTENER
-// =====================================================================
 if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged((user) => {
         currentUser = user;
-        if (user) {
-            console.log('[PPT] User logged in:', user.email);
-        } else {
-            console.log('[PPT] User logged out');
-        }
+        if (user) console.log('[PPT] User logged in:', user.email);
     });
 }
 
-// =====================================================================
-// INIT
-// =====================================================================
 async function init() {
     console.log('[PPT] Initializing...');
-    
     await waitForDOM();
     getDOMElements();
     renderThemes();
     setupCarouselNav();
-    
+
     const contentLoaded = loadContent();
     if (!contentLoaded && generateBtn) {
         generateBtn.disabled = true;
@@ -1700,20 +1098,8 @@ async function init() {
     updateStepIndicator(1);
     await fetchTokens();
 
-    document.querySelectorAll('#chartStyleOptions .style-option').forEach(opt => {
-        const radio = opt.querySelector('input[type="radio"]');
-        if (radio && radio.checked) {
-            opt.classList.add('selected');
-        }
-    });
-
     isInitialized = true;
     console.log('[PPT] Ready!');
-    console.log('[PPT] Content loaded:', contentData ? 'Yes' : 'No');
-    console.log('[PPT] Selected theme:', selectedTheme.name);
-    console.log('[PPT] Firebase available:', typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0);
-    console.log('[PPT] Theme carousel found:', !!themeCarousel);
 }
 
-// Start the app
 init();

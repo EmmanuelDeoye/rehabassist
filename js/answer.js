@@ -1,4 +1,5 @@
 // js/answer.js – Assignment Result Editor (mirrors caseresult.js)
+// Updated: added Export to PowerPoint functionality
 
 if (typeof marked !== 'undefined') {
     marked.setOptions({
@@ -38,6 +39,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     const printBtn = document.getElementById('printBtn');
     const saveEditBtn = document.getElementById('saveEditBtn');
     const closeAssignmentBtn = document.getElementById('closeAssignmentBtn');
+
+    // NEW: Export to PowerPoint button
+    const pptExportBtn = document.getElementById('pptExportBtn');
 
     // Share Modal
     const shareModal = document.getElementById('shareModal');
@@ -600,6 +604,41 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     if (publicToggle) {
         publicToggle.addEventListener('change', togglePublic);
+    }
+
+    // =========================================================================
+    // NEW: Export to PowerPoint
+    // =========================================================================
+    if (pptExportBtn) {
+        pptExportBtn.addEventListener('click', function() {
+            // Ensure we have content
+            const contentHtml = editor.innerHTML;
+            const contentText = editor.innerText;
+            if (!contentText || contentText.trim().length === 0) {
+                showToast('No content to export.', 'error');
+                return;
+            }
+
+            // Build data object matching ppt-export expectations
+            const data = {
+                content: contentHtml,
+                modeLabel: assignmentData?.topic || 'Assignment',
+                patientName: assignmentData?.course || 'N/A',   // using course as patient placeholder
+                diagnosis: assignmentData?.typeLabel || assignmentData?.type || 'N/A',
+                profession: assignmentData?.toneLabel || assignmentData?.tone || 'N/A'
+            };
+
+            // Store in localStorage
+            try {
+                localStorage.setItem('pptExportData', JSON.stringify(data));
+                showToast('📤 Exporting to PowerPoint...', 'info', 1500);
+                // Navigate to ppt-export.html
+                window.location.href = 'ppt-export.html';
+            } catch (err) {
+                console.error('Export error:', err);
+                showToast('Failed to export: ' + err.message, 'error');
+            }
+        });
     }
 
     // =========================================================================
