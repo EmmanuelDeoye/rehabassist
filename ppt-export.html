@@ -18,12 +18,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5" />
     <title>rehablix · Export to PowerPoint</title>
-    
+
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js">
+    </script>
+
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <!-- Google Fonts -->
@@ -31,25 +34,30 @@
     <!-- PptxGenJS -->
     <script src="https://cdn.jsdelivr.net/gh/gitbrent/PptxGenJS@3.12.0/dist/pptxgen.bundle.js">
     </script>
-    
+
     <!-- Main site styles -->
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/auth.css" />
-    
-    <!-- PPT Export styles -->
+
+    <!-- PPT Export styles (fully external) -->
     <link rel="stylesheet" href="css/ppt.css" />
-    
-    <!-- Config & Auth (must load before ppt.js) -->
-    <script src="js/config.js"></script>
-    <script src="js/modal.js"></script>
-    <script src="js/auth.js"></script>
-    
-    <!-- PPT Export logic -->
-    <script src="js/ppt.js"></script>
+
+    <!-- Config & Auth -->
+    <script src="js/config.js">
+    </script>
+    <script src="js/modal.js">
+    </script>
+    <script src="js/auth.js">
+    </script>
+
+    <!-- PPT Export logic (enhanced) -->
+    <script src="js/ppt.js">
+    </script>
 </head>
 <body>
+
     <!-- ============================================================= -->
-    <!-- NAVBAR (same as other pages)                                  -->
+    <!-- NAVBAR                                                        -->
     <!-- ============================================================= -->
     <nav class="navbar">
         <div class="nav-container">
@@ -79,10 +87,11 @@
     </nav>
 
     <!-- ============================================================= -->
-    <!-- MAIN CONTENT                                                 -->
+    <!-- MAIN CONTENT                                                  -->
     <!-- ============================================================= -->
     <main class="ppt-main">
         <div class="container">
+
             <!-- Header -->
             <header class="ppt-header">
                 <h1><i class="fas fa-file-powerpoint"></i> Export to PowerPoint</h1>
@@ -92,7 +101,7 @@
                 </a>
             </header>
 
-            <!-- Steps Indicator - Horizontal linked tree -->
+            <!-- Steps Indicator (simplified: Theme → Style → Generate) -->
             <div class="steps-indicator">
                 <div class="step-item active" data-step="1">
                     <div class="step-circle">
@@ -113,14 +122,6 @@
                 <div class="step-item" data-step="3">
                     <div class="step-circle">
                         <span class="step-num">3</span>
-                        <i class="fas fa-layer-group step-icon"></i>
-                    </div>
-                    <span class="step-label">Layout</span>
-                </div>
-                <div class="step-line"></div>
-                <div class="step-item" data-step="4">
-                    <div class="step-circle">
-                        <span class="step-num">4</span>
                         <i class="fas fa-magic step-icon"></i>
                     </div>
                     <span class="step-label">Generate</span>
@@ -147,194 +148,68 @@
             </div>
 
             <!-- ============================================================
-                 STEP 2: STYLE & FORMAT
+                 STEP 2: STYLE (simplified — just art style)
                  ============================================================ -->
             <div class="ppt-card" id="stepStyle">
-                <h2><i class="fas fa-brush"></i> Style &amp; Format</h2>
-                <p class="sub">Choose the art style for your slides.</p>
+                <h2><i class="fas fa-brush"></i> Style</h2>
+                <p class="sub">Choose the visual treatment for your slides.</p>
                 <div class="style-options" id="styleOptions">
                     <label class="style-option selected">
-                        <input type="radio" name="artStyle" value="photo" checked /> Photo
+                        <input type="radio" name="artStyle" value="professional" checked /> Professional
                     </label>
                     <label class="style-option">
-                        <input type="radio" name="artStyle" value="illustration" /> Illustration
+                        <input type="radio" name="artStyle" value="modern" /> Modern
                     </label>
                     <label class="style-option">
-                        <input type="radio" name="artStyle" value="abstract" /> Abstract
+                        <input type="radio" name="artStyle" value="clean" /> Clean
                     </label>
                     <label class="style-option">
-                        <input type="radio" name="artStyle" value="minimal" /> Minimal
+                        <input type="radio" name="artStyle" value="clinical" /> Clinical
                     </label>
                 </div>
-
-                <!-- NEW: Chart Style Preference -->
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-light);">
-                    <label style="display:block; font-weight:600; margin-bottom:0.5rem; font-size:0.95rem;">
-                        <i class="fas fa-chart-bar"></i> Chart Style
-                    </label>
-                    <div class="style-options" id="chartStyleOptions">
-                        <label class="style-option selected">
-                            <input type="radio" name="chartStyle" value="modern" checked /> Modern
-                        </label>
-                        <label class="style-option">
-                            <input type="radio" name="chartStyle" value="classic" /> Classic
-                        </label>
-                        <label class="style-option">
-                            <input type="radio" name="chartStyle" value="minimal" /> Minimal
-                        </label>
-                        <label class="style-option">
-                            <input type="radio" name="chartStyle" value="vibrant" /> Vibrant
-                        </label>
-                    </div>
-                </div>
-
-                <!-- NEW: Image Generation Toggle -->
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-light);">
-                    <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; font-weight:500;">
-                        <input type="checkbox" id="enableImageGeneration" style="width:20px; height:20px; accent-color: var(--accent);" />
-                        <span><i class="fas fa-image"></i> Generate AI images for slides (experimental)</span>
-                    </label>
-                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.3rem; margin-left:2.8rem;">
-                        Requires API key for image generation. Images will be suggested but may need manual review.
-                    </p>
-                </div>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.8rem;">
+                    <i class="fas fa-info-circle"></i> "Professional" gives a sophisticated, executive-style look.
+                </p>
             </div>
 
             <!-- ============================================================
-                 STEP 3: LAYOUT & CONTENT STRUCTURE
-                 ============================================================ -->
-            <div class="ppt-card" id="stepLayout">
-                <h2><i class="fas fa-layer-group"></i> Layout &amp; Content</h2>
-                <p class="sub">How should the slides be organised and structured?</p>
-                
-                <div style="margin-bottom: 1.2rem;">
-                    <label style="display:block; font-weight:600; margin-bottom:0.5rem; font-size:0.95rem;">
-                        <i class="fas fa-columns"></i> Slide Layout
-                    </label>
-                    <div class="layout-options" id="layoutOptions">
-                        <label class="layout-option selected">
-                            <input type="radio" name="layoutType" value="freeform" checked /> Freeform
-                        </label>
-                        <label class="layout-option">
-                            <input type="radio" name="layoutType" value="card" /> Card-by-card
-                        </label>
-                        <label class="layout-option">
-                            <input type="radio" name="layoutType" value="dynamic" /> Dynamic (AI-driven)
-                        </label>
-                    </div>
-                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.3rem;">
-                        <i class="fas fa-info-circle"></i> "Dynamic" lets AI choose the best layout per slide (two-column, comparison, big-number, etc.)
-                    </p>
-                </div>
-
-                <div>
-                    <label style="display:block; font-weight:600; margin-bottom:0.5rem; font-size:0.95rem;">
-                        <i class="fas fa-sitemap"></i> Content Structure
-                    </label>
-                    <div class="structure-options" id="structureOptions">
-                        <label class="structure-option selected">
-                            <input type="radio" name="slideStructure" value="headings" checked /> One slide per heading
-                        </label>
-                        <label class="structure-option">
-                            <input type="radio" name="slideStructure" value="paragraphs" /> One slide per paragraph
-                        </label>
-                        <label class="structure-option">
-                            <input type="radio" name="slideStructure" value="auto" /> Auto‑detect
-                        </label>
-                        <label class="structure-option">
-                            <input type="radio" name="slideStructure" value="comprehensive" /> Comprehensive (recommended)
-                        </label>
-                    </div>
-                    <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.3rem;">
-                        <i class="fas fa-info-circle"></i> "Comprehensive" includes charts, tables, and visual elements where appropriate
-                    </p>
-                </div>
-
-                <div style="margin-top:1.5rem;">
-                    <label style="display:block; font-weight:500; margin-bottom:0.5rem;">
-                        <i class="fas fa-pen"></i> Additional instructions (optional)
-                    </label>
-                    <textarea class="additional-textarea" id="pptInstructions" 
-                        placeholder="e.g., Include a title slide with the patient name, add a summary slide at the end, use professional medical terminology, emphasize key metrics with charts..."></textarea>
-                </div>
-            </div>
-
-            <!-- ============================================================
-                 STEP 4: GENERATE
+                 STEP 3: GENERATE (simplified)
                  ============================================================ -->
             <div class="ppt-card" id="stepGenerate">
-                <h2><i class="fas fa-magic"></i> Ready to generate</h2>
+                <h2><i class="fas fa-magic"></i> Generate</h2>
                 <p class="sub">
-                    Your presentation will include 
+                    Your presentation will include
                     <span class="slide-count-badge">
                         <i class="fas fa-file-powerpoint"></i>
                         <span id="slideCount">0</span> slides
                     </span>
-                    based on the selected theme, style, and layout.
+                    based on the selected theme and style.
                 </p>
-                
-                <!-- NEW: Advanced Options Toggle -->
-                <details style="margin: 1rem 0; padding: 0.8rem; background: var(--surface); border-radius: 0.8rem; border: 1px solid var(--border-light);">
-                    <summary style="cursor: pointer; font-weight: 600; color: var(--text-primary);">
-                        <i class="fas fa-cog"></i> Advanced Options
-                    </summary>
-                    <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:500; margin-bottom:0.3rem;">
-                                <i class="fas fa-font"></i> Font Size
-                            </label>
-                            <select id="fontSizeSelect" style="width:100%; padding:0.4rem; border-radius:0.5rem; border:1px solid var(--border-light); background:var(--surface); color:var(--text-primary);">
-                                <option value="small">Small (14pt)</option>
-                                <option value="medium" selected>Medium (18pt)</option>
-                                <option value="large">Large (22pt)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:500; margin-bottom:0.3rem;">
-                                <i class="fas fa-layer-group"></i> Slide Density
-                            </label>
-                            <select id="densitySelect" style="width:100%; padding:0.4rem; border-radius:0.5rem; border:1px solid var(--border-light); background:var(--surface); color:var(--text-primary);">
-                                <option value="sparse">Sparse (3-4 items)</option>
-                                <option value="balanced" selected>Balanced (5-6 items)</option>
-                                <option value="dense">Dense (7-8 items)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:500; margin-bottom:0.3rem;">
-                                <i class="fas fa-file-alt"></i> Include Speaker Notes
-                            </label>
-                            <select id="notesSelect" style="width:100%; padding:0.4rem; border-radius:0.5rem; border:1px solid var(--border-light); background:var(--surface); color:var(--text-primary);">
-                                <option value="yes" selected>Yes</option>
-                                <option value="no">No</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.85rem; font-weight:500; margin-bottom:0.3rem;">
-                                <i class="fas fa-chart-pie"></i> Include Charts
-                            </label>
-                            <select id="chartsSelect" style="width:100%; padding:0.4rem; border-radius:0.5rem; border:1px solid var(--border-light); background:var(--surface); color:var(--text-primary);">
-                                <option value="auto" selected>Auto-detect</option>
-                                <option value="yes">Always include</option>
-                                <option value="no">Never include</option>
-                            </select>
-                        </div>
-                    </div>
-                </details>
+
+                <!-- Additional instructions (optional) -->
+                <div style="margin-bottom: 1rem;">
+                    <label style="display:block; font-weight:500; margin-bottom:0.4rem; font-size:0.95rem;">
+                        <i class="fas fa-pen"></i> Additional instructions (optional)
+                    </label>
+                    <textarea class="additional-textarea" id="pptInstructions"
+                    placeholder="e.g., Include a title slide, add a summary at the end, emphasize key metrics..."></textarea>
+                </div>
 
                 <button class="generate-ppt-btn" id="generatePptBtn">
                     <i class="fas fa-magic"></i> Generate & Download
                 </button>
-                
-                <!-- NEW: Status indicator -->
-                <div id="generationStatus" style="margin-top: 0.8rem; text-align: center; font-size: 0.9rem; color: var(--text-secondary); display: none;">
-                    <i class="fas fa-spinner fa-spin"></i> <span id="statusText">Preparing your presentation...</span>
+
+                <div id="generationStatus">
+                    <i class="fas fa-spinner"></i>
+                    <span id="statusText">Preparing your presentation...</span>
                 </div>
             </div>
+
         </div>
     </main>
 
     <!-- ============================================================= -->
-    <!-- FOOTER (same as other pages)                                  -->
+    <!-- FOOTER                                                         -->
     <!-- ============================================================= -->
     <footer class="site-footer">
         <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
@@ -346,10 +221,16 @@
     <!-- ============================================================= -->
     <!-- SCRIPTS                                                       -->
     <!-- ============================================================= -->
-    <script src="js/config.js"></script>
-    <script src="js/modal.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/tools.js"></script>
-    <script src="js/ppt.js"></script>
+    <script src="js/config.js">
+    </script>
+    <script src="js/modal.js">
+    </script>
+    <script src="js/auth.js">
+    </script>
+    <script src="js/tools.js">
+    </script>
+    <script src="js/ppt.js">
+    </script>
+
 </body>
 </html>
