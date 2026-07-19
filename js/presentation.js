@@ -1683,7 +1683,7 @@ ${combinedText || 'No notes provided.'}`;
     });
 
     // =========================================================================
-    // History drawer (same as before)
+    // History drawer
     // =========================================================================
     let allHistoryEntries = [];
 
@@ -1790,8 +1790,11 @@ ${combinedText || 'No notes provided.'}`;
         closeDrawerBtn.addEventListener('click', () => historyDrawer.classList.remove('active'));
     }
     
+    // FIXED: Use contains() to check if click target is inside history button
     document.addEventListener('click', e => {
-        if (historyDrawer?.classList.contains('active') && !historyDrawer.contains(e.target) && e.target !== historyNavBtn) {
+        if (historyDrawer?.classList.contains('active') && 
+            !historyDrawer.contains(e.target) && 
+            !historyNavBtn?.contains(e.target)) {
             historyDrawer.classList.remove('active');
         }
     });
