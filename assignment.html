@@ -288,6 +288,16 @@ e.g.,
   <script src="js/auth.js"></script>
   <script src="js/theme.js"></script>
   <script src="js/tools.js"></script>
+  <script src="js/handoff.js"></script>
   <script src="js/assign.js"></script>
+  <script>
+    // Bring over anything the user shared with Ask AI (feature 7)
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!window.RehablixHandoff) return;
+      const data = window.RehablixHandoff.consume('assignment.html');
+      if (!data) return;
+      window.RehablixHandoff.applyTo(data, { textFieldId: 'topicInput', fileFieldId: 'fileInput' });
+    });
+  </script>
 </body>
 </html>

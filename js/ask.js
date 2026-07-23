@@ -1,4 +1,7 @@
-// js/ask.js – AI Chat with History, Copy, Download, Regenerate, and Suggested Questions
+// js/ask.js – Ask AI: chat with history, file attachments (incl. real
+// image/video vision), voice input, editable prompts, link/URL reading,
+// site-aware system knowledge, cross-page handoff, and "export to
+// result.html" for AI answers.
 
 // Marked configuration
 if (typeof marked !== 'undefined') {
@@ -19,6 +22,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const messageInput = document.getElementById('messageInput');
   const sendBtn = document.getElementById('sendBtn');
   const newChatBtn = document.getElementById('newChatBtn');
+  const attachBtn = document.getElementById('attachBtn');
+  const attachMenu = document.getElementById('attachMenu');
+  const fileInput = document.getElementById('fileInput');
+  const attachmentsStrip = document.getElementById('attachmentsStrip');
+  const micBtn = document.getElementById('micBtn');
+  const inputHint = document.getElementById('inputHint');
 
   const historyDrawer = document.getElementById('historyDrawer');
   const historyNavBtn = document.getElementById('historyNavBtn');
@@ -32,12 +41,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   // State
   // =========================================================================
   let currentUser = null;
+  // Text-only model (fast, cheap) – used whenever nothing in the turn needs vision.
   let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+  // Vision-capable model (GPT-4.1 via GitHub Models marketplace) – used when
+  // an image or a video (sampled as frames) is attached.
+  let visionConfig = { token: null, endpoint: null, model: 'gpt-4.1' };
+
   let currentConversationId = null;
-  let messages = [];                     // [{role, content, timestamp}]
+  let conversationTitle = null;
+  let titleIsFinal = false;
+  let messages = [];                     // [{role, content, displayContent, attachmentMeta, timestamp, visionImages?, _rawFiles?}]
   let isWaiting = false;
+  let attachedFiles = [];                // [{id, file, name, type, status, extractedText, visionImages, error}]
 
   const database = firebase.database();
+
+  const isMobile = window.matchMedia('(pointer: coarse)').matches ||
+                    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (inputHint) {
+    inputHint.textContent = isMobile
+      ? 'Tap ➤ to send · Enter adds a new line'
+      : 'Shift+Enter for a new line · Enter to send';
+  }
+
+  const TOOL_PAGES = ['format.html', 'standardized.html', 'doc.html', 'rom.html', 'gait.html',
+    'presentation.html', 'assignment.html', 'project.html', 'study.html', 'exam.html', 'ask.html'];
 
   // =========================================================================
   // Helpers
@@ -66,7 +94,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const data = snapshot.val();
       if (data?.api_key) {
         aiConfig.token = data.api_key;
-        console.log('DeepSeek API loaded');
         return true;
       }
       console.warn('DeepSeek API key missing');
@@ -75,6 +102,846 @@ document.addEventListener('DOMContentLoaded', async () => {
       console.error('Token fetch error:', error);
       return false;
     }
+  }
+
+  async function fetchVisionTokens() {
+    if (visionConfig.token) return true;
+    try {
+      const snapshot = await database.ref('tokens/openAI').once('value');
+      const data = snapshot.val();
+      if (data?.openai_token && data?.github_endpoint) {
+        visionConfig.token = data.openai_token;
+        visionConfig.endpoint = data.github_endpoint.replace(/\/$/, '');
+        return true;
+      }
+      console.warn('Vision (OpenAI) credentials missing');
+      return false;
+    } catch (error) {
+      console.error('Vision token fetch error:', error);
+      return false;
+    }
+  }
+
+  // Lazy-load a third-party script only when actually needed
+  const loadedScripts = {};
+  function loadScript(src) {
+    if (loadedScripts[src]) return loadedScripts[src];
+    loadedScripts[src] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load ' + src));
+      document.head.appendChild(s);
+    });
+    return loadedScripts[src];
+  }
+
+  // Render markdown for AI messages, style + classify links, and make
+  // internal tool-page links hand off context instead of navigating cold.
+  function renderAssistantHtml(content) {
+    const html = marked.parse(content || '');
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    wrapper.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      const isExternal = /^https?:\/\//i.test(href) && !href.includes(window.location.hostname);
+      if (isExternal) {
+        a.setAttribute('target', '_blank');
+        a.setAttribute('rel', 'noopener noreferrer');
+        a.classList.add('external-link');
+      } else if (TOOL_PAGES.some(p => href === p || href.startsWith(p + '?'))) {
+        a.classList.add('internal-link');
+        a.dataset.handoffPage = TOOL_PAGES.find(p => href === p || href.startsWith(p + '?'));
+      }
+    });
+    return wrapper.innerHTML;
+  }
+
+  // =========================================================================
+  // Site & company knowledge baked into the system prompt (feature 7 & 8)
+  // =========================================================================
+  function buildSystemPrompt() {
+    return `You are the "Ask AI" assistant embedded inside rehablix (rehablix.com), an AI toolkit for rehabilitation professionals and healthcare students. You provide accurate, evidence-based answers about rehabilitation, medical conditions, treatments, clinical reasoning, and academic work. Use clear language and markdown formatting (headings, bullet points, bold, tables) to keep answers readable. Be concise but thorough.
+
+You know the rehablix website well and should proactively recommend/redirect the user to the right internal page (as a markdown link, using the exact relative path below) whenever their request matches a dedicated tool — that tool will do a much better job than a chat answer alone, and clicking the link automatically carries over what the user already told you. Available pages:
+
+- [Assessment Format Generator](format.html) – builds structured assessment write-ups from patient data and clinical guidelines.
+- [Standardized Tools](standardized.html) – generates full copies of standardized assessments (MMSE, Berg Balance Scale, etc.) as downloadable PDFs.
+- [Documentation Assistant](doc.html) – dictate, upload files, or upload recorded sessions; AI transcribes and organizes clinical notes.
+- [ROM Analyzer](rom.html) – analyzes joint range of motion from images/videos with angle measurements and clinical insights.
+- [Gait Monitor](gait.html) – analyzes a video of a patient's gait for movement-pattern feedback.
+- [Presentation Maker](presentation.html) – turns notes/research into a case presentation, clinical report, or documentation with AI-generated slides.
+- [Assignment Maker](assignment.html) – generates full academic assignments with references and a chosen tone (for students).
+- [Project Maker](project.html) – builds an academic project chapter by chapter (literature review, methodology, references, defense prep).
+- [Study Buddy](study.html) – turns notes/textbooks/slides into flashcards, summaries, and quizzes.
+- [Exam Simulator](exam.html) – timed, AI-generated practice exams with performance analytics.
+
+When a user's need clearly matches one of these, say so directly and link to it, e.g. "You'll get a much more complete result from the [Gait Monitor](gait.html) — it's built exactly for this." Don't link a page unless it's actually relevant.
+
+About rehablix itself: rehablix was built by rehabverve enterprise, founded by Emmanuel Adeoye — an occupational therapist by profession and a programmer by passion. Only share this if asked about the creator, company, or "who made this."
+
+You should also know about two related businesses and point users to them when relevant (always as a clickable markdown link, opening in a new tab):
+- **rehabverve.com.ng** — for anyone who wants to hire a rehabilitation professional directly, or needs bespoke professional/consulting help beyond what the AI tools can do. Link: [rehabverve.com.ng](https://rehabverve.com.ng)
+- **rehabace.com** — for sensory room construction/design or therapy equipment and supplies. Link: [rehabace.com](https://rehabace.com)
+
+Only mention rehabverve.com.ng or rehabace.com when the user's request genuinely matches (e.g. "I need to hire a therapist", "who can build a sensory room", "where can I buy therapy equipment") — don't force them into unrelated answers.
+
+If the user's message includes content extracted from an uploaded file, an image, video frames, or a URL they shared (you'll see it clearly marked, e.g. "[Attached file: ...]" or "[Content from URL: ...]"), use that content as context to answer their actual question — don't just describe it back to them unless asked to.`;
+  }
+
+  // =========================================================================
+  // URL detection & reading (feature 9)
+  // =========================================================================
+  function extractUrls(text) {
+    const matches = text.match(/(https?:\/\/[^\s)]+)/g) || [];
+    return [...new Set(matches)].slice(0, 2);
+  }
+
+  async function fetchUrlContent(url) {
+    const readerUrl = `https://r.jina.ai/${url}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const res = await fetch(readerUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) throw new Error('reader error ' + res.status);
+      const text = await res.text();
+      return text.slice(0, 3000);
+    } catch (err) {
+      clearTimeout(timeout);
+      console.warn('URL fetch failed for', url, err);
+      return null;
+    }
+  }
+
+  // =========================================================================
+  // File attachments (feature 1) + real image/video vision (feature 5)
+  // =========================================================================
+  function fileTypeIcon(file) {
+    const t = file.type;
+    const n = file.name.toLowerCase();
+    if (t.startsWith('image/')) return 'fa-file-image';
+    if (t.startsWith('video/')) return 'fa-file-video';
+    if (t.startsWith('audio/')) return 'fa-file-audio';
+    if (n.endsWith('.pdf')) return 'fa-file-pdf';
+    if (n.endsWith('.doc') || n.endsWith('.docx')) return 'fa-file-word';
+    if (n.endsWith('.zip')) return 'fa-file-zipper';
+    if (n.endsWith('.csv')) return 'fa-file-csv';
+    return 'fa-file-lines';
+  }
+
+  function renderAttachmentsStrip() {
+    if (!attachmentsStrip) return;
+    if (attachedFiles.length === 0) {
+      attachmentsStrip.hidden = true;
+      attachmentsStrip.innerHTML = '';
+      return;
+    }
+    attachmentsStrip.hidden = false;
+    attachmentsStrip.innerHTML = '';
+    attachedFiles.forEach(att => {
+      const chip = document.createElement('div');
+      chip.className = 'attachment-chip';
+      const statusText = att.status === 'reading' ? 'Reading…' : att.status === 'error' ? 'Not readable' : 'Ready';
+      chip.innerHTML = `
+        <i class="fas ${fileTypeIcon(att.file)} file-type-icon"></i>
+        <span class="attachment-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
+        <span class="attachment-status">${statusText}</span>
+        <button class="remove-attachment" data-id="${att.id}" aria-label="Remove attachment"><i class="fas fa-times"></i></button>
+      `;
+      attachmentsStrip.appendChild(chip);
+    });
+    attachmentsStrip.querySelectorAll('.remove-attachment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        attachedFiles = attachedFiles.filter(a => a.id !== btn.dataset.id);
+        renderAttachmentsStrip();
+      });
+    });
+  }
+
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(file);
+    });
+  }
+
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Resize/compress an image (or a canvas frame) down to a sane size before
+  // sending it to the vision model, to keep payloads fast and cheap.
+  function downscaleImage(source, maxDim = 1024, quality = 0.82) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = source;
+    });
+  }
+
+  async function extractPdfText(file) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const buf = await readFileAsArrayBuffer(file);
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    const maxPages = Math.min(pdf.numPages, 15);
+    for (let i = 1; i <= maxPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(it => it.str).join(' ') + '\n';
+      if (text.length > 8000) break;
+    }
+    return text.trim();
+  }
+
+  async function extractDocxText(file) {
+    await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js');
+    const buf = await readFileAsArrayBuffer(file);
+    const result = await window.mammoth.extractRawText({ arrayBuffer: buf });
+    return (result.value || '').trim();
+  }
+
+  async function extractZipText(file) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+    const buf = await readFileAsArrayBuffer(file);
+    const zip = await window.JSZip.loadAsync(buf);
+    const entries = Object.values(zip.files).filter(f => !f.dir);
+    let summary = `Zip archive with ${entries.length} file(s): ${entries.slice(0, 30).map(f => f.name).join(', ')}\n\n`;
+    let charsUsed = summary.length;
+    for (const entry of entries) {
+      if (charsUsed > 6000) break;
+      if (/\.(txt|md|csv|json|log)$/i.test(entry.name) && entry._data && entry._data.uncompressedSize < 200000) {
+        try {
+          const content = await entry.async('text');
+          const snippet = content.slice(0, 1500);
+          summary += `--- ${entry.name} ---\n${snippet}\n\n`;
+          charsUsed += snippet.length;
+        } catch (e) { /* skip unreadable entry */ }
+      }
+    }
+    return summary.trim();
+  }
+
+  // Real vision path: downscale the image for the model, and also run OCR
+  // so any legible text still ends up in the text-only fallback/context.
+  async function processImageAttachment(file) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const visionUrl = await downscaleImage(dataUrl).catch(() => dataUrl);
+    let ocrText = '';
+    try {
+      await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js');
+      const { data } = await window.Tesseract.recognize(dataUrl, 'eng');
+      ocrText = (data.text || '').trim();
+    } catch (e) { /* OCR is best-effort */ }
+    return {
+      visionImages: [visionUrl],
+      text: `[Image attached: ${file.name}]` + (ocrText ? ` Detected text: ${ocrText}` : ' (analyzed visually)')
+    };
+  }
+
+  // Sample a handful of frames from a video so the vision model can "see"
+  // it, since there's no direct video-understanding endpoint available here.
+  function extractVideoFrames(file, frameCount = 4) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      const url = URL.createObjectURL(file);
+      video.src = url;
+
+      video.onloadedmetadata = async () => {
+        try {
+          const duration = video.duration;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.min(video.videoWidth, 960) || 640;
+          canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth || 0.5625));
+          const ctx = canvas.getContext('2d');
+          const frames = [];
+          for (let i = 0; i < frameCount; i++) {
+            const t = (duration / (frameCount + 1)) * (i + 1);
+            await new Promise((res) => {
+              video.currentTime = t;
+              video.onseeked = res;
+            });
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            frames.push(canvas.toDataURL('image/jpeg', 0.75));
+          }
+          URL.revokeObjectURL(url);
+          resolve(frames);
+        } catch (err) {
+          URL.revokeObjectURL(url);
+          reject(err);
+        }
+      };
+      video.onerror = () => { URL.revokeObjectURL(url); reject(new Error('video load failed')); };
+    });
+  }
+
+  async function processAttachment(att) {
+    try {
+      const file = att.file;
+      const name = file.name.toLowerCase();
+      if (file.type === 'text/plain' || /\.(txt|md|csv|log)$/i.test(name)) {
+        att.extractedText = (await readFileAsText(file)).slice(0, 6000);
+      } else if (name.endsWith('.pdf')) {
+        att.extractedText = await extractPdfText(file);
+      } else if (name.endsWith('.docx') || name.endsWith('.doc')) {
+        att.extractedText = await extractDocxText(file);
+      } else if (name.endsWith('.zip')) {
+        att.extractedText = await extractZipText(file);
+      } else if (file.type.startsWith('image/')) {
+        const result = await processImageAttachment(file);
+        att.extractedText = result.text;
+        att.visionImages = result.visionImages;
+      } else if (file.type.startsWith('video/')) {
+        const frames = await extractVideoFrames(file, 4).catch(() => []);
+        if (frames.length > 0) {
+          att.visionImages = frames;
+          att.extractedText = `[Video attached: ${file.name} — ${frames.length} frames sampled across its duration for visual analysis.]`;
+        } else {
+          att.extractedText = `[Video file "${file.name}" attached, but frames could not be extracted in this browser.]`;
+        }
+      } else if (file.type.startsWith('audio/')) {
+        att.extractedText = `[Audio file "${file.name}" attached. Its contents cannot be transcribed automatically here — ask the user to describe what's in it if you need details.]`;
+      } else {
+        att.extractedText = `[File "${file.name}" attached — this file type can't be read automatically.]`;
+      }
+      att.status = 'ready';
+    } catch (err) {
+      console.warn('Attachment extraction failed:', err);
+      att.status = 'error';
+      att.extractedText = `[File "${att.name}" was attached but could not be read.]`;
+    }
+    renderAttachmentsStrip();
+  }
+
+  function handleFilesSelected(fileList) {
+    Array.from(fileList).forEach(file => {
+      if (file.size > 25 * 1024 * 1024) {
+        showToast(`${file.name} is too large (max 25MB)`, 'error');
+        return;
+      }
+      const att = {
+        id: 'att_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        file,
+        name: file.name,
+        type: file.type,
+        status: 'reading',
+        extractedText: '',
+        visionImages: null
+      };
+      attachedFiles.push(att);
+      processAttachment(att);
+    });
+    renderAttachmentsStrip();
+  }
+
+  // ---- Attach menu (Camera / Photos / Videos / Files) ----
+  function closeAttachMenu() {
+    if (attachMenu) attachMenu.hidden = true;
+    if (attachBtn) attachBtn.classList.remove('active');
+  }
+
+  if (attachBtn && attachMenu) {
+    attachBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = attachMenu.hidden;
+      closeAttachMenu();
+      if (willOpen) {
+        attachMenu.hidden = false;
+        attachBtn.classList.add('active');
+      }
+    });
+
+    attachMenu.querySelectorAll('button[data-mode]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const mode = btn.dataset.mode;
+        if (mode === 'camera') {
+          fileInput.setAttribute('accept', 'image/*');
+          fileInput.setAttribute('capture', 'environment');
+        } else if (mode === 'photos') {
+          fileInput.setAttribute('accept', 'image/*');
+          fileInput.removeAttribute('capture');
+        } else if (mode === 'videos') {
+          fileInput.setAttribute('accept', 'video/*');
+          fileInput.removeAttribute('capture');
+        } else {
+          fileInput.setAttribute('accept', 'image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.csv,.md');
+          fileInput.removeAttribute('capture');
+        }
+        closeAttachMenu();
+        fileInput.click();
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!attachMenu.hidden && !attachMenu.contains(e.target) && e.target !== attachBtn) closeAttachMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAttachMenu();
+    });
+  }
+
+  if (fileInput) fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFilesSelected(e.target.files);
+    fileInput.value = '';
+  });
+
+  // Drag & drop onto the chat area
+  chatMessages.addEventListener('dragover', (e) => e.preventDefault());
+  chatMessages.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer?.files?.length) handleFilesSelected(e.dataTransfer.files);
+  });
+
+  // =========================================================================
+  // Voice input (feature 3)
+  // =========================================================================
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
+
+  if (SpeechRecognitionAPI && micBtn) {
+    recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let baseText = '';
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalTranscript += transcript;
+        else interimTranscript += transcript;
+      }
+      const sep = baseText && !baseText.endsWith(' ') ? ' ' : '';
+      messageInput.value = baseText + sep + finalTranscript + interimTranscript;
+      messageInput.dispatchEvent(new Event('input'));
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event.error);
+      if (event.error !== 'no-speech') showToast('Voice input error: ' + event.error, 'error');
+      stopRecording();
+    };
+
+    recognition.onend = () => stopRecording();
+
+    function startRecording() {
+      baseText = messageInput.value.trim();
+      if (baseText) baseText += ' ';
+      isRecording = true;
+      micBtn.classList.add('recording');
+      micBtn.querySelector('i').className = 'fas fa-stop';
+      try { recognition.start(); } catch (e) { /* already started */ }
+      showToast('Listening… tap the mic to stop', 'info', 2000);
+    }
+
+    function stopRecording() {
+      isRecording = false;
+      micBtn.classList.remove('recording');
+      micBtn.querySelector('i').className = 'fas fa-microphone';
+      try { recognition.stop(); } catch (e) { /* ignore */ }
+    }
+
+    micBtn.addEventListener('click', () => {
+      if (isRecording) stopRecording();
+      else startRecording();
+    });
+  } else if (micBtn) {
+    micBtn.addEventListener('click', () => {
+      showToast('Voice input is not supported in this browser', 'error');
+    });
+  }
+
+  // =========================================================================
+  // Render messages (with action buttons, attachments, and suggestions)
+  // =========================================================================
+  function renderMessages() {
+    chatMessages.innerHTML = '';
+    if (messages.length === 0) {
+      chatMessages.innerHTML = `
+        <div class="empty-chat">
+          <div class="empty-chat-icon">💬</div>
+          <p>Ask me anything about rehabilitation, conditions, assignments, or clinical reasoning.</p>
+          <p class="empty-chat-hint">Your conversation will be saved automatically when you're logged in.</p>
+        </div>
+      `;
+      return;
+    }
+
+    messages.forEach((msg, index) => {
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `message ${msg.role}`;
+      msgDiv.setAttribute('data-index', index);
+      if (msg.role === 'assistant') {
+        msgDiv.setAttribute('data-raw-content', msg.content);
+      }
+
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble';
+      if (msg.role === 'assistant') {
+        bubble.innerHTML = renderAssistantHtml(msg.content);
+      } else {
+        bubble.textContent = msg.displayContent || msg.content;
+      }
+      msgDiv.appendChild(bubble);
+
+      if (msg.role === 'user') {
+        const editBox = document.createElement('div');
+        editBox.className = 'user-edit-box';
+        editBox.innerHTML = `
+          <textarea class="edit-textarea">${escapeHtml(msg.displayContent || msg.content)}</textarea>
+          <div class="edit-actions">
+            <button class="cancel-edit-btn">Cancel</button>
+            <button class="save-edit-btn">Save &amp; resend</button>
+          </div>
+        `;
+        msgDiv.appendChild(editBox);
+
+        if (msg.attachmentMeta && msg.attachmentMeta.length > 0) {
+          const attWrap = document.createElement('div');
+          attWrap.className = 'message-attachments';
+          msg.attachmentMeta.forEach(a => {
+            const chip = document.createElement('div');
+            chip.className = 'attachment-chip';
+            chip.innerHTML = `<i class="fas ${a.icon || 'fa-file-lines'} file-type-icon"></i><span class="attachment-name">${escapeHtml(a.name)}</span>`;
+            attWrap.appendChild(chip);
+          });
+          msgDiv.appendChild(attWrap);
+        }
+      }
+
+      if (msg.role === 'assistant') {
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+        actionsDiv.innerHTML = `
+          <button class="action-btn copy-btn" title="Copy response"><i class="fas fa-copy"></i> Copy</button>
+          <button class="action-btn download-btn" title="Open in editor to export"><i class="fas fa-download"></i> Word</button>
+          <button class="action-btn regenerate-btn" title="Regenerate response"><i class="fas fa-redo"></i> Regenerate</button>
+        `;
+        msgDiv.appendChild(actionsDiv);
+
+        const isLastAiMessage = index === messages.length - 1 && msg.role === 'assistant';
+        if (isLastAiMessage && msg.suggestions && msg.suggestions.length > 0) {
+          const suggestionsDiv = document.createElement('div');
+          suggestionsDiv.className = 'suggestions-container';
+
+          const suggestionsLabel = document.createElement('p');
+          suggestionsLabel.className = 'suggestions-label';
+          suggestionsLabel.textContent = '💡 Suggested follow‑up questions:';
+          suggestionsDiv.appendChild(suggestionsLabel);
+
+          const suggestionsRow = document.createElement('div');
+          suggestionsRow.className = 'suggestions-row';
+
+          msg.suggestions.forEach(suggestion => {
+            const chip = document.createElement('button');
+            chip.className = 'suggestion-chip';
+            chip.textContent = suggestion;
+            chip.title = 'Click to ask this question';
+            chip.addEventListener('click', () => {
+              if (isWaiting) return;
+              messageInput.value = suggestion;
+              handleSend();
+            });
+            suggestionsRow.appendChild(chip);
+          });
+
+          suggestionsDiv.appendChild(suggestionsRow);
+          msgDiv.appendChild(suggestionsDiv);
+        }
+      }
+
+      const time = document.createElement('div');
+      time.className = 'message-time';
+      if (msg.timestamp) {
+        const date = new Date(msg.timestamp);
+        time.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      msgDiv.appendChild(time);
+
+      chatMessages.appendChild(msgDiv);
+    });
+
+    setTimeout(() => {
+      const lastAssistantMsg = chatMessages.querySelector('.message.assistant:last-of-type');
+      if (lastAssistantMsg) {
+        lastAssistantMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+    }, 50);
+  }
+
+  // =========================================================================
+  // Long-press to edit/copy a previous user prompt (feature 4)
+  // =========================================================================
+  let longPressTimer = null;
+  let activePopover = null;
+
+  function closeActivePopover() {
+    if (activePopover) {
+      activePopover.remove();
+      activePopover = null;
+    }
+  }
+
+  function openUserMsgPopover(msgDiv, index) {
+    closeActivePopover();
+    const popover = document.createElement('div');
+    popover.className = 'user-msg-popover';
+    popover.innerHTML = `
+      <button class="popover-copy-btn" title="Copy"><i class="fas fa-copy"></i></button>
+      <button class="popover-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>
+    `;
+    msgDiv.appendChild(popover);
+    activePopover = popover;
+
+    popover.querySelector('.popover-copy-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = messages[index].displayContent || messages[index].content;
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('Prompt copied', 'success'))
+        .catch(() => showToast('Copy failed', 'error'));
+      closeActivePopover();
+    });
+
+    popover.querySelector('.popover-edit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeActivePopover();
+      msgDiv.classList.add('editing');
+      const textarea = msgDiv.querySelector('.edit-textarea');
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    });
+  }
+
+  chatMessages.addEventListener('mousedown', (e) => startLongPress(e));
+  chatMessages.addEventListener('touchstart', (e) => startLongPress(e), { passive: true });
+  chatMessages.addEventListener('mouseup', cancelLongPress);
+  chatMessages.addEventListener('mouseleave', cancelLongPress);
+  chatMessages.addEventListener('touchend', cancelLongPress);
+  chatMessages.addEventListener('touchmove', cancelLongPress);
+
+  function startLongPress(e) {
+    const msgDiv = e.target.closest('.message.user');
+    if (!msgDiv || msgDiv.classList.contains('editing')) return;
+    const index = parseInt(msgDiv.getAttribute('data-index'), 10);
+    longPressTimer = setTimeout(() => {
+      openUserMsgPopover(msgDiv, index);
+    }, 550);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    if (activePopover && !activePopover.contains(e.target)) closeActivePopover();
+  });
+
+  chatMessages.addEventListener('click', (e) => {
+    const cancelBtn = e.target.closest('.cancel-edit-btn');
+    if (cancelBtn) {
+      cancelBtn.closest('.message.user').classList.remove('editing');
+      return;
+    }
+    const saveBtn = e.target.closest('.save-edit-btn');
+    if (saveBtn) {
+      const msgDiv = saveBtn.closest('.message.user');
+      const index = parseInt(msgDiv.getAttribute('data-index'), 10);
+      const newText = msgDiv.querySelector('.edit-textarea').value.trim();
+      if (!newText) { showToast('Prompt cannot be empty', 'error'); return; }
+      editAndResend(index, newText);
+      return;
+    }
+
+    // --- Internal tool-page link: hand off context, then navigate (feature 7) ---
+    const link = e.target.closest('a.internal-link');
+    if (link) {
+      e.preventDefault();
+      handoffAndNavigate(link);
+    }
+  });
+
+  async function editAndResend(index, newText) {
+    if (isWaiting) { showToast('Please wait for the current response to finish', 'error'); return; }
+    messages = messages.slice(0, index);
+    messages.push({ role: 'user', content: newText, displayContent: newText, timestamp: Date.now() });
+    renderMessages();
+    if (currentUser) await saveConversation();
+    await runAssistantTurn(newText);
+  }
+
+  // Gather context from the most recent user turn and send it ahead of
+  // navigating to the chosen tool page.
+  async function handoffAndNavigate(link) {
+    const targetPage = link.dataset.handoffPage || link.getAttribute('href');
+    let text = '';
+    let rawFile = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        text = messages[i].displayContent || messages[i].content || '';
+        if (messages[i]._rawFiles && messages[i]._rawFiles.length) rawFile = messages[i]._rawFiles[0];
+        break;
+      }
+    }
+    const payload = { text };
+    if (rawFile && window.RehablixHandoff) {
+      try {
+        payload.fileDataUrl = await readFileAsDataUrl(rawFile);
+        payload.fileName = rawFile.name;
+        payload.fileMime = rawFile.type;
+      } catch (e) { /* file transfer is best-effort */ }
+    }
+    if (window.RehablixHandoff) window.RehablixHandoff.send(targetPage, payload);
+    window.location.href = link.getAttribute('href');
+  }
+
+  // =========================================================================
+  // Event delegation for AI response action buttons (Copy, Word, Regenerate)
+  // =========================================================================
+  chatMessages.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.classList.contains('suggestion-chip')) return;
+    if (btn.classList.contains('cancel-edit-btn') || btn.classList.contains('save-edit-btn')) return;
+
+    const messageDiv = btn.closest('.message.assistant');
+    if (!messageDiv) return;
+
+    const index = parseInt(messageDiv.getAttribute('data-index'), 10);
+    if (isNaN(index) || !messages[index]) return;
+
+    if (btn.classList.contains('copy-btn')) {
+      const rawContent = messageDiv.getAttribute('data-raw-content') || messages[index].content;
+      navigator.clipboard.writeText(rawContent)
+        .then(() => {
+          btn.classList.add('copied');
+          const icon = btn.querySelector('i');
+          if (icon) icon.className = 'fas fa-check';
+          showToast('Copied to clipboard', 'success');
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            if (icon) icon.className = 'fas fa-copy';
+          }, 2000);
+        })
+        .catch(() => showToast('Copy failed', 'error'));
+    }
+
+    if (btn.classList.contains('download-btn')) {
+      openInResultEditor(index);
+    }
+
+    if (btn.classList.contains('regenerate-btn')) {
+      if (isWaiting) {
+        showToast('Please wait for the current response to finish', 'error');
+        return;
+      }
+      let userMessageIndex = index - 1;
+      while (userMessageIndex >= 0 && messages[userMessageIndex].role !== 'user') {
+        userMessageIndex--;
+      }
+      if (userMessageIndex < 0) {
+        showToast('No previous user message to regenerate from', 'error');
+        return;
+      }
+      const userMessageContent = messages[userMessageIndex].content;
+      messages.splice(index, 1);
+      renderMessages();
+      if (currentUser) saveConversation();
+      runAssistantTurn(userMessageContent, { isRegenerate: true });
+    }
+  });
+
+  async function openInResultEditor(index) {
+    const msg = messages[index];
+    if (!msg) return;
+    if (!currentUser) {
+      showToast('Log in to open this in the editor and export it', 'info');
+      const loginBtn = document.getElementById('loginBtn');
+      if (loginBtn) loginBtn.click();
+      return;
+    }
+    let question = '';
+    for (let i = index - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { question = messages[i].displayContent || messages[i].content; break; }
+    }
+    try {
+      const resultsMarkdown = msg.content;
+      const resultsHtml = marked.parse(resultsMarkdown);
+      const ref = await database.ref(`history/${currentUser.uid}/askResults`).push({
+        question: question.slice(0, 200),
+        resultsMarkdown,
+        resultsHtml,
+        date: new Date().toLocaleDateString(),
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+      });
+      window.open(`result.html?type=ask&id=${ref.key}`, '_blank');
+    } catch (err) {
+      console.error('Failed to open in editor:', err);
+      showToast('Could not open the editor. Please try again.', 'error');
+    }
+  }
+
+  // =========================================================================
+  // Typing indicator
+  // =========================================================================
+  function showTyping() {
+    const existingTyping = document.getElementById('typingIndicator');
+    if (existingTyping) existingTyping.remove();
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'typing-indicator';
+    typingDiv.id = 'typingIndicator';
+    typingDiv.innerHTML = '<span></span><span></span><span></span>';
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
   }
 
   // =========================================================================
@@ -119,20 +986,15 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       });
 
       if (!response.ok) return [];
-
       const data = await response.json();
       const content = data.choices[0].message.content.trim();
 
-      // Try to parse the JSON array
       const jsonMatch = content.match(/\[.*\]/s);
       if (jsonMatch) {
         const suggestions = JSON.parse(jsonMatch[0]);
-        if (Array.isArray(suggestions) && suggestions.length > 0) {
-          return suggestions.slice(0, 3);
-        }
+        if (Array.isArray(suggestions) && suggestions.length > 0) return suggestions.slice(0, 3);
       }
 
-      // Fallback: extract lines that look like questions
       const lines = content.split('\n')
         .map(l => l.replace(/^[\d.\-•*]+\s*/, '').replace(/^["']|["']$/g, '').trim())
         .filter(l => l.length > 10 && l.endsWith('?'))
@@ -145,281 +1007,82 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     }
   }
 
-  // =========================================================================
-  // Render messages (with action buttons and suggestions on AI replies)
-  // =========================================================================
-  function renderMessages() {
-    chatMessages.innerHTML = '';
-    if (messages.length === 0) {
-      chatMessages.innerHTML = `
-        <div class="empty-chat">
-          <div class="empty-chat-icon">💬</div>
-          <p>Ask me anything about rehabilitation, conditions, assignments, or clinical reasoning.</p>
-          <p class="empty-chat-hint">Your conversation will be saved automatically when you're logged in.</p>
-        </div>
-      `;
-      return;
-    }
-
-    messages.forEach((msg, index) => {
-      const msgDiv = document.createElement('div');
-      msgDiv.className = `message ${msg.role}`;
-      msgDiv.setAttribute('data-index', index);
-      if (msg.role === 'assistant') {
-        msgDiv.setAttribute('data-raw-content', msg.content);
-      }
-
-      // Bubble
-      const bubble = document.createElement('div');
-      bubble.className = 'message-bubble';
-      if (msg.role === 'assistant') {
-        bubble.innerHTML = marked.parse(msg.content);
-      } else {
-        bubble.textContent = msg.content;
-      }
-      msgDiv.appendChild(bubble);
-
-      // Action buttons + Suggestions (AI only)
-      if (msg.role === 'assistant') {
-        // Action buttons
-        const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'message-actions';
-        actionsDiv.innerHTML = `
-          <button class="action-btn copy-btn" title="Copy response"><i class="fas fa-copy"></i> Copy</button>
-          <button class="action-btn download-btn" title="Download as Word document"><i class="fas fa-download"></i> Word</button>
-          <button class="action-btn regenerate-btn" title="Regenerate response"><i class="fas fa-redo"></i> Regenerate</button>
-        `;
-        msgDiv.appendChild(actionsDiv);
-
-        // Suggested follow‑up questions (only on the last AI message)
-        const isLastAiMessage = index === messages.length - 1 && msg.role === 'assistant';
-        if (isLastAiMessage && msg.suggestions && msg.suggestions.length > 0) {
-          const suggestionsDiv = document.createElement('div');
-          suggestionsDiv.className = 'suggestions-container';
-          
-          const suggestionsLabel = document.createElement('p');
-          suggestionsLabel.className = 'suggestions-label';
-          suggestionsLabel.textContent = '💡 Suggested follow‑up questions:';
-          suggestionsDiv.appendChild(suggestionsLabel);
-
-          const suggestionsRow = document.createElement('div');
-          suggestionsRow.className = 'suggestions-row';
-
-          msg.suggestions.forEach(suggestion => {
-            const chip = document.createElement('button');
-            chip.className = 'suggestion-chip';
-            chip.textContent = suggestion;
-            chip.title = 'Click to ask this question';
-            chip.addEventListener('click', () => {
-              if (isWaiting) return;
-              messageInput.value = suggestion;
-              handleSend();
-            });
-            suggestionsRow.appendChild(chip);
-          });
-
-          suggestionsDiv.appendChild(suggestionsRow);
-          msgDiv.appendChild(suggestionsDiv);
-        }
-      }
-
-      // Timestamp
-      const time = document.createElement('div');
-      time.className = 'message-time';
-      if (msg.timestamp) {
-        const date = new Date(msg.timestamp);
-        time.textContent = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
-      msgDiv.appendChild(time);
-
-      chatMessages.appendChild(msgDiv);
-    });
-
-    // Scroll to the start of the last AI message
-    setTimeout(() => {
-      const lastAssistantMsg = chatMessages.querySelector('.message.assistant:last-of-type');
-      if (lastAssistantMsg) {
-        lastAssistantMsg.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      }
-    }, 50);
-  }
-
-  // =========================================================================
-  // Event delegation for action buttons (Copy, Download, Regenerate)
-  // =========================================================================
-  chatMessages.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-
-    // Ignore suggestion chips (they have their own handlers)
-    if (btn.classList.contains('suggestion-chip')) return;
-
-    const messageDiv = btn.closest('.message.assistant');
-    if (!messageDiv) return;
-
-    const index = parseInt(messageDiv.getAttribute('data-index'), 10);
-    if (isNaN(index) || !messages[index]) return;
-
-    // --- COPY ---
-    if (btn.classList.contains('copy-btn')) {
-      const rawContent = messageDiv.getAttribute('data-raw-content') || messages[index].content;
-      navigator.clipboard.writeText(rawContent)
-        .then(() => {
-          btn.classList.add('copied');
-          const icon = btn.querySelector('i');
-          if (icon) {
-            icon.className = 'fas fa-check';
-          }
-          showToast('Copied to clipboard', 'success');
-          setTimeout(() => {
-            btn.classList.remove('copied');
-            if (icon) {
-              icon.className = 'fas fa-copy';
-            }
-          }, 2000);
-        })
-        .catch(() => showToast('Copy failed', 'error'));
-    }
-
-    // --- DOWNLOAD AS WORD ---
-    if (btn.classList.contains('download-btn')) {
-      const rawContent = messageDiv.getAttribute('data-raw-content') || messages[index].content;
-      const htmlContent = marked.parse(rawContent);
-      const fullHtml = `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>AI Response - rehablix</title>
-<style>
-  body{font-family:Arial,sans-serif;line-height:1.6;max-width:800px;margin:2rem auto;padding:0 1rem;color:#333;}
-  h1,h2,h3,h4{color:#009688;margin-top:1.5em;}
-  pre{background:#f5f5f5;padding:1rem;border-radius:0.5rem;overflow-x:auto;}
-  code{font-family:monospace;font-size:0.9em;}
-  table{border-collapse:collapse;width:100%;margin:1rem 0;}
-  th,td{border:1px solid #ddd;padding:8px;text-align:left;}
-  th{background:#f5f5f5;}
-  blockquote{border-left:4px solid #009688;padding-left:1rem;margin-left:0;color:#666;}
-  hr{border:none;border-top:1px solid #ddd;margin:2rem 0;}
-</style></head>
-<body>${htmlContent}
-<p style="margin-top:2rem;font-size:0.8rem;color:#999;">Generated by rehablix Ask AI</p>
-</body></html>`;
-      const blob = new Blob([fullHtml], { type: 'application/msword' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `rehablix_AI_Response_${new Date().toISOString().slice(0,10)}.doc`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast('Downloaded as Word document', 'success');
-    }
-
-    // --- REGENERATE ---
-    if (btn.classList.contains('regenerate-btn')) {
-      if (isWaiting) {
-        showToast('Please wait for the current response to finish', 'error');
-        return;
-      }
-      
-      // Find the user message that prompted this AI response
-      let userMessageIndex = index - 1;
-      while (userMessageIndex >= 0 && messages[userMessageIndex].role !== 'user') {
-        userMessageIndex--;
-      }
-      
-      if (userMessageIndex < 0) {
-        showToast('No previous user message to regenerate from', 'error');
-        return;
-      }
-      
-      const userMessageContent = messages[userMessageIndex].content;
-      
-      // Remove the AI response
-      messages.splice(index, 1);
-      renderMessages();
-      if (currentUser) saveConversation();
-
-      // Trigger regeneration
-      isWaiting = true;
-      sendBtn.disabled = true;
-      showTyping();
-
-      callAI(userMessageContent)
-        .then(async (reply) => {
-          removeTyping();
-          const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
-          
-          // Generate suggestions for the regenerated response
-          const suggestions = await generateSuggestions(userMessageContent, reply);
-          assistantMsg.suggestions = suggestions;
-          
-          messages.push(assistantMsg);
-          renderMessages();
-          if (currentUser) saveConversation();
-          showToast('Response regenerated', 'success');
-        })
-        .catch(err => {
-          removeTyping();
-          showToast(`Regenerate failed: ${err.message}`, 'error', 5000);
-        })
-        .finally(() => {
-          isWaiting = false;
-          sendBtn.disabled = false;
-        });
-    }
-  });
-
-  // =========================================================================
-  // Typing indicator
-  // =========================================================================
-  function showTyping() {
-    const existingTyping = document.getElementById('typingIndicator');
-    if (existingTyping) existingTyping.remove();
-    
-    const typingDiv = document.createElement('div');
-    typingDiv.className = 'typing-indicator';
-    typingDiv.id = 'typingIndicator';
-    typingDiv.innerHTML = '<span></span><span></span><span></span>';
-    chatMessages.appendChild(typingDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  function removeTyping() {
-    const el = document.getElementById('typingIndicator');
-    if (el) el.remove();
-  }
-
-  // =========================================================================
-  // AI Call
-  // =========================================================================
-  async function callAI(userMessage) {
+  // Turns the first exchange into a short, professional conversation title,
+  // instead of just truncating the user's raw first message (feature 3).
+  async function generateConversationTitle(userText, aiReply) {
     if (!aiConfig.token) {
       const ok = await fetchTokens();
+      if (!ok) return null;
+    }
+    try {
+      const response = await fetch(`${aiConfig.endpoint}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiConfig.token}` },
+        body: JSON.stringify({
+          model: aiConfig.model,
+          messages: [
+            { role: 'system', content: 'Generate a short, professional conversation title (4-7 words, title case, no quotes, no trailing period) that summarizes what the user is asking about. Return ONLY the title text.' },
+            { role: 'user', content: `User asked: "${(userText || '').slice(0, 300)}"\n\nAI answered about: "${(aiReply || '').slice(0, 300)}"` }
+          ],
+          max_tokens: 30,
+          temperature: 0.5
+        })
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      let title = (data.choices?.[0]?.message?.content || '').trim().replace(/^["']|["']$/g, '');
+      return title || null;
+    } catch (err) {
+      console.warn('Title generation failed:', err);
+      return null;
+    }
+  }
+
+  // =========================================================================
+  // AI Call (auto-switches to the vision model when images/video frames are present)
+  // =========================================================================
+  function buildApiContent(msg) {
+    if (msg.visionImages && msg.visionImages.length > 0) {
+      const parts = [{ type: 'text', text: msg.content }];
+      msg.visionImages.forEach(url => parts.push({ type: 'image_url', image_url: { url } }));
+      return parts;
+    }
+    return msg.content;
+  }
+
+  async function callAI() {
+    const recentMessages = messages.slice(-20);
+    const needsVision = recentMessages.some(m => m.visionImages && m.visionImages.length > 0);
+
+    let config = aiConfig;
+    if (needsVision) {
+      const ok = await fetchVisionTokens();
+      if (ok) {
+        config = visionConfig;
+      } else {
+        showToast('Vision model is not configured — answering from extracted text only.', 'info', 4000);
+      }
+    }
+    if (!config.token) {
+      const ok = await fetchTokens();
       if (!ok) throw new Error('AI service is not configured.');
+      config = aiConfig;
     }
 
-    const recentMessages = messages.slice(-20);
     const apiMessages = [
-      { 
-        role: 'system', 
-        content: 'You are a knowledgeable rehabilitation assistant. You provide accurate, evidence‑based answers about rehabilitation, medical conditions, treatments, and can help with assignments for healthcare students. Use clear language and markdown for formatting when helpful. Be concise but thorough. Always structure your answers in a readable format with appropriate headings, bullet points, and emphasis.' 
-      },
-      ...recentMessages.map(m => ({ role: m.role, content: m.content }))
+      { role: 'system', content: buildSystemPrompt() },
+      ...recentMessages.map(m => ({ role: m.role, content: buildApiContent(m) }))
     ];
 
-    console.log('[AI] Sending request, message count:', apiMessages.length);
-
-    const url = `${aiConfig.endpoint}/chat/completions`;
+    const url = `${config.endpoint}/chat/completions`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${aiConfig.token}`
+        'Authorization': `Bearer ${config.token}`
       },
       body: JSON.stringify({
-        model: aiConfig.model,
+        model: config.model,
         messages: apiMessages,
         max_tokens: 1500,
         temperature: 0.7,
@@ -437,41 +1100,122 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     return data.choices[0].message.content;
   }
 
+  // Shared "ask the AI and append its reply" logic, used by send/edit/regenerate
+  async function runAssistantTurn(promptTextForSuggestions) {
+    isWaiting = true;
+    sendBtn.disabled = true;
+    showTyping();
+    try {
+      const reply = await callAI();
+      removeTyping();
+      const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
+      const suggestions = await generateSuggestions(promptTextForSuggestions, reply);
+      assistantMsg.suggestions = suggestions;
+      messages.push(assistantMsg);
+      renderMessages();
+
+      // Give a brand-new conversation a proper AI-written title once we
+      // have a real exchange to summarize.
+      if (currentUser && !titleIsFinal && messages.filter(m => m.role === 'user').length === 1) {
+        generateConversationTitle(promptTextForSuggestions, reply).then(title => {
+          if (title) {
+            conversationTitle = title;
+            titleIsFinal = true;
+            if (currentConversationId) {
+              database.ref(`history/${currentUser.uid}/askConversations/${currentConversationId}`).update({ title }).catch(() => {});
+            }
+          }
+        });
+      }
+
+      if (currentUser) {
+        const saved = await saveConversation();
+        if (!saved) {
+          // Try one more time with a short delay (Firebase might need a moment)
+          setTimeout(async () => {
+            await saveConversation();
+          }, 500);
+        }
+      }
+    } catch (error) {
+      removeTyping();
+      const errorMsg = (error.message || '').includes('Service error') ? 'AI service error. Please try again.' : error.message;
+      showToast(`Error: ${errorMsg}`, 'error', 5000);
+      renderMessages();
+      if (currentUser) saveConversation();
+    } finally {
+      isWaiting = false;
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      // Don't force the mobile keyboard back open right after a reply lands —
+      // it's disruptive while the user is trying to read (feature 4).
+      if (!isMobile) messageInput.focus();
+    }
+  }
+
   // =========================================================================
   // Conversation persistence
   // =========================================================================
   async function saveConversation() {
-    if (!currentUser || messages.length === 0) return;
-    
-    // Strip suggestions before saving (they're regenerated on load)
-    const cleanMessages = messages.map(m => {
-      const { suggestions, ...rest } = m;
-      return rest;
-    });
-    
-    const title = messages[0].content.substring(0, 60).replace(/\n/g, ' ') + (messages[0].content.length > 60 ? '...' : '');
-    
+    if (!currentUser) {
+      console.warn('[saveConversation] No user logged in – skipping save');
+      return false;
+    }
+    if (messages.length === 0) {
+      console.warn('[saveConversation] No messages to save');
+      return false;
+    }
+
+    const cleanMessages = messages.map(m => ({
+      role: m.role,
+      content: m.content,
+      displayContent: m.displayContent || null,
+      attachmentMeta: m.attachmentMeta || null,
+      timestamp: m.timestamp || Date.now()
+    }));
+
+    // Generate a title if we don't have one yet
+    let title = conversationTitle;
+    if (!title) {
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      const titleSource = (firstUserMsg?.displayContent || firstUserMsg?.content || 'Untitled');
+      title = titleSource.substring(0, 60).replace(/\n/g, ' ') + (titleSource.length > 60 ? '...' : '');
+    }
+
     try {
+      const refPath = `history/${currentUser.uid}/askConversations`;
+      
       if (currentConversationId) {
-        await database.ref(`history/${currentUser.uid}/askConversations/${currentConversationId}`).update({
+        // Update existing conversation
+        await database.ref(`${refPath}/${currentConversationId}`).update({
           title,
           messages: cleanMessages,
           updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
+        console.log('[saveConversation] Updated conversation:', currentConversationId);
+        return true;
       } else {
-        const ref = await database.ref(`history/${currentUser.uid}/askConversations`).push({
+        // Create new conversation
+        const newRef = await database.ref(refPath).push({
           title,
           messages: cleanMessages,
           createdAt: firebase.database.ServerValue.TIMESTAMP,
           updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
-        currentConversationId = ref.key;
+        currentConversationId = newRef.key;
+        console.log('[saveConversation] Created new conversation:', currentConversationId);
+        return true;
       }
     } catch (error) {
-      console.error('Error saving conversation:', error);
+      console.error('[saveConversation] Error:', error);
+      showToast('Failed to save conversation. Check console for details.', 'error', 4000);
+      return false;
     }
   }
 
+  // =========================================================================
+  // LOAD CONVERSATION - FIXED: No automatic save/update timestamp
+  // =========================================================================
   async function loadConversation(convId) {
     if (!currentUser) return;
     try {
@@ -479,23 +1223,38 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       const data = snap.val();
       if (data) {
         currentConversationId = convId;
+        conversationTitle = data.title || null;
+        titleIsFinal = true;
         messages = data.messages || [];
         
-        // Generate suggestions for the last AI message if applicable
+        // Generate suggestions for the last assistant message
         if (messages.length >= 2) {
           const lastAi = messages[messages.length - 1];
           const lastUser = messages[messages.length - 2];
           if (lastAi.role === 'assistant' && lastUser.role === 'user') {
-            const suggestions = await generateSuggestions(lastUser.content, lastAi.content);
-            lastAi.suggestions = suggestions;
+            try {
+              const suggestions = await generateSuggestions(
+                lastUser.displayContent || lastUser.content, 
+                lastAi.content
+              );
+              lastAi.suggestions = suggestions;
+            } catch (e) {
+              // Suggestions are non-critical
+              console.warn('Could not generate suggestions for loaded conversation:', e);
+            }
           }
         }
         
         renderMessages();
         historyDrawer.classList.remove('active');
         showToast('Conversation loaded', 'success');
+        
+        // FIXED: Do NOT automatically save/update the timestamp.
+        // Only update the timestamp when the user actually sends a new message.
+        // Removed the setTimeout(() => saveConversation(), 1000) call.
       }
     } catch (error) {
+      console.error('[loadConversation] Error:', error);
       showToast('Failed to load conversation', 'error');
     }
   }
@@ -506,9 +1265,7 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     if (!confirm('Delete this conversation?')) return;
     try {
       await database.ref(`history/${currentUser.uid}/askConversations/${convId}`).remove();
-      if (currentConversationId === convId) {
-        newChat();
-      }
+      if (currentConversationId === convId) newChat();
       loadHistoryList();
       showToast('Conversation deleted', 'success');
     } catch (error) {
@@ -518,9 +1275,13 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
 
   function newChat() {
     currentConversationId = null;
+    conversationTitle = null;
+    titleIsFinal = false;
     messages = [];
+    attachedFiles = [];
+    renderAttachmentsStrip();
     renderMessages();
-    messageInput.focus();
+    if (!isMobile) messageInput.focus();
   }
 
   // =========================================================================
@@ -556,9 +1317,9 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       `;
       return;
     }
-    
+
     const searchTerm = historySearchInput?.value.toLowerCase().trim() || '';
-    const filtered = conversations.filter(c => 
+    const filtered = conversations.filter(c =>
       !searchTerm || (c.title || '').toLowerCase().includes(searchTerm)
     );
 
@@ -587,104 +1348,122 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
           <span>${conv.messages?.length || 0} messages</span>
         </div>
       `;
-      
       div.addEventListener('click', (e) => {
         if (e.target.closest('.delete-btn')) return;
         loadConversation(conv.id);
       });
-      
       div.querySelector('.delete-btn').addEventListener('click', (e) => deleteConversation(conv.id, e));
-      
       historyList.appendChild(div);
     });
   }
 
   // =========================================================================
-  // Send message
+  // Send message (assembles text + attachments + URL context)
   // =========================================================================
   async function handleSend() {
     const text = messageInput.value.trim();
-    if (!text || isWaiting) return;
+    if ((!text && attachedFiles.length === 0) || isWaiting) return;
 
-    if (!currentUser) {
-      showToast('Log in to save your conversation', 'info');
-    }
+    if (!currentUser) showToast('Log in to save your conversation', 'info');
 
     isWaiting = true;
     sendBtn.disabled = true;
     messageInput.disabled = true;
 
-    // Clear suggestions from previous AI messages before adding new user message
-    messages.forEach(m => {
-      if (m.role === 'assistant') {
-        delete m.suggestions;
-      }
-    });
+    messages.forEach(m => { if (m.role === 'assistant') delete m.suggestions; });
 
-    const userMsg = { role: 'user', content: text, timestamp: Date.now() };
+    const waitStart = Date.now();
+    while (attachedFiles.some(a => a.status === 'reading') && Date.now() - waitStart < 8000) {
+      await new Promise(r => setTimeout(r, 250));
+    }
+
+    let fullContent = text || '(see attached file)';
+    const attachmentMeta = [];
+    const visionImages = [];
+    const rawFiles = [];
+    if (attachedFiles.length > 0) {
+      let block = '\n\n';
+      attachedFiles.forEach(att => {
+        attachmentMeta.push({ name: att.name, icon: fileTypeIcon(att.file) });
+        block += `[Attached file: ${att.name}]\n${att.extractedText || '(no content extracted)'}\n\n`;
+        if (att.visionImages) visionImages.push(...att.visionImages);
+        rawFiles.push(att.file);
+      });
+      fullContent += block;
+    }
+
+    const urls = extractUrls(text);
+    if (urls.length > 0) {
+      showToast('Reading linked page(s)…', 'info', 2000);
+      for (const url of urls) {
+        const content = await fetchUrlContent(url);
+        if (content) {
+          fullContent += `\n\n[Content from URL: ${url}]\n${content}\n`;
+        } else {
+          fullContent += `\n\n[Could not read URL: ${url}]\n`;
+        }
+      }
+    }
+
+    const userMsg = {
+      role: 'user',
+      content: fullContent,
+      displayContent: text,
+      attachmentMeta,
+      timestamp: Date.now(),
+      _rawFiles: rawFiles // in-memory only; not persisted (see saveConversation)
+    };
+    if (visionImages.length > 0) userMsg.visionImages = visionImages;
+
     messages.push(userMsg);
     renderMessages();
     messageInput.value = '';
     messageInput.style.height = 'auto';
+    attachedFiles = [];
+    renderAttachmentsStrip();
 
-    if (currentUser) await saveConversation();
+    if (currentUser) {
+      const saved = await saveConversation();
+      if (!saved) {
+        console.warn('[handleSend] First save attempt failed – will retry after AI response');
+      }
+    }
 
-    showTyping();
+    // Store the conversation ID so runAssistantTurn can use it
+    const convIdBefore = currentConversationId;
+    await runAssistantTurn(text || 'this file');
 
-    try {
-      const reply = await callAI(text);
-      removeTyping();
-      
-      const assistantMsg = { role: 'assistant', content: reply, timestamp: Date.now() };
-      
-      // Generate follow‑up suggestions
-      const suggestions = await generateSuggestions(text, reply);
-      assistantMsg.suggestions = suggestions;
-      
-      messages.push(assistantMsg);
-      renderMessages();
-      if (currentUser) await saveConversation();
-    } catch (error) {
-      removeTyping();
-      const errorMsg = error.message.includes('Service error') ? 'AI service error. Please try again.' : error.message;
-      showToast(`Error: ${errorMsg}`, 'error', 5000);
-      messages.pop();
-      renderMessages();
-      if (currentUser) saveConversation();
-    } finally {
-      isWaiting = false;
-      sendBtn.disabled = false;
-      messageInput.disabled = false;
-      messageInput.focus();
+    // If the conversation ID changed (new conversation), make sure we have it
+    if (!convIdBefore && currentConversationId) {
+      console.log('[handleSend] New conversation created with ID:', currentConversationId);
     }
   }
 
   // =========================================================================
   // Event listeners
   // =========================================================================
-  
-  // Auto-resize textarea
   messageInput.addEventListener('input', () => {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
-    sendBtn.disabled = messageInput.value.trim() === '' || isWaiting;
+    sendBtn.disabled = (messageInput.value.trim() === '' && attachedFiles.length === 0) || isWaiting;
   });
 
-  // Send on Enter (Shift+Enter for new line)
+  // Enter-to-send behavior differs on mobile so multi-paragraph prompts are easy to type (feature 2)
   messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key !== 'Enter') return;
+    if (isMobile) return; // let Enter insert a newline; only the send button sends
+    if (!e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   });
 
-  // Send button
   sendBtn.addEventListener('click', handleSend);
 
-  // New chat button
   newChatBtn.addEventListener('click', () => {
     if (messages.length > 0 && !confirm('Start a new chat? Current conversation will be saved.')) return;
     newChat();
+    historyDrawer.classList.remove('active');
     showToast('New conversation started', 'info');
   });
 
@@ -710,7 +1489,6 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     });
   }
 
-  // Close drawer when clicking outside
   document.addEventListener('click', (e) => {
     if (historyDrawer?.classList.contains('active') &&
         !historyDrawer.contains(e.target) &&
@@ -720,14 +1498,12 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     }
   });
 
-  // Close drawer with Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && historyDrawer?.classList.contains('active')) {
       historyDrawer.classList.remove('active');
     }
   });
 
-  // History search filter
   if (historySearchInput) {
     historySearchInput.addEventListener('input', () => renderHistoryList(allConversations));
   }
@@ -738,21 +1514,20 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
   firebase.auth().onAuthStateChanged(user => {
     currentUser = user;
     if (user) {
-      console.log('[AUTH] User logged in:', user.email);
       historyNavBtn.style.display = 'block';
       loadHistoryList();
     } else {
-      console.log('[AUTH] User logged out');
       historyNavBtn.style.display = 'none';
     }
   });
 
   async function initialize() {
-    console.log('[INIT] Starting Ask AI...');
     await fetchTokens();
     renderMessages();
-    messageInput.focus();
-    console.log('[INIT] Ask AI ready with Copy, Download, Regenerate, and Suggestions');
+    // Skip auto-focus on mobile so the keyboard doesn't pop up unprompted
+    // the moment the page loads (feature 4).
+    if (!isMobile) messageInput.focus();
+    console.log('[INIT] Ask AI ready: attachments+vision, voice input, editable prompts, link reading, handoff');
   }
 
   initialize();

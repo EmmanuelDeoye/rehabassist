@@ -844,9 +844,9 @@ Return ONLY the polished HTML. No markdown fences.`;
     viewFullAssignmentBtn.addEventListener('click', () => {
       closePreviewModal();
       if (currentHistoryId) {
-        window.open(`answer.html?id=${currentHistoryId}`, '_blank');
+        window.open(`result.html?type=answer&id=${currentHistoryId}`, '_blank');
       } else {
-        window.open('answer.html', '_blank');
+        window.open('result.html?type=answer', '_blank');
       }
     });
   }
@@ -949,7 +949,7 @@ Return ONLY the polished HTML. No markdown fences.`;
           div.addEventListener('click', (e) => {
             if (e.target.closest('.delete-btn') || e.target.closest('.retrieve-btn')) return;
             localStorage.setItem('rehab_assignment_current_id', id);
-            window.open(`answer.html?id=${id}`, '_blank');
+            window.open(`result.html?type=answer&id=${id}`, '_blank');
             historyDrawer.classList.remove('active');
             document.body.style.overflow = '';
           });
@@ -963,7 +963,7 @@ Return ONLY the polished HTML. No markdown fences.`;
           div.querySelector('.retrieve-btn').addEventListener('click', (e) => {
             e.stopPropagation();
             localStorage.setItem('rehab_assignment_current_id', id);
-            window.open(`answer.html?id=${id}`, '_blank');
+            window.open(`result.html?type=answer&id=${id}`, '_blank');
             historyDrawer.classList.remove('active');
             document.body.style.overflow = '';
           });

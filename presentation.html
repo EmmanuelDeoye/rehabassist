@@ -418,6 +418,16 @@
     <script src="js/auth.js"></script>
     <script src="js/theme.js"></script>
     <script src="js/tools.js"></script>
+    <script src="js/handoff.js"></script>
     <script src="js/presentation.js"></script>
+    <script>
+      // Bring over anything the user shared with Ask AI (feature 7)
+      document.addEventListener('DOMContentLoaded', () => {
+        if (!window.RehablixHandoff) return;
+        const data = window.RehablixHandoff.consume('presentation.html');
+        if (!data) return;
+        window.RehablixHandoff.applyTo(data, { textFieldId: 'textInput', fileFieldId: 'multiFileInput' });
+      });
+    </script>
 </body>
 </html>

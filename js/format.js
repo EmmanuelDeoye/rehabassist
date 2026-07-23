@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     previewModal.className = 'preview-modal';
     
     const viewAction = assessmentId 
-      ? `window.open('formatresult.html?id=${assessmentId}', '_blank'); document.querySelector('.preview-modal').remove();`
+      ? `window.open('result.html?type=format&id=${assessmentId}', '_blank'); document.querySelector('.preview-modal').remove();`
       : `(function() {
            const w = window.open('', '_blank');
            w.document.write(decodeURIComponent('${encodeURIComponent(html)}'));
@@ -583,7 +583,7 @@ Return ONLY the HTML.`;
   }
 
   function retrieveHistoryItem(item) {
-    window.open(`formatresult.html?id=${item.id}`, '_blank');
+    window.open(`result.html?type=format&id=${item.id}`, '_blank');
   }
 
   function updateHistoryUI(searchTerm = '') {
