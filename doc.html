@@ -17,11 +17,11 @@
         })();
     </script>
     <title>rehablix · EMR & Patient Journey</title>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js">
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" defer>
     </script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js">
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js" defer>
     </script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js">
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js" defer>
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet' />
@@ -30,9 +30,9 @@
     <link rel="stylesheet" href="css/doc.css" />
     <link rel="manifest" href="/manifest.json" />
     <!-- Client-side file extraction (no backend required) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js" defer></script>
 </head>
 <body>
 
@@ -115,7 +115,7 @@
 
                     <!-- Stats -->
                     <div class="emr-stats-row" id="dashStats">
-                        <div class="stat-card">
+                        <div class="stat-card" id="statPatientsCard" style="cursor:pointer;" title="View all patients">
                             <div class="stat-label">Active Patients</div>
                             <div class="stat-value" id="statPatients">0</div>
                             <div class="stat-sub">This month</div>
@@ -448,6 +448,26 @@
                         <div><h1 class="emr-page-title">All <em>Patients</em></h1><p class="emr-page-sub">Manage your patient roster</p></div>
                         <div class="emr-header-actions"><button class="btn btn-primary" id="patientsNewBtn"><i class="bx bx-user-plus"></i> New Patient</button></div>
                     </div>
+                    <div class="glass-card" style="margin-bottom:1rem;">
+                        <div class="card-body" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
+                            <div style="flex:1;min-width:200px;position:relative;">
+                                <i class="bx bx-search" style="position:absolute;left:0.8rem;top:50%;transform:translateY(-50%);color:var(--text-secondary);"></i>
+                                <input type="text" id="patientsSearchInput" class="form-input" placeholder="Search by name or diagnosis…" style="padding-left:2.2rem;">
+                            </div>
+                            <select id="patientsFilterSelect" class="form-select" style="max-width:160px;">
+                                <option value="all">All Patients</option>
+                                <option value="active">Active</option>
+                                <option value="draft">Draft</option>
+                                <option value="discharged">Discharged</option>
+                            </select>
+                            <select id="patientsSortSelect" class="form-select" style="max-width:180px;">
+                                <option value="newest">Newest First</option>
+                                <option value="oldest">Oldest First</option>
+                                <option value="name-az">Name (A–Z)</option>
+                                <option value="name-za">Name (Z–A)</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="glass-card">
                         <div class="card-body" id="patientsList">Loading…</div>
                     </div>
@@ -507,13 +527,13 @@
         </div>
     </div>
 
-    <script src="js/config.js"></script>
-    <script src="js/plan.js"></script>
-    <script src="js/modal.js"></script>
-    <script src="js/auth.js"></script>
-    <script src="js/tools.js"></script>
-    <script src="js/handoff.js"></script>
-    <script src="js/doc.js"></script>
+    <script src="js/config.js" defer></script>
+    <script src="js/plan.js" defer></script>
+    <script src="js/modal.js" defer></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/tools.js" defer></script>
+    <script src="js/handoff.js" defer></script>
+    <script src="js/doc.js" defer></script>
     <script>
       // Bring over anything the user shared with Ask AI (feature 7)
       document.addEventListener('DOMContentLoaded', () => {

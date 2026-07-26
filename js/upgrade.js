@@ -289,8 +289,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   };
 
   // ===== Payment Gateway Keys =====
+  // Paystack: this is a live key (pk_live_...) — correct for production.
   const PAYSTACK_PUBLIC_KEY = 'pk_live_1fd1c3c6380edae5c08ca9f1e69db8d717534af2';
-  const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK_TEST-b879ba7c16b007a6b9abc7253b739730-X';
+  // ⚠️ FLUTTERWAVE: this was a TEST key (FLWPUBK_TEST-...), which means every
+  // Flutterwave-only country (Kenya, Tanzania, Uganda, Rwanda, Cameroon,
+  // Côte d'Ivoire, Senegal) was running in sandbox mode — no real money was
+  // ever charged, but users were still being granted paid access. Replace
+  // this with your LIVE Flutterwave public key (starts with FLWPUBK-, no
+  // "_TEST") from your Flutterwave dashboard before going live.
+  const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK-REPLACE_WITH_YOUR_LIVE_KEY-X';
   const GPAY_MERCHANT_ID = 'BCR2DN7TTCZMPJCG';
 
   // ===== Helpers =====
@@ -751,8 +758,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       tokenizationSpecification: tokenizationSpecification
     });
 
+    // ⚠️ This was hardcoded to 'TEST', which means Google Pay never charged
+    // real money — and GPay is the ONLY gateway for US/UK/CA/AU/DE/FR/BR
+    // customers, so essentially no Western customer's card was ever really
+    // charged; the "successful" callback still granted paid access for free.
+    // 'PRODUCTION' requires your Google Pay Business Console account to be
+    // fully verified for production first, or GPay will simply report
+    // itself unavailable (safe failure, not a crash) until that's done.
     const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: 'TEST'
+      environment: 'PRODUCTION'
     });
 
     const isReadyToPayRequest = Object.assign({}, baseRequest);
@@ -789,7 +803,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ===== Payment Success Handler =====
   async function handlePaymentSuccess(gateway, response, amount) {
     if (!currentUser || !selectedPlan) return;
-    
+
+    // Minimal sanity check on the transaction reference before we grant
+    // access. This does NOT replace real server-side verification (see
+    // note below) — it only catches obviously broken/empty callbacks.
+    const transactionRef = response.reference || response.tx_ref || response.paymentMethodData?.token || '';
+    if (!transactionRef) {
+      showToast('Payment could not be confirmed — no transaction reference received. You have not been charged (or if you were, contact support with your bank statement).', 'error', 7000);
+      return;
+    }
+
+    // ⚠️ IMPORTANT: this app has no backend, so this is trusting the
+    // gateway's browser-side callback directly — there is no server-side
+    // verification of `transactionRef` against Paystack/Flutterwave's API.
+    // A technically determined user could fabricate a success callback in
+    // devtools and grant themselves a paid plan without paying. Closing
+    // this gap for real requires a server (webhook receiver + API
+    // verification call), which is outside what a static/backend-less
+    // site can do. Flagging this clearly rather than pretending otherwise.
+
     const endDate = new Date();
     if (isYearly) {
       endDate.setFullYear(endDate.getFullYear() + 1);
@@ -805,7 +837,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         starts: new Date().toISOString(),
         ends: endDate.toISOString(),
         gateway: gateway,
-        transactionRef: response.reference || response.tx_ref || response.paymentMethodData?.token || '',
+        transactionRef: transactionRef,
         country: userCountry,
         currency: userCurrency,
         amount: amount
@@ -815,19 +847,44 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Force plan.js to reload the subscription by dispatching event
       document.dispatchEvent(new CustomEvent('planUpdated', { detail: { plan: selectedPlan } }));
-      
-      showToast(`🎉 Successfully subscribed to ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} plan!`, 'success', 3000);
-      
-      // Redirect back to previous page after short delay
-      setTimeout(() => {
-        const previousPage = getPreviousPage();
-        window.location.href = previousPage;
-      }, 1500);
+
+      showSuccessCelebration(selectedPlan, endDate);
       
     } catch (error) {
       console.error('Subscription update failed:', error);
       showToast('Payment successful but subscription update failed. Please contact support.', 'error', 5000);
     }
+  }
+
+  // ===== Success Celebration Modal =====
+  function showSuccessCelebration(plan, endDate) {
+    const planNames = { student: 'Student', pro: 'Pro' };
+    const planIcons = { student: '🎓', pro: '💎' };
+    const overlay = document.createElement('div');
+    overlay.className = 'sub-success-overlay';
+    overlay.innerHTML = `
+      <div class="sub-success-card">
+        <div class="sub-success-check">
+          <svg viewBox="0 0 52 52"><circle class="sub-success-check-circle" cx="26" cy="26" r="24" fill="none"/><path class="sub-success-check-mark" fill="none" d="M14 27l7 7 17-17"/></svg>
+        </div>
+        <div class="sub-success-icon">${planIcons[plan] || '🎉'}</div>
+        <h2>Welcome to ${planNames[plan] || plan}!</h2>
+        <p>Your subscription is active. Renews/expires on <strong>${endDate.toLocaleDateString()}</strong>.</p>
+        <button class="btn-primary sub-success-continue" id="subSuccessContinue">Continue</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+
+    const goBack = () => {
+      overlay.classList.remove('show');
+      setTimeout(() => {
+        overlay.remove();
+        window.location.href = getPreviousPage();
+      }, 250);
+    };
+    overlay.querySelector('#subSuccessContinue').addEventListener('click', goBack);
+    setTimeout(goBack, 4500); // auto-continue if they don't click
   }
 
   function closePaymentModalHandler() {
@@ -870,33 +927,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     // Re-attach listeners after UI update
     attachPlanButtonListeners();
+    renderRenewalBanner();
   }
 
-  // ===== Load User's Current Subscription =====
-  async function loadCurrentSubscription() {
-    if (!currentUser) return;
-    
-    try {
-      const snap = await database.ref(`users/${currentUser.uid}/subscription`).once('value');
-      const sub = snap.val();
-      
-      if (sub && sub.plan) {
-        currentPlan = sub.plan;
-        updateCurrentPlanUI(sub.plan);
-      }
-    } catch (error) {
-      console.error('Error loading subscription:', error);
-    }
+  // ===== Renewal Reminder Banner =====
+  // Since true zero-touch automatic re-billing needs a backend (to charge
+  // the card while the user isn't on the site), the practical alternative
+  // here is to warn paid users before they lose access, so nothing is a
+  // surprise and they can manually renew in time.
+  function renderRenewalBanner() {
+    const existing = document.getElementById('renewalBanner');
+    if (existing) existing.remove();
+    if (!window.rehabPlans) return;
+
+    const plan = window.rehabPlans.getCurrentPlan();
+    const days = window.rehabPlans.daysUntilExpiry();
+    if (!plan || plan === 'free' || days === null || days > 5) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'renewalBanner';
+    banner.className = 'renewal-banner';
+    banner.innerHTML = days > 0
+      ? `<i class="fas fa-clock"></i> Your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan expires in ${days} day${days === 1 ? '' : 's'}. Renew below to avoid losing access.`
+      : `<i class="fas fa-exclamation-circle"></i> Your ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan expires today. Renew below to keep your access.`;
+    const header = document.querySelector('.sub-header');
+    if (header) header.insertAdjacentElement('afterend', banner);
   }
 
-  // ===== Auth Listener =====
-  auth.onAuthStateChanged(async (user) => {
+  // ===== Auth / Plan Listener =====
+  // plan.js is the single source of truth for the user's current plan
+  // (it also handles expiry/auto-downgrade) — this page just reflects it,
+  // instead of re-reading the subscription from Firebase a second time.
+  auth.onAuthStateChanged((user) => {
     currentUser = user;
-    if (user) {
-      await loadCurrentSubscription();
-    }
-    // Re-attach listeners after auth state changes
     attachPlanButtonListeners();
+  });
+
+  document.addEventListener('planUpdated', (e) => {
+    currentPlan = e.detail.plan || 'free';
+    updateCurrentPlanUI(currentPlan);
+  });
+
+  document.addEventListener('planExpired', (e) => {
+    showToast(`Your ${e.detail.previousPlan} plan has expired and you've been moved to the Free plan.`, 'warning', 6000);
   });
 
   // ===== Theme Toggle =====

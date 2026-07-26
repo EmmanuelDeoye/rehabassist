@@ -385,7 +385,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         pending.push({
                             patientName: patient.name || 'Unknown',
                             patientId,
-                            date: session.date || 'Unknown'
+                            sessionId: session.id || sessionId,
+                            sessionType: session.type || 'Session',
+                            date: session.date || 'Unknown',
+                            hasContent: !!(session.notes || session.content || '').trim()
                         });
                     }
                 }
@@ -399,12 +402,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <div style="display:flex;align-items:center;gap:0.8rem;padding:0.4rem 0;border-bottom:1px solid var(--border-light);">
                 <i class="bx bx-file" style="color:var(--accent);"></i>
                 <div style="flex:1;">
-                    <div style="font-weight:600;font-size:0.85rem;">${escapeHtml(doc.patientName)}</div>
-                    <div style="font-size:0.75rem;color:var(--text-secondary);">Session ${escapeHtml(doc.date)}</div>
+                    <div style="font-weight:600;font-size:0.85rem;">${escapeHtml(doc.patientName)} — ${escapeHtml(doc.sessionType)}</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);">${escapeHtml(doc.date)}${doc.hasContent ? '' : ' · No notes yet'}</div>
                 </div>
-                <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" onclick="openPatient('${doc.patientId}')">
-                    <i class="bx bx-folder-open"></i> Open
-                </button>
+                <a href="docresult.html?id=${encodeURIComponent(doc.patientId)}&type=session&sessionId=${encodeURIComponent(doc.sessionId)}" target="_blank" class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;text-decoration:none;">
+                    <i class="bx bx-edit"></i> Complete
+                </a>
             </div>
         `).join('');
     }
@@ -412,23 +415,64 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // Patients List
     // =========================================================================
+    document.getElementById('statPatientsCard')?.addEventListener('click', function() {
+        switchScreen('patients');
+    });
+
     async function loadPatientsList() {
         if (!currentUser) return;
         try {
             const snapshot = await database.ref(`patients/${currentUser.uid}`).once('value');
             const patients = snapshot.val() || {};
             allPatients = Object.entries(patients).map(([id, data]) => ({ id, ...data }));
-            renderPatientsList(allPatients);
+            applyPatientsListView();
         } catch (error) {
             console.error('[EMR] Patients list error:', error);
         }
     }
 
+    // Re-applies search + filter + sort on top of allPatients (default: newest first)
+    function applyPatientsListView() {
+        const searchTerm = (document.getElementById('patientsSearchInput')?.value || '').trim().toLowerCase();
+        const filter = document.getElementById('patientsFilterSelect')?.value || 'all';
+        const sortBy = document.getElementById('patientsSortSelect')?.value || 'newest';
+
+        let list = [...allPatients];
+
+        if (filter === 'active') list = list.filter(p => p.status !== 'draft' && p.active !== false);
+        else if (filter === 'draft') list = list.filter(p => p.status === 'draft');
+        else if (filter === 'discharged') list = list.filter(p => p.status !== 'draft' && p.active === false);
+
+        if (searchTerm) {
+            list = list.filter(p =>
+                (p.name || '').toLowerCase().includes(searchTerm) ||
+                (p.primaryDx || '').toLowerCase().includes(searchTerm)
+            );
+        }
+
+        list.sort((a, b) => {
+            if (sortBy === 'name-az') return (a.name || '').localeCompare(b.name || '');
+            if (sortBy === 'name-za') return (b.name || '').localeCompare(a.name || '');
+            const ta = a.createdAt || 0, tb = b.createdAt || 0;
+            return sortBy === 'oldest' ? ta - tb : tb - ta; // default: newest first
+        });
+
+        renderPatientsList(list);
+    }
+
+    document.getElementById('patientsSearchInput')?.addEventListener('input', applyPatientsListView);
+    document.getElementById('patientsFilterSelect')?.addEventListener('change', applyPatientsListView);
+    document.getElementById('patientsSortSelect')?.addEventListener('change', applyPatientsListView);
+
     function renderPatientsList(patients) {
         const container = document.getElementById('patientsList');
         if (!container) return;
-        if (patients.length === 0) {
+        if (allPatients.length === 0) {
             container.innerHTML = `<div class="emr-empty-state"><i class="bx bx-group"></i><p>No patients yet</p><button class="btn btn-primary" onclick="switchScreen('intake')"><i class="bx bx-user-plus"></i> Add First Patient</button></div>`;
+            return;
+        }
+        if (patients.length === 0) {
+            container.innerHTML = `<div class="emr-empty-state"><i class="bx bx-search"></i><p>No patients match your search/filter</p></div>`;
             return;
         }
         container.innerHTML = `
@@ -953,14 +997,15 @@ document.addEventListener('DOMContentLoaded', function() {
             container.innerHTML = `<div class="emr-empty-state"><i class="bx bx-file"></i><p>No summary reports yet.</p></div>`;
             return;
         }
-        const sorted = [...summaries].sort((a, b) => new Date(b.date) - new Date(a.date));
-        container.innerHTML = sorted.map((summary, index) => `
-            <a href="docresult.html?id=${currentPatientId}&type=summary&index=${index}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
+        const indexed = summaries.map((s, i) => ({ ...s, _index: i }));
+        const sorted = indexed.sort((a, b) => new Date(b.date) - new Date(a.date));
+        container.innerHTML = sorted.map(summary => `
+            <a href="docresult.html?id=${currentPatientId}&type=summary&index=${summary._index}" target="_blank" style="text-decoration:none;color:inherit;display:block;">
                 <div class="summary-card">
                     <div class="summary-card-header">
                         <div>
-                            <div class="summary-card-title">${summary.title || 'Summary Report'}</div>
-                            <div class="summary-card-meta">${summary.date || ''}</div>
+                            <div class="summary-card-title">${escapeHtml(summary.title) || 'Summary Report'}</div>
+                            <div class="summary-card-meta">${escapeHtml(summary.date) || ''}</div>
                         </div>
                         <div><i class="bx bx-link-external"></i></div>
                     </div>

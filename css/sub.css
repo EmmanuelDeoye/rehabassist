@@ -569,3 +569,83 @@ input:checked + .toggle-slider:before {
   .toggle-label { font-size: 0.8rem; }
   .save-badge { font-size: 0.65rem; }
 }
+/* =========================================================================
+   Renewal Reminder Banner
+   ========================================================================= */
+.renewal-banner {
+  max-width: 700px;
+  margin: 0 auto 1.2rem;
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.7rem;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #b45309;
+  font-size: 0.88rem;
+  text-align: center;
+}
+[data-theme="dark"] .renewal-banner {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+/* =========================================================================
+   Success Celebration Overlay
+   ========================================================================= */
+.sub-success-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.sub-success-overlay.show { opacity: 1; }
+
+.sub-success-card {
+  background: var(--surface, #fff);
+  color: var(--text-primary, #111);
+  border-radius: 1.2rem;
+  padding: 2.2rem 2rem;
+  max-width: 380px;
+  width: 90%;
+  text-align: center;
+  transform: scale(0.85) translateY(10px);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+.sub-success-overlay.show .sub-success-card { transform: scale(1) translateY(0); }
+
+.sub-success-check { width: 72px; height: 72px; margin: 0 auto 0.8rem; }
+.sub-success-check-circle {
+  stroke: #22c55e;
+  stroke-width: 2;
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  animation: subCheckCircle 0.5s ease-out forwards;
+}
+.sub-success-check-mark {
+  stroke: #22c55e;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: subCheckMark 0.35s 0.4s ease-out forwards;
+}
+@keyframes subCheckCircle { to { stroke-dashoffset: 0; } }
+@keyframes subCheckMark { to { stroke-dashoffset: 0; } }
+
+.sub-success-icon { font-size: 2.2rem; margin-bottom: 0.4rem; }
+.sub-success-card h2 { margin: 0 0 0.5rem; font-size: 1.3rem; }
+.sub-success-card p { margin: 0 0 1.2rem; font-size: 0.9rem; opacity: 0.85; }
+.sub-success-continue {
+  width: 100%;
+  padding: 0.7rem;
+  border-radius: 0.6rem;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}

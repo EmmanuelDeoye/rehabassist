@@ -22,6 +22,7 @@
   const planLevel = { free: 0, student: 1, pro: 2 };
 
   let currentPlan = null; // 'free' | 'student' | 'pro' | null
+  let currentSubscription = null; // full record: {plan, starts, ends, renewal, ...}
 
   // Check whether a feature is allowed
   function isFeatureAllowed(feature) {
@@ -40,29 +41,66 @@
   async function loadSubscription(user) {
     if (!user) {
       currentPlan = null;
+      currentSubscription = null;
       dispatchUpdate();
       return;
     }
     try {
-      const snap = await database.ref(`users/${user.uid}/subscription`).once('value');
+      const ref = database.ref(`users/${user.uid}/subscription`);
+      const snap = await ref.once('value');
       const sub = snap.val();
+
       if (sub && sub.plan && planLevel[sub.plan] !== undefined) {
-        currentPlan = sub.plan;
+        // A paid plan that has passed its "ends" date is no longer valid —
+        // this is the check that was missing, which let expired Pro/Student
+        // subscriptions keep working forever. Free plans use a far-future
+        // "ends" date on purpose, so they never trip this.
+        const isExpired = sub.plan !== 'free' && sub.ends && new Date(sub.ends).getTime() < Date.now();
+
+        if (isExpired) {
+          const downgraded = {
+            plan: 'free',
+            starts: new Date().toISOString(),
+            ends: new Date(2099, 11, 31).toISOString(),
+            renewal: 'manual',
+            downgradedFrom: sub.plan,
+            downgradedAt: new Date().toISOString()
+          };
+          await ref.set(downgraded);
+          currentPlan = 'free';
+          currentSubscription = downgraded;
+          // Let pages show a "your plan expired" notice if they want to,
+          // without forcing every page that loads plan.js to handle it.
+          document.dispatchEvent(new CustomEvent('planExpired', { detail: { previousPlan: sub.plan } }));
+        } else {
+          currentPlan = sub.plan;
+          currentSubscription = sub;
+        }
       } else {
         // No subscription → treat as free & persist it
-        currentPlan = 'free';
-        await database.ref(`users/${user.uid}/subscription`).set({
+        const fresh = {
           plan: 'free',
           starts: new Date().toISOString(),
           ends: new Date(2099, 11, 31).toISOString(),
           renewal: 'manual',
-        });
+        };
+        await ref.set(fresh);
+        currentPlan = 'free';
+        currentSubscription = fresh;
       }
     } catch (error) {
       console.error('[plan.js] Subscription fetch failed:', error);
       currentPlan = 'free'; // fallback
+      currentSubscription = null;
     }
     dispatchUpdate();
+  }
+
+  // Days left until the current paid plan expires (null if free or unknown)
+  function daysUntilExpiry() {
+    if (!currentSubscription || currentPlan === 'free' || !currentSubscription.ends) return null;
+    const ms = new Date(currentSubscription.ends).getTime() - Date.now();
+    return Math.ceil(ms / (1000 * 60 * 60 * 24));
   }
 
   // Fire custom event so pages can react
@@ -79,6 +117,8 @@
   window.rehabPlans = {
     isFeatureAllowed,
     getCurrentPlan,
+    getSubscription: () => currentSubscription,
+    daysUntilExpiry,
     planLevel,
     featureMinPlans,
 
