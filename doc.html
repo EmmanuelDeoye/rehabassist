@@ -29,6 +29,10 @@
     <link rel="stylesheet" href="css/auth.css" />
     <link rel="stylesheet" href="css/doc.css" />
     <link rel="manifest" href="/manifest.json" />
+    <!-- Client-side file extraction (no backend required) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -297,9 +301,10 @@
                     <!-- Tabs -->
                     <div class="emr-tab-bar" id="patientTabs">
                         <div class="emr-tab active" data-tab="intake">Intake</div>
+                        <div class="emr-tab" data-tab="problems">Problems</div>
                         <div class="emr-tab" data-tab="summary">Summary</div>
                         <div class="emr-tab" data-tab="treatment">Treatment Plan</div>
-                        <div class="emr-tab" data-tab="sessions">Sessions</div>
+                        <div class="emr-tab" data-tab="sessions">Previous Sessions</div>
                         <div class="emr-tab" data-tab="nextsession">Next Session</div>
                         <div class="emr-tab" data-tab="progress">Progress</div>
                         <div class="emr-tab" data-tab="discharge">Discharge Summary</div>
@@ -313,6 +318,33 @@
                             <div class="glass-card">
                                 <div class="card-header"><div class="card-title"><i class="bx bx-user-circle"></i> Patient Details</div><button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="editIntakeBtn"><i class="bx bx-edit"></i> Edit</button></div>
                                 <div class="card-body" id="paneIntakeContent">Loading…</div>
+                            </div>
+
+                            <!-- Linked Records from other pages (Case Presentation/Report history, Gait Analysis history) -->
+                            <div class="glass-card" style="margin-top:1rem;">
+                                <div class="card-header">
+                                    <div class="card-title"><i class="bx bx-link"></i> Linked Records</div>
+                                    <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="refreshLinkedRecordsBtn"><i class="bx bx-refresh"></i> Refresh</button>
+                                </div>
+                                <div class="card-body" id="linkedRecordsList">
+                                    <div class="emr-empty-state"><i class="bx bx-link"></i><p>Looking for matching records from Case Presentation/Report and Gait Analysis…</p></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Identified Problems (its own tab now) -->
+                        <div class="patient-tab-pane" data-pane="problems">
+                            <div class="glass-card">
+                                <div class="card-header">
+                                    <div class="card-title"><i class="bx bx-list-check"></i> Identified Problems</div>
+                                    <div style="display:flex;gap:0.5rem;">
+                                        <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="addProblemBtn"><i class="bx bx-plus"></i> Add</button>
+                                        <button class="btn btn-amber" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="generateProblemsBtn"><i class="bx bx-magic"></i> AI Generate</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" id="patientProblemList">
+                                    <div class="emr-empty-state"><i class="bx bx-list-check"></i><p>No problems identified yet. Click "AI Generate" to analyze intake data.</p></div>
+                                </div>
                             </div>
                         </div>
 
@@ -350,10 +382,10 @@
 
                         <!-- Sessions -->
                         <div class="patient-tab-pane" data-pane="sessions">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                                <div><div style="font-weight:600;font-size:14px;">Session History</div><div style="font-size:12px;color:var(--text-secondary);" id="paneSessionsCount">0 sessions</div></div>
-                                <button class="btn btn-primary" id="addSessionBtn"><i class="bx bx-plus"></i> Add</button>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:0.5rem;">
+                                <div><div style="font-weight:600;font-size:14px;">Previous Sessions</div><div style="font-size:12px;color:var(--text-secondary);" id="paneSessionsCount">0 sessions</div></div>
                             </div>
+                            <p style="font-size:12px;color:var(--text-secondary);margin:-8px 0 16px;">Previous sessions are logged automatically when you mark a Next Session Plan as completed — nothing to add here manually.</p>
                             <div id="paneSessionsList">Loading…</div>
                         </div>
 
@@ -363,11 +395,12 @@
                                 <div class="card-header">
                                     <div class="card-title"><i class="bx bx-calendar-check"></i> Next Session Plan</div>
                                     <div style="display:flex;gap:0.5rem;">
+                                        <button class="btn btn-secondary" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="addNextSessionActivityBtn"><i class="bx bx-plus"></i> Add Activity</button>
                                         <button class="btn btn-amber" style="font-size:0.7rem;padding:0.2rem 0.8rem;" id="generateNextSessionBtn"><i class="bx bx-magic"></i> AI Generate</button>
                                     </div>
                                 </div>
                                 <div class="card-body" id="paneNextSessionContent">
-                                    <div class="emr-empty-state"><i class="bx bx-calendar"></i><p>No next session planned. Click "AI Generate" to create one.</p></div>
+                                    <div class="emr-empty-state"><i class="bx bx-calendar"></i><p>No next session planned. Click "AI Generate" to create one, or add an activity manually.</p></div>
                                 </div>
                             </div>
                         </div>
@@ -427,7 +460,52 @@
     <!-- TOAST -->
     <div id="toast-container"></div>
 
-    
+    <!-- SESSION AI GENERATION MODAL (used by Next Session tab) -->
+    <div id="sessionGenModal" class="modal">
+        <div class="modal-content session-gen-modal-content">
+            <button class="modal-close" id="sessionGenClose">&times;</button>
+            <h3 style="margin-bottom:0.3rem;"><i class="bx bx-magic"></i> Generate Next Session Plan</h3>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1rem;">Pick the problems and treatment plan the AI should base this plan on, so it stays accurate to the patient's actual care.</p>
+
+            <div style="margin-bottom:1rem;">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;"><i class="bx bx-list-check"></i> Problems to Address</div>
+                <div id="sessionGenProblems"></div>
+            </div>
+
+            <div style="margin-bottom:1rem;">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;"><i class="bx bx-clipboard"></i> Latest Treatment Plan</div>
+                <div id="sessionGenTreatmentPlan"></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Session Type</label>
+                <input class="form-input" id="sessionGenType" placeholder="e.g. Follow-up Therapy Session" />
+            </div>
+            <div class="form-group">
+                <label class="form-label">Additional notes for the AI (optional)</label>
+                <textarea class="form-textarea" id="sessionGenNotes" rows="2" placeholder="Anything specific to focus on next time…"></textarea>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1rem;">
+                <button class="btn btn-secondary" id="sessionGenCancel">Cancel</button>
+                <button class="btn btn-primary" id="sessionGenSubmit"><i class="bx bx-magic"></i> Generate Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GENERIC MULTI-LINE INPUT MODAL (replaces ugly one-line prompt() dialogs) -->
+    <div id="customInputModal" class="modal">
+        <div class="modal-content custom-input-modal-content">
+            <button class="modal-close" id="customInputClose">&times;</button>
+            <h3 id="customInputTitle" style="margin-bottom:0.3rem;">Add Details</h3>
+            <p id="customInputSubtitle" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1rem;"></p>
+            <div id="customInputFields"></div>
+            <div style="display:flex;justify-content:flex-end;gap:0.6rem;margin-top:1rem;">
+                <button class="btn btn-secondary" id="customInputCancel">Cancel</button>
+                <button class="btn btn-primary" id="customInputSave"><i class="bx bx-check"></i> Save</button>
+            </div>
+        </div>
+    </div>
 
     <script src="js/config.js"></script>
     <script src="js/plan.js"></script>

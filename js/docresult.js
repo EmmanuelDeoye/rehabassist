@@ -243,7 +243,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // =========================================================================
     // AI API helpers
     // =========================================================================
-    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' };
 
     async function fetchTokens() {
         try {
@@ -364,6 +364,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     if (isNewDocument || !sessionId) {
                         const newRef = database.ref(`${path}/sessions`).push();
                         data = {
+                            id: newRef.key,
                             date: new Date().toISOString().split('T')[0],
                             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                             type: 'Session',
@@ -389,6 +390,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                         ref = database.ref(`${path}/sessions/${sessionId}`);
                         snap = await ref.once('value');
                         const existing = snap.val() || {};
+                        existing.id = existing.id || sessionId; // self-heal older sessions saved before the id fix
                         existing.notes = htmlContent;
                         existing.content = htmlContent;
                         existing.plainText = plainText;

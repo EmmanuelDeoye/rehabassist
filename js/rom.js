@@ -400,6 +400,126 @@ document.addEventListener('DOMContentLoaded', async () => {
   let movementQueue = [];
   let currentQueueIndex = 0;
   let allCapturedFrames = {};
+  const romPatientNameInput = document.getElementById('romPatientName');
+
+  // =========================================================================
+  // 3b. REAL ANGLE MEASUREMENT (MediaPipe Pose landmarks — runs automatically
+  // in the background right after capture, no extra taps from the user).
+  // This replaces a pure AI "guess" with an actual computed geometric angle
+  // wherever the joint is trackable from body pose landmarks. Joints that
+  // aren't trackable this way (wrist deviation, fingers, thumb, spine
+  // rotation) fall back to the AI's visual estimate, and the UI is explicit
+  // about which is which so results are never presented as more precise
+  // than they are.
+  // =========================================================================
+  let poseLandmarkerPromise = null;
+
+  function loadPoseLandmarker() {
+    if (poseLandmarkerPromise) return poseLandmarkerPromise;
+    poseLandmarkerPromise = (async () => {
+      try {
+        const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+        const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        return await vision.PoseLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'IMAGE',
+          numPoses: 1
+        });
+      } catch (err) {
+        console.warn('[ROM] Pose landmark model failed to load — falling back to AI-only estimates:', err);
+        return null;
+      }
+    })();
+    return poseLandmarkerPromise;
+  }
+
+  // Which 3 landmarks define the angle at the joint for each movement.
+  // Angle is measured at the middle point, between the two segments.
+  const JOINT_LANDMARK_MAP = {
+    shoulder_flexion: ['HIP', 'SHOULDER', 'ELBOW'],
+    shoulder_extension: ['HIP', 'SHOULDER', 'ELBOW'],
+    shoulder_abduction: ['HIP', 'SHOULDER', 'ELBOW'],
+    shoulder_adduction: ['HIP', 'SHOULDER', 'ELBOW'],
+    elbow_flexion: ['SHOULDER', 'ELBOW', 'WRIST'],
+    elbow_extension: ['SHOULDER', 'ELBOW', 'WRIST'],
+    hip_flexion: ['SHOULDER', 'HIP', 'KNEE'],
+    hip_extension: ['SHOULDER', 'HIP', 'KNEE'],
+    hip_abduction: ['SHOULDER', 'HIP', 'KNEE'],
+    hip_adduction: ['SHOULDER', 'HIP', 'KNEE'],
+    knee_flexion: ['HIP', 'KNEE', 'ANKLE'],
+    knee_extension: ['HIP', 'KNEE', 'ANKLE'],
+    ankle_dorsiflexion: ['KNEE', 'ANKLE', 'FOOT_INDEX'],
+    ankle_plantarflexion: ['KNEE', 'ANKLE', 'FOOT_INDEX']
+  };
+
+  const LANDMARK_INDEX = {
+    SHOULDER: [11, 12], ELBOW: [13, 14], WRIST: [15, 16],
+    HIP: [23, 24], KNEE: [25, 26], ANKLE: [27, 28], FOOT_INDEX: [31, 32]
+  };
+
+  function angleAtVertex(a, b, c) {
+    const v1 = { x: a.x - b.x, y: a.y - b.y };
+    const v2 = { x: c.x - b.x, y: c.y - b.y };
+    const mag1 = Math.hypot(v1.x, v1.y);
+    const mag2 = Math.hypot(v2.x, v2.y);
+    if (mag1 === 0 || mag2 === 0) return null;
+    const cos = Math.min(1, Math.max(-1, (v1.x * v2.x + v1.y * v2.y) / (mag1 * mag2)));
+    return Math.acos(cos) * (180 / Math.PI);
+  }
+
+  function loadImageEl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  // Detects the joint angle in a single frame, picking whichever body side
+  // (left/right) the camera can see more clearly.
+  async function detectAngleInFrame(dataUrl, movementKey) {
+    const pointNames = JOINT_LANDMARK_MAP[movementKey];
+    if (!pointNames) return null;
+    const landmarker = await loadPoseLandmarker();
+    if (!landmarker) return null;
+
+    try {
+      const img = await loadImageEl(dataUrl);
+      const result = landmarker.detect(img);
+      if (!result?.landmarks?.length) return null;
+      const lm = result.landmarks[0];
+
+      const pick = (name, side) => lm[LANDMARK_INDEX[name][side]];
+      const sideScore = (side) => pointNames.reduce((sum, name) => sum + (pick(name, side)?.visibility ?? 0), 0);
+      const side = sideScore(1) >= sideScore(0) ? 1 : 0;
+      const pts = pointNames.map(name => pick(name, side));
+
+      if (pts.some(p => !p || (p.visibility !== undefined && p.visibility < 0.5))) return null;
+      const angle = angleAtVertex(pts[0], pts[1], pts[2]);
+      return angle === null ? null : Math.round(angle);
+    } catch (err) {
+      console.warn('[ROM] Pose detection failed on a frame:', err);
+      return null;
+    }
+  }
+
+  // Measures ROM for one movement from its captured frames (start vs. end
+  // range). Runs silently — no UI, no extra step for the clinician.
+  async function measureMovementROM(frames, movementKey) {
+    if (!JOINT_LANDMARK_MAP[movementKey] || !frames || frames.length < 2) {
+      return { measured: false, degrees: null };
+    }
+    const startAngle = await detectAngleInFrame(frames[0], movementKey);
+    const endAngle = await detectAngleInFrame(frames[frames.length - 1], movementKey);
+    if (startAngle === null || endAngle === null) return { measured: false, degrees: null };
+    return { measured: true, degrees: Math.round(Math.abs(endAngle - startAngle)), startAngle, endAngle };
+  }
 
   // =========================================================================
   // 4. UTILITY FUNCTIONS
@@ -711,6 +831,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     
+    // Fire-and-forget: warms up the pose model in the background so it's
+    // ready by the time the user finishes capturing — adds no wait time.
+    loadPoseLandmarker();
+    
     try {
       stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -957,18 +1081,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     let jointDescription, framesToSend;
-    
+    let measurements = [];
+
     if (assessmentMode === 'isolate') {
       jointDescription = currentMovement.name;
       framesToSend = capturedFrames;
+      const key = movementQueue[0];
+      const m = await measureMovementROM(capturedFrames, key);
+      measurements.push({ key, name: currentMovement.name, ...m });
     } else {
       const selectedOption = jointSelect.options[jointSelect.selectedIndex];
       jointDescription = `Full ${selectedOption.text} Assessment`;
       framesToSend = [];
-      movementQueue.forEach(key => {
-        framesToSend = framesToSend.concat(allCapturedFrames[key] || []);
-      });
+      for (const key of movementQueue) {
+        const frames = allCapturedFrames[key] || [];
+        framesToSend = framesToSend.concat(frames);
+        const m = await measureMovementROM(frames, key);
+        measurements.push({ key, name: movementPrompts[key].name, ...m });
+      }
     }
+
+    // Any joint we could actually measure geometrically becomes the
+    // authoritative number; the AI is told not to override it with a guess.
+    const measurementLines = measurements.map(m => m.measured
+      ? `${m.name}: ${m.degrees}° — computed from pose landmark analysis (start ${m.startAngle}° → end ${m.endAngle}°). Report this exact figure as the measured ROM; do not substitute your own visual estimate for it.`
+      : `${m.name}: no reliable landmark measurement available for this joint/movement — provide your best visual estimate and clearly label it in your response as "AI visual estimate (not measured)".`
+    ).join('\n');
     
     const systemPrompt = `You are rehablix ROM Analyzer, a clinical AI specialized in range of motion assessment for rehabilitation professionals.
 
@@ -977,7 +1115,7 @@ IMPORTANT: First, verify that the provided images clearly show a human subject p
 Do not provide any analysis or additional text in that case.
 
 If a joint IS clearly visible, provide a comprehensive clinical analysis including:
-1. **Estimated Range of Motion** (in degrees) based on visual assessment of the movement sequence
+1. **Range of Motion** in degrees — use the computed measurements provided below wherever available; only fall back to your own visual estimate where noted, and label those estimates explicitly
 2. **Movement Quality Observations** - note any compensations, asymmetries, or deviations
 3. **Comparison to Normative Values** - typical ROM for this joint
 4. **Clinical Recommendations** - suggested interventions or further assessments
@@ -986,6 +1124,9 @@ Format your response with clear headings (## for sections), bullet points for ob
     
     const userContent = `Joint/Movement: ${jointDescription}
 Movement Sequence: ${assessmentMode === 'full' ? 'Multiple movements assessment' : currentMovement.prompts.join(' → ')}
+
+Computed measurements (from pose landmark analysis of the captured frames):
+${measurementLines}
 
 The images show the progression from start position through full range of motion. Please analyze the patient's ROM and movement quality.`;
     
@@ -1021,14 +1162,16 @@ The images show the progression from start position through full range of motion
     }
     
     const data = await response.json();
-    return data.choices[0].message.content;
+    return { text: data.choices[0].message.content, measurements };
   }
   
-  async function saveToHistory(result) {
+  async function saveToHistory(result, measurements) {
     if (!currentUser) return null;
     
     try {
       const jointName = assessmentMode === 'isolate' ? currentMovement.name : `Full ${jointSelect.options[jointSelect.selectedIndex].text} Assessment`;
+      const patientName = romPatientNameInput?.value.trim() || '';
+      const measuredCount = (measurements || []).filter(m => m.measured).length;
       const newRef = await database.ref(`history/${currentUser.uid}/analysisHistory`).push({
         contentType: 'rom',
         fileName: `ROM - ${jointName}`,
@@ -1038,7 +1181,10 @@ The images show the progression from start position through full range of motion
         timestamp: firebase.database.ServerValue.TIMESTAMP,
         date: new Date().toLocaleDateString(),
         frameCount: assessmentMode === 'isolate' ? capturedFrames.length : Object.values(allCapturedFrames).flat().length,
-        assessmentMode: assessmentMode
+        assessmentMode: assessmentMode,
+        patientName: patientName || null,
+        measurements: measurements || [],
+        measuredJointCount: measuredCount
       });
       
       showToast('Analysis saved to history', 'info', 2000);
@@ -1216,10 +1362,10 @@ The images show the progression from start position through full range of motion
       analysisStatus.textContent = 'Analyzing range of motion...';
       progressBar.style.width = '50%';
       
-      const result = await analyzeROM();
+      const { text: aiText, measurements } = await analyzeROM();
       
-      if (result.startsWith('ERROR:')) {
-        const errorMessage = result.substring(6).trim();
+      if (aiText.startsWith('ERROR:')) {
+        const errorMessage = aiText.substring(6).trim();
         showToast(errorMessage, 'error', 6000);
         setStage(1);
         progressBar.style.width = '0%';
@@ -1227,9 +1373,17 @@ The images show the progression from start position through full range of motion
       }
       
       progressBar.style.width = '100%';
+
+      // Prepend a compact, unambiguous summary of what was actually measured
+      // vs. what's an AI visual estimate, so that distinction is never lost.
+      const summaryBlock = '## Measured Range of Motion\n' + measurements.map(m => m.measured
+        ? `- **${m.name}: ${m.degrees}°** (pose-landmark measured)`
+        : `- **${m.name}:** AI visual estimate only — see notes below`
+      ).join('\n') + '\n\n---\n\n';
+      const result = summaryBlock + aiText;
       analysisResults = result;
       
-      const historyKey = await saveToHistory(result);
+      const historyKey = await saveToHistory(result, measurements);
       
       showPreviewModal(result, historyKey);
       

@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // State & helpers
     // =========================================================================
     let currentUser = null;
-    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+    let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' };
     let attachments = [];
     let isRestoring = false;
     let saveTimeout = null;

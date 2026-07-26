@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // =========================================================================
   let currentUser = null;
   // Text-only model (fast, cheap) – used whenever nothing in the turn needs vision.
-  let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-chat' };
+  let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' };
   // Vision-capable model (GPT-4.1 via GitHub Models marketplace) – used when
   // an image or a video (sampled as frames) is attached.
   let visionConfig = { token: null, endpoint: null, model: 'gpt-4.1' };

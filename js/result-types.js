@@ -145,19 +145,31 @@
       titleFor: () => 'ROM Analysis Report',
       shortTitleFor: () => 'rom report',
       fileBase: (data) => `ROM_${(data.fileName || 'Report').replace(/\s+/g, '_')}`,
-      metadata: (data) => [
-        { icon: 'fa-running', text: data.fileName || 'ROM Analysis' },
-        { icon: 'fa-calendar-alt', text: data.date || new Date().toLocaleDateString() },
-        { icon: 'fa-layer-group', text: data.assessmentMode === 'full' ? 'Full Assessment' : 'Isolate Joint' },
-        { icon: 'fa-images', text: `${data.frameCount || 0} frames` },
-        { icon: 'fa-clock', text: data.lastEditedDate || data.date || '-' }
-      ],
+      metadata: (data) => {
+        const measurements = Array.isArray(data.measurements) ? data.measurements : [];
+        const measuredCount = measurements.filter(m => m.measured).length;
+        const measureText = measurements.length === 0
+          ? 'N/A'
+          : measuredCount === measurements.length
+            ? `${measuredCount}/${measurements.length} measured`
+            : `${measuredCount}/${measurements.length} measured, rest AI estimate`;
+        return [
+          { icon: 'fa-user', text: data.patientName || 'Unnamed Patient' },
+          { icon: 'fa-running', text: data.fileName || 'ROM Analysis' },
+          { icon: 'fa-calendar-alt', text: data.date || new Date().toLocaleDateString() },
+          { icon: 'fa-layer-group', text: data.assessmentMode === 'full' ? 'Full Assessment' : 'Isolate Joint' },
+          { icon: 'fa-ruler-combined', text: measureText },
+          { icon: 'fa-images', text: `${data.frameCount || 0} frames` },
+          { icon: 'fa-clock', text: data.lastEditedDate || data.date || '-' }
+        ];
+      },
       getContentHtml: (data) => fallbackContent(data, 'resultsHtml', 'resultsMarkdown'),
       buildSaveUpdates: ({ html, markdown }) => ({ resultsMarkdown: markdown, resultsHtml: html }),
       closeUrl: 'rom.html',
       showPptExport: false,
       shareSubject: (data) => `ROM Analysis Report: ${data.fileName || 'Report'}`,
       printMeta: (data) => [
+        ['Patient', data.patientName || 'N/A'],
         ['Mode', data.assessmentMode === 'full' ? 'Full Assessment' : 'Isolate Joint'],
         ['Frames', `${data.frameCount || 0}`]
       ]

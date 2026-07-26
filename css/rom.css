@@ -1463,3 +1463,21 @@
   color: #eef2f6;
   border-color: #3e4b55;
 }
+/* Optional patient name field (for later EMR linking) */
+.patient-name-input {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border-radius: 3rem;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 1rem;
+  margin: 0.8rem 0;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.patient-name-input:focus {
+  outline: none;
+  border-color: var(--rom-accent);
+  box-shadow: 0 0 0 3px var(--rom-accent-soft);
+}
