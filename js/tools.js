@@ -22,11 +22,13 @@
       { name: 'Format Generator', url: 'format.html', icon: '📋' },
       { name: 'Standardized Tools', url: 'standardized.html', icon: '⚖️' },
       { name: 'Documentation Assistant', url: 'doc.html', icon: '📃' },
-      { name: 'ROM Analyzer', url: 'rom.html', icon: '🦵' },
-      { name: 'Gait Monitor', url: 'gait.html', icon: '🎥' },
+      { name: 'Audio Transcription', url: 'audio.html', icon: '🎧' },
+      { name: 'Motion & Gait Analyzer', url: 'rom.html', icon: '🦵' },
       { name: 'Presentation Maker', url: 'presentation.html', icon: '📊' },
       { name: 'Assignment Maker', url: 'assignment.html', icon: '📝' },
       { name: 'Project Maker', url: 'project.html', icon: '📚' },
+      { name: 'Study Buddy', url: 'study.html', icon: '🧠' },
+      { name: 'Exam Simulator', url: 'exam.html', icon: '⏱️' },
       { name: 'Ask Me', url: 'ask.html', icon: '💬' }
     ];
 

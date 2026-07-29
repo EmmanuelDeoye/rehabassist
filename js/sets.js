@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let pendingAction = null;
 
   // DOM Elements
-  const profileName = document.getElementById('profileName');
+  const profileName = document.getElementById('profileNameInput');
   const profileEmail = document.getElementById('profileEmail');
   const profileSpecialization = document.getElementById('profileSpecialization');
   const updateProfileBtn = document.getElementById('updateProfileBtn');
@@ -324,11 +324,192 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (subscriptionInfo) subscriptionInfo.style.display = 'none';
         if (noSubscriptionMsg) noSubscriptionMsg.style.display = 'block';
       }
+
+      // ==================== LOAD CENTER / ORGANIZATION CARD ====================
+      await loadCenterCard(uid, userData);
       
     } catch (error) {
       console.error('Error loading user data:', error);
       showToast('Error loading profile data: ' + error.message, 'error');
     }
+  }
+
+  // ==================== CENTER / ORGANIZATION CARD ====================
+  const TOOL_LABELS = {
+    doc: 'Documentation', presentation: 'Presentations', rom: 'ROM & Gait Analyzer',
+    project: 'Projects', standardized: 'Standardized Tests', exam: 'Exam Prep',
+    study: 'Study Tools', assignment: 'Assignments', ppt: 'PPT Builder', audio: 'Audio Transcription'
+  };
+
+  async function loadCenterCard(uid, userData) {
+    const body = document.getElementById('centerCardBody');
+    if (!body || !window.RehablixCenter) return;
+
+    const accountType = userData.accountType || 'individual';
+
+    // ---------- CASE 1: Individual account — offer conversion ----------
+    if (accountType === 'individual' && !userData.memberOf) {
+      body.innerHTML = `
+        <p class="settings-hint">Register as a <strong>Center / Organization</strong> to invite other rehablix
+        users (e.g. staff or students), control their access to shared work at will, and track who did what.</p>
+        <div class="form-group">
+          <label for="convertOrgName">Organization / Center Name</label>
+          <input type="text" id="convertOrgName" class="settings-input" placeholder="e.g. Sunrise Rehab Clinic">
+        </div>
+        <button class="btn-settings-primary" id="convertToCenterBtn">
+          <i class="fas fa-hospital"></i> Convert to Center Account
+        </button>
+      `;
+      document.getElementById('convertToCenterBtn')?.addEventListener('click', async () => {
+        const nameInput = document.getElementById('convertOrgName');
+        const orgName = nameInput ? nameInput.value.trim() : '';
+        if (!orgName) { showToast('Please enter your organization name', 'error'); return; }
+        try {
+          await window.RehablixCenter.convertToCenter(orgName);
+          showToast('Your account is now a Center account!', 'success');
+          loadUserData(currentUser);
+        } catch (err) {
+          showToast(err.message || 'Could not convert account', 'error');
+        }
+      });
+      return;
+    }
+
+    // ---------- CASE 2: Member of someone else's center ----------
+    if (userData.memberOf) {
+      const centerSnap = await db.ref('centers/' + userData.memberOf).once('value');
+      const center = centerSnap.val() || {};
+      const memberSnap = await db.ref(`centers/${userData.memberOf}/members/${uid}`).once('value');
+      const member = memberSnap.val() || {};
+      const perms = member.permissions || {};
+      const enabledTools = Object.keys(TOOL_LABELS).filter(k => perms[k] !== false);
+
+      body.innerHTML = `
+        <div class="info-row"><span class="info-label">You belong to:</span><span class="info-value">${escapeHtml(center.name || 'a center')}</span></div>
+        <div class="info-row"><span class="info-label">Status:</span><span class="info-value">${member.status === 'revoked' ? '<span class="badge-warning">Access Revoked</span>' : '<span class="badge-success">Active</span>'}</span></div>
+        <div class="info-row"><span class="info-label">Tools you can access:</span><span class="info-value">${enabledTools.length ? enabledTools.map(k => TOOL_LABELS[k]).join(', ') : 'None'}</span></div>
+        <small class="form-hint">Your center's owner controls access to shared tools and can see your activity on this account.</small>
+      `;
+      return;
+    }
+
+    // ---------- CASE 3: Center owner — management console ----------
+    if (accountType === 'center') {
+      const centerUid = uid;
+      const centerSnap = await db.ref('centers/' + centerUid).once('value');
+      const center = centerSnap.val() || {};
+      const membersSnap = await db.ref(`centers/${centerUid}/members`).once('value');
+      const members = membersSnap.val() || {};
+      const activitySnap = await db.ref(`centers/${centerUid}/activity`).limitToLast(25).once('value');
+      const activityVal = activitySnap.val() || {};
+      const activity = Object.values(activityVal).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+      const memberRows = Object.keys(members).map(mUid => {
+        const m = members[mUid];
+        const perms = m.permissions || {};
+        const toggles = Object.keys(TOOL_LABELS).map(k => `
+          <label class="tool-toggle-chip ${perms[k] !== false ? 'on' : ''}" data-member="${mUid}" data-tool="${k}">
+            <input type="checkbox" ${perms[k] !== false ? 'checked' : ''}> ${TOOL_LABELS[k]}
+          </label>
+        `).join('');
+        return `
+          <div class="member-row" data-member="${mUid}">
+            <div class="member-row-head">
+              <div>
+                <strong>${escapeHtml(m.name || m.email)}</strong>
+                <span class="member-email">${escapeHtml(m.email)}</span>
+              </div>
+              <div class="member-row-actions">
+                <span class="badge-${m.status === 'revoked' ? 'warning' : 'success'}">${m.status === 'revoked' ? 'Revoked' : 'Active'}</span>
+                <button class="btn-mini toggle-revoke-btn" data-member="${mUid}" data-status="${m.status === 'revoked' ? 'active' : 'revoked'}">
+                  ${m.status === 'revoked' ? 'Restore Access' : 'Revoke Access'}
+                </button>
+                <button class="btn-mini danger remove-member-btn" data-member="${mUid}"><i class="fas fa-trash-alt"></i></button>
+              </div>
+            </div>
+            <div class="tool-toggle-list">${toggles}</div>
+          </div>
+        `;
+      }).join('') || '<p class="info-empty-inline">No members yet. Invite your first team member below.</p>';
+
+      const activityRows = activity.map(a => `
+        <div class="activity-row">
+          <span class="activity-who">${escapeHtml(a.name || a.email)}</span>
+          <span class="activity-what">${escapeHtml(a.action || '')} ${a.detail ? '— ' + escapeHtml(a.detail) : ''}</span>
+          <span class="activity-where">${escapeHtml(a.page || '')}</span>
+          <span class="activity-when">${a.timestamp ? new Date(a.timestamp).toLocaleString() : ''}</span>
+        </div>
+      `).join('') || '<p class="info-empty-inline">No activity recorded yet.</p>';
+
+      body.innerHTML = `
+        <div class="info-row"><span class="info-label">Center Name:</span><span class="info-value">${escapeHtml(center.name || '')}</span></div>
+
+        <h4 class="settings-subheading">Invite a Team Member</h4>
+        <div class="invite-row">
+          <input type="email" id="inviteMemberEmail" class="settings-input" placeholder="colleague@email.com">
+          <button class="btn-settings-primary" id="inviteMemberBtn"><i class="fas fa-user-plus"></i> Invite</button>
+        </div>
+        <small class="form-hint">If they don't have a rehablix account yet, they'll be linked automatically the moment they sign up or log in.</small>
+
+        <h4 class="settings-subheading">Members (${Object.keys(members).length})</h4>
+        <div class="members-list">${memberRows}</div>
+
+        <h4 class="settings-subheading">Recent Activity</h4>
+        <div class="activity-log">${activityRows}</div>
+      `;
+
+      document.getElementById('inviteMemberBtn')?.addEventListener('click', async () => {
+        const input = document.getElementById('inviteMemberEmail');
+        const email = input ? input.value.trim() : '';
+        if (!email) { showToast('Enter an email to invite', 'error'); return; }
+        try {
+          const result = await window.RehablixCenter.inviteMember(centerUid, email);
+          showToast(result.linked ? 'Member added!' : 'Invite saved — they\'ll be linked when they join rehablix.', 'success');
+          if (input) input.value = '';
+          loadUserData(currentUser);
+        } catch (err) {
+          showToast(err.message || 'Could not send invite', 'error');
+        }
+      });
+
+      body.querySelectorAll('.tool-toggle-chip input').forEach(cb => {
+        cb.addEventListener('change', async (e) => {
+          const chip = e.target.closest('.tool-toggle-chip');
+          const memberUid = chip.getAttribute('data-member');
+          const tool = chip.getAttribute('data-tool');
+          await window.RehablixCenter.setMemberPermission(centerUid, memberUid, tool, e.target.checked);
+          chip.classList.toggle('on', e.target.checked);
+          showToast('Access updated', 'success');
+        });
+      });
+
+      body.querySelectorAll('.toggle-revoke-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const memberUid = btn.getAttribute('data-member');
+          const newStatus = btn.getAttribute('data-status');
+          await window.RehablixCenter.setMemberStatus(centerUid, memberUid, newStatus);
+          showToast(newStatus === 'revoked' ? 'Access revoked' : 'Access restored', 'success');
+          loadUserData(currentUser);
+        });
+      });
+
+      body.querySelectorAll('.remove-member-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const memberUid = btn.getAttribute('data-member');
+          openConfirmModal('Remove this member from your center? They will lose access to shared work.', async () => {
+            await window.RehablixCenter.removeMember(centerUid, memberUid);
+            showToast('Member removed', 'success');
+            loadUserData(currentUser);
+          });
+        });
+      });
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
   }
 
   // ==================== UPDATE PROFILE ====================

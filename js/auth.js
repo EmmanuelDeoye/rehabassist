@@ -172,6 +172,14 @@ function initializeAuth() {
    */
   function recordUserVisit(userId, email, pageUrl) {
     if (!userId) return;
+
+    // If a center owner previously invited this email before they had an
+    // account, link them up now that they exist / are signing in.
+    if (window.RehablixCenter && typeof window.RehablixCenter.linkPendingInviteForUser === 'function') {
+      database.ref('users/' + userId + '/name').once('value')
+        .then(snap => window.RehablixCenter.linkPendingInviteForUser(userId, email, snap.val()))
+        .catch(err => console.error('linkPendingInviteForUser error:', err));
+    }
     
     const now = Date.now();
     const visitData = {
@@ -749,9 +757,16 @@ function initializeAuth() {
       const repeatPassword = document.getElementById('regRepeatPassword')?.value;
       const specialization = document.getElementById('voiceRange')?.value;
       const registerTerms = document.getElementById('registerTerms')?.checked;
+      const accountType = document.getElementById('regAccountType')?.value === 'center' ? 'center' : 'individual';
+      const orgName = document.getElementById('regOrgName')?.value?.trim();
       const submitBtn = document.getElementById('registerSubmitBtn');
       
       if (!name || !email || !password || !repeatPassword || !specialization) return;
+
+      if (accountType === 'center' && !orgName) {
+        if (registerError) registerError.textContent = 'Please enter your organization / center name.';
+        return;
+      }
       
       // Check if terms are agreed
       if (!registerTerms) {
@@ -780,8 +795,8 @@ function initializeAuth() {
         const user = userCredential.user;
         
         await user.updateProfile({ displayName: name });
-        
-        await database.ref('users/' + user.uid).set({
+
+        const userRecord = {
           name: name,
           email: email,
           specialization: specialization,
@@ -789,8 +804,24 @@ function initializeAuth() {
           termsAgreed: true,
           termsAgreedAt: new Date().toISOString(),
           userId: user.uid,
-          provider: 'email'
-        });
+          provider: 'email',
+          accountType: accountType
+        };
+
+        if (accountType === 'center') {
+          userRecord.centerId = user.uid; // a center owner's own uid doubles as the center id
+        }
+
+        await database.ref('users/' + user.uid).set(userRecord);
+
+        if (accountType === 'center') {
+          await database.ref('centers/' + user.uid).set({
+            name: orgName,
+            ownerUid: user.uid,
+            ownerEmail: email,
+            createdAt: new Date().toISOString()
+          });
+        }
         
         // Record first visit
         recordUserVisit(user.uid, user.email, window.location.pathname);

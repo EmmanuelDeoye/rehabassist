@@ -183,6 +183,54 @@ main { flex: 1; }
   padding: 0 1rem;
 }
 
+/* Compact "Ask AI" banner card, sits above the tool grid */
+.ask-ai-mini-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1.25rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, var(--accent-soft), transparent);
+  border: 1px solid var(--accent);
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ask-ai-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.ask-ai-mini-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.ask-ai-mini-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.ask-ai-mini-text strong {
+  font-size: 0.95rem;
+}
+
+.ask-ai-mini-text span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.ask-ai-mini-arrow {
+  color: var(--accent);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
 .tool-grid {
   display: grid;
   grid-template-columns: 1fr;

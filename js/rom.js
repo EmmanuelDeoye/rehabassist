@@ -42,6 +42,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const radioIsolate = document.querySelector('input[value="isolate"]');
   const radioFull = document.querySelector('input[value="full"]');
 
+  const autoGuidedToggle = document.getElementById('autoGuidedToggle');
+  const liveAngleReadout = document.getElementById('liveAngleReadout');
+  const liveAngleValue = document.getElementById('liveAngleValue');
+  const liveAngleHint = document.getElementById('liveAngleHint');
+
   let captureFrameBtn = null;
   let captureBtnContainer = null;
   
@@ -402,6 +407,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   let allCapturedFrames = {};
   const romPatientNameInput = document.getElementById('romPatientName');
 
+  // Auto-Guided Scan (voice prompts + live pose detection + auto-capture)
+  let liveLandmarkerPromise = null;
+  let autoScanRAF = null;
+  let autoScanAngleBuffer = [];
+  let autoScanBusy = false;       // true while a capture is being processed (debounce)
+  let autoScanCooldownUntil = 0;  // timestamp; ignore holds until after this
+  let autoScanLastSpokenPrompt = null;
+
   // =========================================================================
   // 3b. REAL ANGLE MEASUREMENT (MediaPipe Pose landmarks — runs automatically
   // in the background right after capture, no extra taps from the user).
@@ -470,6 +483,159 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (mag1 === 0 || mag2 === 0) return null;
     const cos = Math.min(1, Math.max(-1, (v1.x * v2.x + v1.y * v2.y) / (mag1 * mag2)));
     return Math.acos(cos) * (180 / Math.PI);
+  }
+
+  // ===================================================================
+  // AUTO-GUIDED SCAN — live pose tracking + AI voice prompts.
+  // Reuses captureCurrentFrame()/the existing movement-queue logic so the
+  // rest of the pipeline (AI write-up, results page, history) needs no
+  // changes; this only automates *when* a frame gets captured.
+  // ===================================================================
+
+  // A second landmarker instance running in VIDEO mode (separate from the
+  // IMAGE-mode one used for post-hoc angle measurement) for live tracking.
+  function loadLiveLandmarker() {
+    if (liveLandmarkerPromise) return liveLandmarkerPromise;
+    liveLandmarkerPromise = (async () => {
+      try {
+        const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+        const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        return await vision.PoseLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+            delegate: 'GPU'
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1
+        });
+      } catch (err) {
+        console.warn('[ROM] Live pose model failed to load — Auto-Guided Scan will fall back to voice-only prompts:', err);
+        return null;
+      }
+    })();
+    return liveLandmarkerPromise;
+  }
+
+  // Speaks a short instruction aloud. Cancels any in-progress speech first
+  // so prompts don't pile up and talk over each other.
+  function speak(text) {
+    if (!('speechSynthesis' in window) || !text) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1;
+      utter.pitch = 1;
+      window.speechSynthesis.speak(utter);
+    } catch (err) {
+      console.warn('[ROM] Speech synthesis failed:', err);
+    }
+  }
+
+  function currentAngleFromLandmarks(lm, movementKey) {
+    const pointNames = JOINT_LANDMARK_MAP[movementKey];
+    if (!pointNames || !lm) return null;
+    const pick = (name, side) => lm[LANDMARK_INDEX[name][side]];
+    const sideScore = (side) => pointNames.reduce((sum, name) => sum + (pick(name, side)?.visibility ?? 0), 0);
+    const side = sideScore(1) >= sideScore(0) ? 1 : 0;
+    const pts = pointNames.map(name => pick(name, side));
+    if (pts.some(p => !p || (p.visibility !== undefined && p.visibility < 0.5))) return null;
+    const angle = angleAtVertex(pts[0], pts[1], pts[2]);
+    return angle === null ? null : Math.round(angle);
+  }
+
+  async function startAutoGuidedScan() {
+    if (!currentMovement) return;
+    const movementKey = movementQueue[currentQueueIndex];
+    const trackable = !!JOINT_LANDMARK_MAP[movementKey];
+
+    autoScanAngleBuffer = [];
+    autoScanBusy = false;
+    autoScanCooldownUntil = Date.now() + 1200; // brief grace period after camera starts
+    autoScanLastSpokenPrompt = null;
+
+    speak(`Let's begin. ${currentMovement.prompts[0]}`);
+    autoScanLastSpokenPrompt = currentMovement.prompts[0];
+
+    if (!trackable) {
+      // We can still guide by voice on a timer, but the user taps to capture.
+      liveAngleReadout.style.display = 'none';
+      return;
+    }
+
+    const landmarker = await loadLiveLandmarker();
+    if (!landmarker || !isCameraActive) {
+      liveAngleReadout.style.display = 'none';
+      return; // graceful fallback to manual capture with voice prompt already spoken
+    }
+
+    liveAngleReadout.style.display = 'flex';
+    liveAngleHint.textContent = 'Move into position and hold…';
+
+    const loop = () => {
+      if (!isCameraActive || !stream) { stopAutoGuidedScan(); return; }
+
+      // Speak a new prompt aloud whenever it changes (e.g. after auto-capture
+      // advances promptIndex, or the movement queue advances).
+      const promptNow = currentPrompt.textContent;
+      if (promptNow && promptNow !== autoScanLastSpokenPrompt && !promptNow.startsWith('✓')) {
+        speak(promptNow);
+        autoScanLastSpokenPrompt = promptNow;
+      }
+
+      try {
+        const result = landmarker.detectForVideo(cameraPreview, performance.now());
+        const lm = result?.landmarks?.[0];
+        const angle = lm ? currentAngleFromLandmarks(lm, movementQueue[currentQueueIndex]) : null;
+
+        if (angle !== null) {
+          liveAngleValue.textContent = angle + '°';
+          autoScanAngleBuffer.push({ angle, t: Date.now() });
+          // keep ~700ms of recent samples
+          autoScanAngleBuffer = autoScanAngleBuffer.filter(s => Date.now() - s.t < 700);
+
+          const readyToEvaluate = autoScanAngleBuffer.length >= 8 && Date.now() > autoScanCooldownUntil;
+          if (readyToEvaluate && !autoScanBusy) {
+            const angles = autoScanAngleBuffer.map(s => s.angle);
+            const spread = Math.max(...angles) - Math.min(...angles);
+            if (spread <= 3) {
+              // Position held steady — auto-capture this frame.
+              autoScanBusy = true;
+              liveAngleHint.textContent = 'Captured!';
+              if (navigator.vibrate) navigator.vibrate(60);
+              captureCurrentFrame().finally(() => {
+                autoScanAngleBuffer = [];
+                autoScanCooldownUntil = Date.now() + 1500;
+                autoScanBusy = false;
+                liveAngleHint.textContent = isCameraActive ? 'Move into the next position and hold…' : '';
+              });
+            } else {
+              liveAngleHint.textContent = 'Hold the position steady…';
+            }
+          }
+        } else {
+          liveAngleValue.textContent = '—';
+        }
+      } catch (err) {
+        // Non-fatal — just skip this frame.
+      }
+
+      autoScanRAF = requestAnimationFrame(loop);
+    };
+
+    autoScanRAF = requestAnimationFrame(loop);
+  }
+
+  function stopAutoGuidedScan() {
+    if (autoScanRAF) {
+      cancelAnimationFrame(autoScanRAF);
+      autoScanRAF = null;
+    }
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    liveAngleReadout.style.display = 'none';
+    autoScanAngleBuffer = [];
+    autoScanBusy = false;
   }
 
   function loadImageEl(dataUrl) {
@@ -880,6 +1046,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       setTimeout(() => {
         cameraPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
+
+      if (autoGuidedToggle && autoGuidedToggle.checked) {
+        startAutoGuidedScan();
+      }
       
     } catch (err) {
       console.error('Camera error:', err);
@@ -890,6 +1060,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   function stopCamera() {
+    stopAutoGuidedScan();
+
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
@@ -1520,4 +1692,10 @@ The images show the progression from start position through full range of motion
   });
   
   console.log('ROM Analyzer initialized with preview modal + AI validation');
+
+  // Let the mode-tab switcher stop this camera/scan when the user switches to Gait mode.
+  window.__romStopCamera = () => { if (isCameraActive) stopCamera(); };
+  window.addEventListener('rehablix:modechange', (e) => {
+    if (e.detail?.mode !== 'rom' && isCameraActive) stopCamera();
+  });
 });

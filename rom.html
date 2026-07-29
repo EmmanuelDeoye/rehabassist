@@ -18,7 +18,7 @@
   </script>
   <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes">
-  <title>rehablix · ROM Analyzer</title>
+  <title>rehablix · Motion & Gait Analyzer</title>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js" defer></script>
@@ -34,6 +34,8 @@
   <link rel="stylesheet" href="css/main.css">
   <link rel="stylesheet" href="css/auth.css">
   <link rel="stylesheet" href="css/rom.css">
+  <link rel="stylesheet" href="css/gait.css">
+  <link rel="stylesheet" href="css/motion-merge.css">
 </head>
 <body>
   <nav class="navbar">
@@ -42,7 +44,7 @@
         <span class="logo-icon" aria-hidden="true"></span>
         <div class="logo-text">
           <span class="logo-lop">rehablix</span>
-          <span class="logo-full">ROM analyzer</span>
+          <span class="logo-full">Motion & Gait Analyzer</span>
         </div>
       </div>
       <div class="nav-right">
@@ -93,8 +95,18 @@
         </div>
       </div>
 
+      <!-- Mode Switcher: ROM Assessment vs Gait Analysis -->
+      <div class="motion-mode-tabs" id="motionModeTabs">
+        <button type="button" class="motion-mode-tab active" data-mode="rom" id="modeTabRom">
+          <i class="fas fa-person-walking-with-cane"></i> ROM Assessment
+        </button>
+        <button type="button" class="motion-mode-tab" data-mode="gait" id="modeTabGait">
+          <i class="fas fa-shoe-prints"></i> Gait Analysis
+        </button>
+      </div>
+
       <!-- Stage 1: Camera & Capture -->
-      <div id="stageScan" class="stage-container active">
+      <div id="stageScan" class="stage-container active rom-only">
         <div class="glass-card camera-card full-width">
           <div class="camera-header">
             <h3><i class="fas fa-video"></i> Live Motion Scanner</h3>
@@ -200,6 +212,17 @@
             <button id="startCameraBtn" class="btn-primary" disabled>
               <i class="fas fa-play"></i> Start Scanning
             </button>
+            <label class="auto-guided-toggle" id="autoGuidedToggleWrap">
+              <input type="checkbox" id="autoGuidedToggle" checked>
+              <span><i class="fas fa-microphone-lines"></i> Auto-Guided Scan (AI voice + auto-capture)</span>
+            </label>
+          </div>
+
+          <!-- Live angle readout, shown during an active auto-guided scan -->
+          <div id="liveAngleReadout" class="live-angle-readout" style="display:none;">
+            <span class="live-angle-value" id="liveAngleValue">0°</span>
+            <span class="live-angle-label">current angle</span>
+            <span id="liveAngleHint" class="live-angle-hint">Hold the position steady…</span>
           </div>
 
           <!-- Movement prompt display -->
@@ -221,7 +244,83 @@
             </button>
           </div>
         </div>
+
+      <!-- Stage 1: Record Video -->
+      <div id="stageRecord" class="stage-container active gait-only">
+        <div class="glass-card record-card full-width">
+          <div class="record-header">
+            <h3><i class="fas fa-video"></i> Gait Video Capture</h3>
+            <p>Position the patient walking naturally across the frame (sagittal or frontal view)</p>
+          </div>
+          
+          
+          <div class="controls-column">
+          <div class="patient-name-section">
+                <label for="patientName"><i class="fas fa-user"></i> Patient Name</label>
+                <input type="text" id="patientName" class="patient-name-input" placeholder="Enter patient name (optional)">
+              </div>
+              
+              <div class="record-controls">
+                <button id="gaitStartCameraBtn" class="btn-primary" disabled>
+                  <i class="fas fa-play"></i> Start Camera
+                </button>
+                
+              </div>
+              </div>
+          
+          <div class="record-layout">
+            <div class="camera-column">
+              <div class="camera-view tall">
+                <video id="gaitCameraPreview" autoplay playsinline muted></video>
+                <div class="scan-overlay" style="display: none;">
+                  <div class="scan-line"></div>
+                </div>
+                <div id="gaitCameraPlaceholder" class="camera-placeholder">
+                  <i class="fas fa-camera"></i>
+                  <p>Camera not started</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="controls-column">
+              <!-- Patient Name Input (NEW) -->
+              <div class="gait-params">
+                <label>View / Condition (optional)</label>
+                <select id="gaitViewSelect" class="joint-select">
+                  <option value="sagittal">Sagittal View (side)</option>
+                  <option value="frontal">Frontal View (front)</option>
+                  <option value="posterior">Posterior View (back)</option>
+                </select>
+                <input type="text" id="gaitNotes" placeholder="Additional notes (e.g., 'with walking aid')" class="gait-notes-input">
+              </div>
+              
+              <div class="record-controls">
+                
+                <button id="recordBtn" class="btn-record" disabled>
+                  <i class="fas fa-circle"></i> Record
+                </button>
+              </div>
+
+              <div id="recordingTimer" class="recording-timer" style="display: none;">
+                <span class="recording-indicator"><i class="fas fa-circle"></i> Recording</span>
+                <span id="timerDisplay">00:00</span>
+              </div>
+
+              <div id="videoPreview" class="video-preview" style="display: none;">
+                <h4>Recorded Video</h4>
+                <video id="recordedVideo" controls></video>
+                <div class="preview-actions">
+                  <button id="reRecordBtn" class="btn-secondary"><i class="fas fa-redo-alt"></i> Record Again</button>
+                  <button id="gaitProceedToAnalysisBtn" class="btn-primary" disabled><i class="fas fa-arrow-right"></i> Analyze Gait</button>
+                </div>
+              </div>
+
+              
+            </div>
+          </div>
+        </div>
       </div>
+
 
       <!-- Stage 2: Analysis (Loading) -->
       <div id="stageAnalyze" class="stage-container">
@@ -267,10 +366,21 @@
   <!-- History Drawer -->
   <aside class="history-drawer" id="historyDrawer">
     <div class="drawer-header">
-      <h3><i class='bx bx-time-five'></i> ROM Analysis History</h3>
+      <h3 class="rom-only"><i class='bx bx-time-five'></i> ROM Analysis History</h3>
+      <h3 class="gait-only"><i class='bx bx-time-five'></i> Gait History</h3>
       <button id="closeDrawerBtn" class="drawer-close-btn"><i class='bx bx-x'></i></button>
     </div>
-    <div class="history-content" id="historyList">
+    <div class="history-search gait-only">
+      <i class="fas fa-search"></i>
+      <input type="text" id="gaitHistorySearchInput" placeholder="Search by patient name...">
+    </div>
+    <div class="history-content rom-only" id="historyList">
+      <div class="empty-state">
+        <i class='bx bx-folder-open'></i>
+        <p>No history found</p>
+      </div>
+    </div>
+    <div class="history-content gait-only" id="gaitHistoryList">
       <div class="empty-state">
         <i class='bx bx-folder-open'></i>
         <p>No history found</p>
@@ -282,8 +392,11 @@
   <div id="toast-container"></div>
   <script src="js/config.js" defer></script>
   <script src="js/modal.js" defer></script>     <!-- Creates auth modal, toast, etc. -->
+  <script src="js/center.js" defer></script>
   <script src="js/auth.js" defer></script>      <!-- Auth logic -->
   <script src="js/tools.js" defer></script>     <!-- Shared tools logic -->
   <script src="js/rom.js" defer></script>       <!-- ROM analyzer logic -->
+  <script src="js/gait.js" defer></script>      <!-- Gait analyzer logic -->
+  <script src="js/motion-tabs.js" defer></script> <!-- ROM/Gait tab switcher -->
 </body>
 </html>

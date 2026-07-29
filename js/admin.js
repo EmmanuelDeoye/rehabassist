@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const filterSpecialization = document.getElementById('filterSpecialization');
   const filterPlan = document.getElementById('filterPlan');
   const filterProvider = document.getElementById('filterProvider');
+  const filterAccountType = document.getElementById('filterAccountType');
   const sortUsers = document.getElementById('sortUsers');
   const refreshUsersBtn = document.getElementById('refreshUsersBtn');
 
@@ -830,6 +831,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const spec = data.specialization || 'Not specified';
+        const accountType = data.accountType === 'center' ? 'center' : 'individual';
 
         return {
           uid: key,
@@ -844,8 +846,21 @@ document.addEventListener('DOMContentLoaded', function() {
           joined: data.createdAt || data.created_at || 'Unknown',
           isBanned: isBanned,
           photoURL: data.photoURL || '',
+          accountType: accountType,
+          memberOf: data.memberOf || null,
           raw: data
         };
+      });
+
+      // Attach member counts to center-owner rows (used for the badge + detail view)
+      const centersSnap = await database.ref('centers').once('value');
+      const centersVal = centersSnap.val() || {};
+      allUsers.forEach(u => {
+        if (u.accountType === 'center' && centersVal[u.uid]) {
+          const members = centersVal[u.uid].members || {};
+          u.centerName = centersVal[u.uid].name || '';
+          u.memberCount = Object.keys(members).length;
+        }
       });
 
       const specs = [...new Set(allUsers.map(u => u.specialization))];
@@ -876,6 +891,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const spec = filterSpecialization.value;
     const plan = filterPlan.value;
     const provider = filterProvider.value;
+    const accountTypeFilter = filterAccountType ? filterAccountType.value : '';
     const sort = sortUsers.value;
 
     filteredUsers = allUsers.filter(user => {
@@ -887,6 +903,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if (spec && user.specialization !== spec) return false;
       if (plan && user.plan !== plan) return false;
       if (provider && user.provider !== provider) return false;
+      if (accountTypeFilter) {
+        if (accountTypeFilter === 'center' && user.accountType !== 'center') return false;
+        if (accountTypeFilter === 'individual' && (user.accountType === 'center' || user.memberOf)) return false;
+        if (accountTypeFilter === 'member' && !user.memberOf) return false;
+      }
       return true;
     });
 
@@ -923,6 +944,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const initials = user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
       const rowClass = user.isBanned ? 'banned-row' : '';
       const isAdmin = user.email === MASTER_ADMIN_EMAIL;
+      const accountBadge = user.accountType === 'center'
+        ? `<span class="badge-center" title="${escapeHtml(user.centerName || '')}">🏥 Center${user.memberCount ? ' · ' + user.memberCount + ' member' + (user.memberCount === 1 ? '' : 's') : ''}</span>`
+        : (user.memberOf ? `<span class="badge-member">👥 Center Member</span>` : `<span class="badge-individual">Individual</span>`);
 
       html += `
         <tr class="${rowClass}" data-uid="${user.uid}">
@@ -932,6 +956,7 @@ document.addEventListener('DOMContentLoaded', function() {
               <div class="user-cell-info">
                 <span class="user-cell-name">${escapeHtml(user.name)} ${isAdmin ? '<span class="badge-admin">Master</span>' : ''}</span>
                 <span class="user-cell-email">${escapeHtml(user.email)}</span>
+                <span class="user-cell-badges">${accountBadge}</span>
               </div>
             </div>
           </td>
@@ -1471,6 +1496,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (filterSpecialization) filterSpecialization.addEventListener('change', applyFilters);
   if (filterPlan) filterPlan.addEventListener('change', applyFilters);
   if (filterProvider) filterProvider.addEventListener('change', applyFilters);
+  if (filterAccountType) filterAccountType.addEventListener('change', applyFilters);
   if (sortUsers) sortUsers.addEventListener('change', applyFilters);
 
   if (refreshUsersBtn) {

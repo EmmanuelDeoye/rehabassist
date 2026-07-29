@@ -103,6 +103,25 @@ function createAuthModal() {
             <input type="text" id="regName" required placeholder="Your name">
           </div>
           <div class="form-group">
+            <label>Account Type</label>
+            <div class="account-type-toggle" id="accountTypeToggle">
+              <button type="button" class="account-type-option active" data-account-type="individual" id="acctTypeIndividual">
+                <i class="fas fa-user"></i>
+                <span>Individual</span>
+              </button>
+              <button type="button" class="account-type-option" data-account-type="center" id="acctTypeCenter">
+                <i class="fas fa-hospital"></i>
+                <span>Center / Organization</span>
+              </button>
+            </div>
+            <input type="hidden" id="regAccountType" value="individual">
+            <small class="form-hint">A Center account lets you invite other rehablix users, control their access to shared work, and track their activity.</small>
+          </div>
+          <div class="form-group" id="regOrgNameGroup" style="display:none;">
+            <label for="regOrgName">Organization / Center Name</label>
+            <input type="text" id="regOrgName" placeholder="e.g. Sunrise Rehab Clinic">
+          </div>
+          <div class="form-group">
             <label for="regEmail">Email</label>
             <input type="email" id="regEmail" required placeholder="your@email.com">
           </div>
@@ -466,7 +485,33 @@ function createAuthModal() {
   });
 
   setupPasswordToggles();
+  setupAccountTypeToggle();
   console.log('Auth modal, review system, profile modal created – Settings redirects to settings.html');
+}
+
+// ---------- Account Type Toggle (Individual vs Center) ----------
+function setupAccountTypeToggle() {
+  const toggle = document.getElementById('accountTypeToggle');
+  const hiddenInput = document.getElementById('regAccountType');
+  const orgNameGroup = document.getElementById('regOrgNameGroup');
+  const orgNameInput = document.getElementById('regOrgName');
+  if (!toggle || !hiddenInput) return;
+
+  toggle.querySelectorAll('.account-type-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      toggle.querySelectorAll('.account-type-option').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const type = btn.getAttribute('data-account-type');
+      hiddenInput.value = type;
+      if (orgNameGroup) {
+        orgNameGroup.style.display = type === 'center' ? 'block' : 'none';
+      }
+      if (orgNameInput) {
+        orgNameInput.required = type === 'center';
+        if (type !== 'center') orgNameInput.value = '';
+      }
+    });
+  });
 }
 
 // Auto-create when script loads

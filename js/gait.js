@@ -10,16 +10,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   const steps = document.querySelectorAll('.step');
   
   // Camera elements
-  const cameraPreview = document.getElementById('cameraPreview');
-  const cameraPlaceholder = document.getElementById('cameraPlaceholder');
-  const startCameraBtn = document.getElementById('startCameraBtn');
+  const gaitCameraPreview = document.getElementById('gaitCameraPreview');
+  const gaitCameraPlaceholder = document.getElementById('gaitCameraPlaceholder');
+  const gaitStartCameraBtn = document.getElementById('gaitStartCameraBtn');
   const recordBtn = document.getElementById('recordBtn');
   const recordingTimer = document.getElementById('recordingTimer');
   const timerDisplay = document.getElementById('timerDisplay');
   const videoPreview = document.getElementById('videoPreview');
   const recordedVideo = document.getElementById('recordedVideo');
   const reRecordBtn = document.getElementById('reRecordBtn');
-  const proceedBtn = document.getElementById('proceedToAnalysisBtn');
+  const proceedBtn = document.getElementById('gaitProceedToAnalysisBtn');
   const gaitViewSelect = document.getElementById('gaitViewSelect');
   const gaitNotes = document.getElementById('gaitNotes');
   const patientNameInput = document.getElementById('patientName');
@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // History drawer elements
   const historyDrawer = document.getElementById('historyDrawer');
-  const historyNavBtn = document.getElementById('historyNavBtn');
+  const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
   const closeDrawerBtn = document.getElementById('closeDrawerBtn');
-  const historyList = document.getElementById('historyList');
-  const historySearchInput = document.getElementById('historySearchInput');
+  const gaitHistoryList = document.getElementById('gaitHistoryList');
+  const gaitHistorySearchInput = document.getElementById('gaitHistorySearchInput');
   
   // Toast container
   let toastContainer = document.getElementById('toast-container');
@@ -335,28 +335,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         audio: false 
       });
       
-      cameraPreview.srcObject = stream;
-      cameraPlaceholder.style.display = 'none';
-      cameraPreview.style.display = 'block';
+      gaitCameraPreview.srcObject = stream;
+      gaitCameraPlaceholder.style.display = 'none';
+      gaitCameraPreview.style.display = 'block';
       
       const scanOverlay = document.querySelector('.scan-overlay');
       if (scanOverlay) scanOverlay.style.display = 'block';
       
-      startCameraBtn.style.display = 'none';
+      gaitStartCameraBtn.style.display = 'none';
       recordBtn.disabled = false;
       isCameraActive = true;
       
       showToast('Camera ready - Record patient walking (max 30s)', 'success');
       
       setTimeout(() => {
-        cameraPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        gaitCameraPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
       
     } catch (err) {
       console.error('Camera error:', err);
       showToast('Camera access denied or not available', 'error');
-      startCameraBtn.style.display = 'block';
-      startCameraBtn.disabled = false;
+      gaitStartCameraBtn.style.display = 'block';
+      gaitStartCameraBtn.disabled = false;
     }
   }
   
@@ -366,16 +366,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       stream = null;
     }
     
-    cameraPreview.srcObject = null;
-    cameraPreview.style.display = 'none';
-    cameraPlaceholder.style.display = 'flex';
+    gaitCameraPreview.srcObject = null;
+    gaitCameraPreview.style.display = 'none';
+    gaitCameraPlaceholder.style.display = 'flex';
     
     const scanOverlay = document.querySelector('.scan-overlay');
     if (scanOverlay) scanOverlay.style.display = 'none';
     
     isCameraActive = false;
-    startCameraBtn.style.display = 'block';
-    startCameraBtn.disabled = false;
+    gaitStartCameraBtn.style.display = 'block';
+    gaitStartCameraBtn.disabled = false;
     recordBtn.disabled = true;
   }
   
@@ -907,7 +907,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   // =========================================================================
   // 15. EVENT LISTENERS
   // =========================================================================
-  startCameraBtn.addEventListener('click', startCamera);
+  gaitStartCameraBtn.addEventListener('click', startCamera);
   
   recordBtn.addEventListener('click', () => {
     if (!isRecording) {
@@ -976,8 +976,8 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       setStage(1);
       await resetRecording();
       
-      startCameraBtn.style.display = 'block';
-      startCameraBtn.disabled = false;
+      gaitStartCameraBtn.style.display = 'block';
+      gaitStartCameraBtn.disabled = false;
       recordBtn.disabled = true;
       recordingTimer.style.display = 'none';
       clearInterval(timerInterval);
@@ -1008,8 +1008,8 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   newGaitBtn?.addEventListener('click', async () => {
     await resetRecording();
     setStage(1);
-    startCameraBtn.style.display = 'block';
-    startCameraBtn.disabled = false;
+    gaitStartCameraBtn.style.display = 'block';
+    gaitStartCameraBtn.disabled = false;
     recordBtn.disabled = true;
     recordingTimer.style.display = 'none';
     clearInterval(timerInterval);
@@ -1109,10 +1109,10 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   // 16. HISTORY DRAWER WITH SEARCH
   // =========================================================================
   function renderHistory(entries) {
-    historyList.innerHTML = '';
+    gaitHistoryList.innerHTML = '';
     
     if (entries.length === 0) {
-      historyList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No matching history found</p></div>';
+      gaitHistoryList.innerHTML = '<div class="empty-state"><i class="bx bx-folder-open"></i><p>No matching history found</p></div>';
       return;
     }
     
@@ -1140,7 +1140,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
         window.open(`result.html?type=gait&id=${key}`, '_blank');
       });
       
-      historyList.appendChild(div);
+      gaitHistoryList.appendChild(div);
     });
   }
   
@@ -1181,7 +1181,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
         
         allHistoryEntries = entries;
         
-        const searchTerm = historySearchInput ? historySearchInput.value : '';
+        const searchTerm = gaitHistorySearchInput ? gaitHistorySearchInput.value : '';
         filterHistory(searchTerm);
       });
   }
@@ -1197,8 +1197,8 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     historyDrawer.classList.add('active');
   }
   
-  if (historyNavBtn) {
-    historyNavBtn.addEventListener('click', toggleHistoryDrawer);
+  if (toggleHistoryBtn) {
+    toggleHistoryBtn.addEventListener('click', toggleHistoryDrawer);
   }
   
   if (closeDrawerBtn) {
@@ -1207,8 +1207,8 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     });
   }
   
-  if (historySearchInput) {
-    historySearchInput.addEventListener('input', (e) => {
+  if (gaitHistorySearchInput) {
+    gaitHistorySearchInput.addEventListener('input', (e) => {
       filterHistory(e.target.value);
     });
   }
@@ -1216,8 +1216,8 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   document.addEventListener('click', (e) => {
     if (historyDrawer && historyDrawer.classList.contains('active') &&
         !historyDrawer.contains(e.target) &&
-        e.target !== historyNavBtn &&
-        !historyNavBtn?.contains(e.target)) {
+        e.target !== toggleHistoryBtn &&
+        !toggleHistoryBtn?.contains(e.target)) {
       historyDrawer.classList.remove('active');
     }
   });
@@ -1230,7 +1230,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   
   if (patientNameInput) {
     patientNameInput.addEventListener('input', () => {
-      startCameraBtn.disabled = false;
+      gaitStartCameraBtn.disabled = false;
     });
   }
   
@@ -1259,10 +1259,10 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     if (user) {
       console.log('User logged in:', user.email);
       loadGaitHistory();
-      if (historyNavBtn) historyNavBtn.style.display = 'block';
+      if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'block';
     } else {
       console.log('User logged out');
-      if (historyNavBtn) historyNavBtn.style.display = 'none';
+      if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'none';
     }
   });
   
@@ -1281,7 +1281,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     
     fetchTokens();
     setStage(1);
-    startCameraBtn.disabled = false;
+    gaitStartCameraBtn.disabled = false;
     
     updatePlanUI();
     
@@ -1290,7 +1290,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       scanOverlay.style.display = 'none';
     }
     
-    if (historyNavBtn) historyNavBtn.style.display = 'none';
+    if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'none';
   }
   
   initialize();
@@ -1311,4 +1311,10 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   });
   
   console.log('Gait Monitor initialized with subscription gating');
+
+  // Let the mode-tab switcher stop this camera/recording when the user switches to ROM mode.
+  window.__gaitStopCamera = () => { if (isCameraActive) stopCamera(); };
+  window.addEventListener('rehablix:modechange', (e) => {
+    if (e.detail?.mode !== 'gait' && isCameraActive) stopCamera();
+  });
 });

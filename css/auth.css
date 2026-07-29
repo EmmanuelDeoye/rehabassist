@@ -137,6 +137,54 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.account-type-toggle {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.account-type-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.75rem 0.5rem;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-color, rgba(255,255,255,0.15));
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.account-type-option i {
+  font-size: 1.1rem;
+  opacity: 0.8;
+}
+
+.account-type-option:hover {
+  border-color: var(--accent, #10b981);
+}
+
+.account-type-option.active {
+  border-color: var(--accent, #10b981);
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--accent, #10b981);
+}
+
+.account-type-option.active i {
+  opacity: 1;
+}
+
+.form-hint {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.65;
+  margin-top: 0.35rem;
+  line-height: 1.4;
+}
+
 .form-group.checkbox {
   display: flex;
   align-items: center;

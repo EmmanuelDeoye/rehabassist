@@ -36,6 +36,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Show/hide empty message
     if (visibleCount === 0) {
       emptyMessage.classList.remove('hidden');
+      const askLink = document.getElementById('emptyMessageAskLink');
+      if (askLink) askLink.href = 'ask.html' + (searchTerm ? '?q=' + encodeURIComponent(searchText.trim()) : '');
     } else {
       emptyMessage.classList.add('hidden');
     }
@@ -45,6 +47,18 @@ document.addEventListener('DOMContentLoaded', function() {
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
       filterTools(e.target.value);
+    });
+
+    // Pressing Enter sends the query straight to the Ask AI assistant —
+    // useful when what they typed isn't really a tool name but a question.
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const value = searchInput.value.trim();
+        if (value) {
+          window.location.href = 'ask.html?q=' + encodeURIComponent(value);
+        }
+      }
     });
   }
 
@@ -120,34 +134,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   
-  // ----- Floating AI button scroll behavior -----
-  let lastScrollTop = 0;
-  const floatingBtn = document.getElementById('floatingAiBtn');
-
-  if (floatingBtn) {
-    window.addEventListener('scroll', () => {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-      
-      if (scrollTop > lastScrollTop && scrollTop > 100) {
-        // Scrolling down - hide button
-        floatingBtn.style.transform = 'translateY(100px)';
-        floatingBtn.style.opacity = '0';
-      } else {
-        // Scrolling up - show button
-        floatingBtn.style.transform = 'translateY(0)';
-        floatingBtn.style.opacity = '1';
-      }
-      
-      lastScrollTop = scrollTop;
-    });
-
-    // Optional: Add click tracking
-    floatingBtn.addEventListener('click', () => {
-      console.log('AI Assistant button clicked');
-      // You can add analytics tracking here
-    });
-  }
-
   // ----- PWA Install Button (Enhanced) -----
   let deferredPrompt;
   let installBtnDismissed = false;

@@ -126,7 +126,7 @@
       ],
       getContentHtml: (data) => fallbackContent(data, 'resultsHtml', 'resultsMarkdown'),
       buildSaveUpdates: ({ html, markdown }) => ({ resultsMarkdown: markdown, resultsHtml: html }),
-      closeUrl: 'gait.html',
+      closeUrl: 'rom.html?mode=gait',
       showPptExport: false,
       shareSubject: (data) => `Gait Analysis Report: ${data.patientName || data.fileName || 'Report'}`,
       printMeta: (data) => [

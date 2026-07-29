@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       : 'Shift+Enter for a new line · Enter to send';
   }
 
-  const TOOL_PAGES = ['format.html', 'standardized.html', 'doc.html', 'rom.html', 'gait.html',
+  const TOOL_PAGES = ['format.html', 'standardized.html', 'doc.html', 'rom.html', 'audio.html',
     'presentation.html', 'assignment.html', 'project.html', 'study.html', 'exam.html', 'ask.html'];
 
   // =========================================================================
@@ -168,15 +168,17 @@ You know the rehablix website well and should proactively recommend/redirect the
 - [Assessment Format Generator](format.html) – builds structured assessment write-ups from patient data and clinical guidelines.
 - [Standardized Tools](standardized.html) – generates full copies of standardized assessments (MMSE, Berg Balance Scale, etc.) as downloadable PDFs.
 - [Documentation Assistant](doc.html) – dictate, upload files, or upload recorded sessions; AI transcribes and organizes clinical notes.
-- [ROM Analyzer](rom.html) – analyzes joint range of motion from images/videos with angle measurements and clinical insights.
-- [Gait Monitor](gait.html) – analyzes a video of a patient's gait for movement-pattern feedback.
+- [Audio Transcription](audio.html) – records a live assessment/therapy session or transcribes an uploaded audio file.
+- [Motion & Gait Analyzer](rom.html) – a voice-guided video scan that measures joint range of motion (rom.html?mode=rom) or analyzes a patient's gait (rom.html?mode=gait), with AI tracking positioning automatically.
 - [Presentation Maker](presentation.html) – turns notes/research into a case presentation, clinical report, or documentation with AI-generated slides.
 - [Assignment Maker](assignment.html) – generates full academic assignments with references and a chosen tone (for students).
 - [Project Maker](project.html) – builds an academic project chapter by chapter (literature review, methodology, references, defense prep).
 - [Study Buddy](study.html) – turns notes/textbooks/slides into flashcards, summaries, and quizzes.
 - [Exam Simulator](exam.html) – timed, AI-generated practice exams with performance analytics.
 
-When a user's need clearly matches one of these, say so directly and link to it, e.g. "You'll get a much more complete result from the [Gait Monitor](gait.html) — it's built exactly for this." Don't link a page unless it's actually relevant.
+When a user's need clearly matches one of these, say so directly and link to it, e.g. "You'll get a much more complete result from the [Motion & Gait Analyzer](rom.html?mode=gait) — it's built exactly for this." Don't link a page unless it's actually relevant.
+
+STRICT RULE: most messages do NOT need a page recommendation. Do not mention or link ANY of these pages in greetings, small talk, general knowledge questions, or when you're already able to fully answer the question yourself in chat. Only bring one up when the user is explicitly trying to DO something (generate a document, analyze a video/image, build a study set, etc.) that one of these tools is specifically built for — and even then, mention at most one page per response. If in doubt, don't mention a page at all.
 
 About rehablix itself: rehablix was built by rehabverve enterprise, founded by Emmanuel Adeoye — an occupational therapist by profession and a programmer by passion. Only share this if asked about the creator, company, or "who made this."
 
@@ -243,10 +245,11 @@ If the user's message includes content extracted from an uploaded file, an image
       const chip = document.createElement('div');
       chip.className = 'attachment-chip';
       const statusText = att.status === 'reading' ? 'Reading…' : att.status === 'error' ? 'Not readable' : 'Ready';
+      const statusIcon = att.status === 'reading' ? '<i class="fas fa-spinner fa-spin"></i> ' : '';
       chip.innerHTML = `
         <i class="fas ${fileTypeIcon(att.file)} file-type-icon"></i>
         <span class="attachment-name" title="${escapeHtml(att.name)}">${escapeHtml(att.name)}</span>
-        <span class="attachment-status">${statusText}</span>
+        <span class="attachment-status">${statusIcon}${statusText}</span>
         <button class="remove-attachment" data-id="${att.id}" aria-label="Remove attachment"><i class="fas fa-times"></i></button>
       `;
       attachmentsStrip.appendChild(chip);
@@ -257,6 +260,12 @@ If the user's message includes content extracted from an uploaded file, an image
         renderAttachmentsStrip();
       });
     });
+    // Real-time feedback: don't let the user fire off a send while a file
+    // is still being read/OCR'd — the 45s wait in handleSend is a safety
+    // net, this is what actually prevents the premature-send race in the
+    // first place for anyone who clicks Send quickly.
+    const stillReading = attachedFiles.some(a => a.status === 'reading');
+    if (sendBtn) sendBtn.disabled = stillReading || isWaiting || (messageInput.value.trim() === '' && attachedFiles.length === 0);
   }
 
   function readFileAsText(file) {
@@ -1122,7 +1131,9 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
             conversationTitle = title;
             titleIsFinal = true;
             if (currentConversationId) {
-              database.ref(`history/${currentUser.uid}/askConversations/${currentConversationId}`).update({ title }).catch(() => {});
+              database.ref(`history/${currentUser.uid}/askConversations/${currentConversationId}`).update({ title })
+                .then(() => loadHistoryList()) // sidebar is a one-time fetch — refresh it so the new title actually shows up
+                .catch(() => {});
             }
           }
         });
@@ -1372,9 +1383,21 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
 
     messages.forEach(m => { if (m.role === 'assistant') delete m.suggestions; });
 
+    // Attachments (especially OCR on images and multi-page PDFs) can
+    // legitimately take longer than a few seconds, particularly on the
+    // first use when the extraction library is still downloading from its
+    // CDN. Sending before extraction finished was the reason files/images
+    // sometimes reached the AI as "(no content extracted)" — wait properly
+    // and tell the user why, instead of racing ahead after a short timeout.
+    if (attachedFiles.some(a => a.status === 'reading')) {
+      showToast('Finishing up your file(s) — this can take a bit longer for scanned images or PDFs…', 'info', 4000);
+    }
     const waitStart = Date.now();
-    while (attachedFiles.some(a => a.status === 'reading') && Date.now() - waitStart < 8000) {
+    while (attachedFiles.some(a => a.status === 'reading') && Date.now() - waitStart < 45000) {
       await new Promise(r => setTimeout(r, 250));
+    }
+    if (attachedFiles.some(a => a.status === 'reading')) {
+      showToast('Still processing a file — sending now with what\'s ready so far.', 'warning', 4000);
     }
 
     let fullContent = text || '(see attached file)';
@@ -1445,7 +1468,8 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
   messageInput.addEventListener('input', () => {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 150) + 'px';
-    sendBtn.disabled = (messageInput.value.trim() === '' && attachedFiles.length === 0) || isWaiting;
+    const stillReading = attachedFiles.some(a => a.status === 'reading');
+    sendBtn.disabled = stillReading || isWaiting || (messageInput.value.trim() === '' && attachedFiles.length === 0);
   });
 
   // Enter-to-send behavior differs on mobile so multi-paragraph prompts are easy to type (feature 2)
@@ -1459,6 +1483,20 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
   });
 
   sendBtn.addEventListener('click', handleSend);
+
+  // If arriving from the homepage search bar (index.html?…redirect to ask.html?q=...),
+  // prefill the question and send it automatically.
+  (function prefillFromQueryParam() {
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get('q');
+    if (q && q.trim()) {
+      messageInput.value = q.trim();
+      messageInput.dispatchEvent(new Event('input'));
+      // Clean the URL so a refresh doesn't resend the same question.
+      window.history.replaceState({}, '', 'ask.html');
+      setTimeout(() => handleSend(), 300);
+    }
+  })();
 
   newChatBtn.addEventListener('click', () => {
     if (messages.length > 0 && !confirm('Start a new chat? Current conversation will be saved.')) return;

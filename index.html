@@ -158,7 +158,18 @@
 
     <!-- Card grid - Static HTML cards -->
     <section class="tool-grid-section" aria-labelledby="toolsHeading">
-      <h2 id="toolsHeading" class="visually-hidden">Clinical AI Tools</h2>
+      
+
+      <!-- Compact Ask AI banner card -->
+      <a href="ask.html" class="ask-ai-mini-card">
+        <span class="ask-ai-mini-icon" aria-hidden="true">💬</span>
+        <span class="ask-ai-mini-text">
+          <strong>Ask rehablix AI</strong>
+          <span>Get an instant answer to any clinical question</span>
+        </span>
+        <span class="ask-ai-mini-arrow" aria-hidden="true">→</span>
+      </a>
+
       <div id="toolGrid" class="tool-grid">
         <!-- Assessment Format Generator Card -->
         <a href="format.html" class="tool-card-link" data-tool="assessment">
@@ -195,28 +206,28 @@
           </article>
         </a>
 
-        <!-- ROM Analyzer Card -->
-        <a href="rom.html" class="tool-card-link" data-tool="rom">
+        <!-- Audio Transcription Card -->
+        <a href="audio.html" class="tool-card-link" data-tool="audio">
           <article class="tool-card">
-            <div class="tool-icon" aria-hidden="true">🦵</div>
-            <h3 class="tool-title">ROM Analyzer</h3>
-            <p class="tool-description">
-              Analyze joint range of motion from images or videos. Get angle measurements, movement limitations, and clinical insights instantly.
-            </p>
+            <div class="tool-icon" aria-hidden="true">🎧</div>
+            <h3 class="tool-title">Audio Transcription</h3>
+            <p class="tool-description">Record a live assessment or therapy session, or upload a pre-recorded audio file, and get an accurate AI transcript.</p>
             <div class="tool-meta">
-              <span>⚡ AI · Motion Analysis</span>
+              <span>⚡ Live recording · Upload</span>
             </div>
           </article>
         </a>
 
-        <!-- Gait Monitor Card -->
-        <a href="gait.html" class="tool-card-link" data-tool="gait">
+        <!-- Motion & Gait Analyzer Card (merged ROM + Gait) -->
+        <a href="rom.html" class="tool-card-link" data-tool="rom">
           <article class="tool-card">
-            <div class="tool-icon" aria-hidden="true">🎥</div>
-            <h3 class="tool-title">Gait Monitor</h3>
-            <p class="tool-description">Upload a video of a patient's gait for AI‑powered analysis and feedback on movement patterns.</p>
+            <div class="tool-icon" aria-hidden="true">🦵</div>
+            <h3 class="tool-title">Motion & Gait Analyzer</h3>
+            <p class="tool-description">
+              Measure joint range of motion or analyze a patient's gait with a guided, voice-prompted video scan — AI tracks positioning automatically and gives angle measurements, movement limitations, and clinical insights instantly.
+            </p>
             <div class="tool-meta">
-              <span>⚡ Video analysis · Biomechanics</span>
+              <span>⚡ AI · Voice-guided scan</span>
             </div>
           </article>
         </a>
@@ -291,7 +302,7 @@
         </a>
       </div>
 
-      <div id="emptyMessage" class="empty-state hidden">No matching tools found.</div>
+      <div id="emptyMessage" class="empty-state hidden">No matching tools found. <a href="ask.html" id="emptyMessageAskLink">Ask the AI instead →</a></div>
     </section>
 
     <!-- Current Plan Card Section -->
@@ -565,21 +576,6 @@
     <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
   </footer>
 
-  <!-- Floating AI Button -->
-  <a href="ask.html" class="floating-ai-btn" id="floatingAiBtn" aria-label="Ask the rehablix AI Assistant">
-    <div class="ai-btn-content">
-      <span class="ai-icon" aria-hidden="true">💬</span>
-      <span class="ask-text">Ask Me</span>
-    </div>
-    <div class="ai-pulse"></div>
-  </a>
-
-  <!-- Ask Me floating button -->
-  <a href="ask.html" class="floating-ask-btn" id="floatingAskBtn" aria-label="Ask AI" style="display:none">
-    <span class="ask-icon" aria-hidden="true">💬</span>
-    <span class="ask-text">Ask Me</span>
-  </a>
-
   <!-- Payment Gateway SDKs -->
   <script src="https://js.paystack.co/v1/inline.js" defer></script>
   <script src="https://checkout.flutterwave.com/v3.js" defer></script>
@@ -588,6 +584,7 @@
   <script src="js/config.js" defer></script>
   <script src="js/plan.js" defer></script>
   <script src="js/modal.js" defer></script>
+  <script src="js/center.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/main.js" defer></script>
 </body>
