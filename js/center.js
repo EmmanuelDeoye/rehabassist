@@ -213,9 +213,117 @@
     }
   }
 
+  // Which uid's data should this tool page actually read/write?
+  // - Individuals and center OWNERS work on their own uid (which, for an
+  //   owner, IS the center's shared data root).
+  // - Center MEMBERS work on their center owner's uid instead of their own,
+  //   so everyone in the center sees and edits the SAME patients/records —
+  //   that's the whole point of a center account. Their own activity still
+  //   gets logged under their own name via logActivity().
+  // Returns null if the member's access to this specific tool has been
+  // revoked or turned off — callers should treat that as "no access" and
+  // show an appropriate message rather than silently falling back.
+  async function getEffectiveScopeUid(toolKey) {
+    const ctx = await getContext();
+    if (!ctx.loggedIn) return null;
+    if (!ctx.isMember) return ctx.uid; // individual or center owner: own uid is the data root
+    if (ctx.memberStatus === 'revoked') return null;
+    if (toolKey && ctx.permissions && ctx.permissions[toolKey] === false) return null;
+    return ctx.centerId;
+  }
+
+  // ---------------------------------------------------------------------
+  // Custom center link (e.g. rehablix.com/rehabverve)
+  // Slugs need a fast lookup ("is this slug taken? which center is it?")
+  // that Realtime Database can't do by scanning nested user records, so we
+  // keep one small top-level index: centerSlugs/{slug} -> centerUid.
+  // The slug's actual value + its last-changed date still live with the
+  // center itself, at users/{centerUid}/centers.slug / .slugUpdatedAt.
+  // ---------------------------------------------------------------------
+  const SLUG_EDIT_COOLDOWN_DAYS = 15;
+  const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/; // 3-30 chars, lowercase/digits/hyphens, no leading/trailing hyphen
+
+  const RESERVED_SLUGS = new Set([
+    'index', 'admin', 'settings', 'ask', 'doc', 'docresult', 'documentation', 'audio',
+    'rom', 'gait', 'presentation', 'project', 'study', 'exam', 'standardized', 'assignment',
+    'answer', 'result', 'sub', 'format', 'formatresult', 'join', 'login', 'register', 'js', 'css', 'img'
+  ]);
+
+  function normalizeSlug(raw) {
+    return (raw || '').trim().toLowerCase();
+  }
+
+  function slugValidationError(slug) {
+    if (!slug) return 'Enter a link.';
+    if (!SLUG_PATTERN.test(slug)) return 'Use 3-30 lowercase letters, numbers, or hyphens (no spaces, no leading/trailing hyphen).';
+    if (RESERVED_SLUGS.has(slug)) return 'That link is reserved. Please choose another.';
+    return null;
+  }
+
+  // Returns { available: bool, ownedByYou: bool }
+  async function checkSlugAvailable(slug, centerUid) {
+    const snap = await db().ref('centerSlugs/' + slug).once('value');
+    const owner = snap.val();
+    if (!owner) return { available: true, ownedByYou: false };
+    return { available: owner === centerUid, ownedByYou: owner === centerUid };
+  }
+
+  function daysUntilSlugEditable(slugUpdatedAt) {
+    if (!slugUpdatedAt) return 0;
+    const elapsedMs = Date.now() - new Date(slugUpdatedAt).getTime();
+    const remainingDays = SLUG_EDIT_COOLDOWN_DAYS - (elapsedMs / 86400000);
+    return Math.max(0, Math.ceil(remainingDays));
+  }
+
+  // Sets/changes a center's custom link. Throws a descriptive Error on
+  // validation failure, taken slug, or an active cooldown.
+  async function setCenterSlug(centerUid, rawSlug) {
+    const slug = normalizeSlug(rawSlug);
+    const validationError = slugValidationError(slug);
+    if (validationError) throw new Error(validationError);
+
+    const centerSnap = await db().ref(`users/${centerUid}/centers`).once('value');
+    const center = centerSnap.val();
+    if (!center) throw new Error('Center not found.');
+
+    const previousSlug = center.slug || null;
+    if (previousSlug === slug) return slug; // no-op, nothing changed
+
+    const remainingDays = daysUntilSlugEditable(center.slugUpdatedAt);
+    if (previousSlug && remainingDays > 0) {
+      throw new Error(`You can change your center link again in ${remainingDays} day${remainingDays === 1 ? '' : 's'}.`);
+    }
+
+    const { available } = await checkSlugAvailable(slug, centerUid);
+    if (!available) throw new Error('That link is already taken. Please choose another.');
+
+    const updates = {};
+    updates[`centerSlugs/${slug}`] = centerUid;
+    if (previousSlug) updates[`centerSlugs/${previousSlug}`] = null; // free up the old one
+    updates[`users/${centerUid}/centers/slug`] = slug;
+    updates[`users/${centerUid}/centers/slugUpdatedAt`] = new Date().toISOString();
+
+    await db().ref().update(updates);
+    return slug;
+  }
+
+  // Looks up which center owns a given slug, for join.html.
+  async function getCenterBySlug(rawSlug) {
+    const slug = normalizeSlug(rawSlug);
+    if (!slug) return null;
+    const ownerSnap = await db().ref('centerSlugs/' + slug).once('value');
+    const centerUid = ownerSnap.val();
+    if (!centerUid) return null;
+    const centerSnap = await db().ref(`users/${centerUid}/centers`).once('value');
+    const center = centerSnap.val();
+    if (!center) return null;
+    return { centerUid, ...center };
+  }
+
   window.RehablixCenter = {
     TOOL_KEYS,
     getContext,
+    getEffectiveScopeUid,
     convertToCenter,
     inviteMember,
     linkPendingInviteForUser,
@@ -224,6 +332,12 @@
     setMemberStatus,
     removeMember,
     checkAccess,
-    logActivity
+    logActivity,
+    slugValidationError,
+    checkSlugAvailable,
+    daysUntilSlugEditable,
+    setCenterSlug,
+    getCenterBySlug,
+    SLUG_EDIT_COOLDOWN_DAYS
   };
 })();

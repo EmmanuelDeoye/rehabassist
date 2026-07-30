@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ===== State =====
   let currentUser = null;
+  let scopeUid = null; // center owner's uid for center members, so exam subjects/attempts are shared
   let subjects = {};      // shared with study.js: subjectId -> {name, topics:{...}}
   let attempts = {};      // attemptId -> {subjectId, title, questions, answers, score, topicBreakdown, createdAt}
   let activeSubjectId = null;
@@ -102,13 +103,13 @@ document.addEventListener('DOMContentLoaded', function () {
   // =========================================================================
   async function loadSubjects() {
     if (!currentUser) return;
-    const snap = await database.ref(`history/${currentUser.uid}/subjects`).once('value');
+    const snap = await database.ref(`history/${scopeUid}/subjects`).once('value');
     subjects = snap.val() || {};
   }
 
   async function loadAttempts() {
     if (!currentUser) return;
-    const snap = await database.ref(`history/${currentUser.uid}/exam/attempts`).once('value');
+    const snap = await database.ref(`history/${scopeUid}/exam/attempts`).once('value');
     attempts = snap.val() || {};
   }
 
@@ -116,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const trimmed = name.trim();
     const existingId = Object.keys(subjects).find(id => (subjects[id].name || '').toLowerCase() === trimmed.toLowerCase());
     if (existingId) return existingId;
-    const ref = database.ref(`history/${currentUser.uid}/subjects`).push();
+    const ref = database.ref(`history/${scopeUid}/subjects`).push();
     await ref.set({ name: trimmed, topics: {}, createdAt: firebase.database.ServerValue.TIMESTAMP });
     subjects[ref.key] = { name: trimmed, topics: {}, createdAt: Date.now() };
     return ref.key;
@@ -125,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
   async function updateTopicMastery(subjectId, topicName, correct, total) {
     if (!subjectId || !topicName || total === 0) return;
     const topicId = topicName.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40) || 'general';
-    const path = `history/${currentUser.uid}/subjects/${subjectId}/topics/${topicId}`;
+    const path = `history/${scopeUid}/subjects/${subjectId}/topics/${topicId}`;
     const snap = await database.ref(path).once('value');
     const existing = snap.val() || { name: topicName, masteryScore: 50, timesReviewed: 0 };
     const newPerformance = (correct / total) * 100;
@@ -364,7 +365,7 @@ Generate exactly ${questionCount} multiple-choice questions at "${difficulty}" d
       await updateTopicMastery(activeSubjectId, topic, result.correct, result.total);
     }
 
-    const attemptRef = database.ref(`history/${currentUser.uid}/exam/attempts`).push();
+    const attemptRef = database.ref(`history/${scopeUid}/exam/attempts`).push();
     const attemptRecord = {
       subjectId: activeSubjectId,
       subjectName: activeSubjectName,
@@ -474,6 +475,20 @@ Generate exactly ${questionCount} multiple-choice questions at "${difficulty}" d
     currentUser = user;
     if (!user) { $('historyNavBtn').style.display = 'none'; return; }
     $('historyNavBtn').style.display = '';
+
+    if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+      try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('exam'); }
+      catch (err) { scopeUid = user.uid; }
+    } else {
+      scopeUid = user.uid;
+    }
+    if (scopeUid === null) {
+      showToast('Your access to Exam Simulator has been turned off by your center admin.', 'error', 6000);
+      return;
+    } else if (scopeUid !== user.uid) {
+      showToast('Working on your center\'s shared subjects', 'info', 3000);
+    }
+
     await loadSubjects();
     await loadAttempts();
     populateSubjectDatalist();

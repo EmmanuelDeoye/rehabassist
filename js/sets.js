@@ -441,13 +441,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `).join('') || '<p class="info-empty-inline">No activity recorded yet.</p>';
 
+      const currentSlug = center.slug || '';
+      const cooldownDays = window.RehablixCenter.daysUntilSlugEditable(center.slugUpdatedAt);
+      const canEditSlug = !currentSlug || cooldownDays === 0;
+
       body.innerHTML = `
         <div class="info-row"><span class="info-label">Center Name:</span><span class="info-value">${escapeHtml(center.name || '')}</span></div>
+
+        <h4 class="settings-subheading">Your Center's Link</h4>
+        <p class="settings-hint">Share this link with your team. Anyone with active access can use it to get straight to your center's tools.</p>
+        ${currentSlug ? `
+          <div class="center-link-display">
+            <code>rehablix.com/${escapeHtml(currentSlug)}</code>
+            <button class="btn-mini" id="copyCenterLinkBtn" type="button"><i class="fas fa-copy"></i> Copy</button>
+          </div>
+        ` : ''}
+        <div class="invite-row">
+          <span class="center-link-prefix">rehablix.com/</span>
+          <input type="text" id="centerSlugInput" class="settings-input" placeholder="yourcentername" value="${escapeHtml(currentSlug)}" maxlength="30" ${canEditSlug ? '' : 'disabled'}>
+          <button class="btn-settings-primary22" id="saveCenterSlugBtn" ${canEditSlug ? '' : 'disabled'}>
+            <i class="fas fa-link"></i> <span>${currentSlug ? 'Update' : 'Create Link'} </span>
+          </button>
+        </div>
+        ${!canEditSlug ? `<small class="form-hint">You can change your link again in ${cooldownDays} day${cooldownDays === 1 ? '' : 's'}.</small>` : `<small class="form-hint">3-30 characters: lowercase letters, numbers, and hyphens only. You can change it again 15 days after saving.</small>`}
+        <div id="centerSlugStatus" class="form-hint" style="min-height:1.1em;"></div>
 
         <h4 class="settings-subheading">Invite a Team Member</h4>
         <div class="invite-row">
           <input type="email" id="inviteMemberEmail" class="settings-input" placeholder="colleague@email.com">
-          <button class="btn-settings-primary22" id="inviteMemberBtn"><i class="fas fa-user-plus"></i> <span>Invite </span></button>
+          <button class="btn-settings-primary22" id="inviteMemberBtn"><i class="fas fa-user-plus"></i> <span>Invite</span></button>
         </div>
         <small class="form-hint">If they don't have a rehablix account yet, they'll be linked automatically the moment they sign up or log in.</small>
 
@@ -457,6 +479,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         <h4 class="settings-subheading">Recent Activity</h4>
         <div class="activity-log">${activityRows}</div>
       `;
+
+      document.getElementById('copyCenterLinkBtn')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(`https://rehablix.com/${currentSlug}`)
+          .then(() => showToast('Link copied!', 'success'))
+          .catch(() => showToast('Could not copy link', 'error'));
+      });
+
+      document.getElementById('saveCenterSlugBtn')?.addEventListener('click', async () => {
+        const input = document.getElementById('centerSlugInput');
+        const statusEl = document.getElementById('centerSlugStatus');
+        const btn = document.getElementById('saveCenterSlugBtn');
+        const raw = input ? input.value : '';
+        btn.disabled = true;
+        statusEl.textContent = 'Checking availability…';
+        try {
+          const finalSlug = await window.RehablixCenter.setCenterSlug(centerUid, raw);
+          statusEl.textContent = '';
+          showToast(`Your center link is now rehablix.com/${finalSlug}`, 'success');
+          loadUserData(currentUser);
+        } catch (err) {
+          statusEl.textContent = err.message || 'Could not save link';
+          btn.disabled = false;
+        }
+      });
 
       document.getElementById('inviteMemberBtn')?.addEventListener('click', async () => {
         const input = document.getElementById('inviteMemberEmail');

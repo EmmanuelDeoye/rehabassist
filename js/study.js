@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // ===== State =====
   let currentUser = null;
+  let scopeUid = null; // center owner's uid for center members, so study sets/subjects are shared
   let subjects = {};          // subjectId -> {name, topics:{topicId:{name,masteryScore,timesReviewed,lastActivity}}, createdAt}
   let studySets = {};         // setId -> {subjectId, title, summary, flashcards:[], quiz:[], createdAt}
   let activeSubjectId = null;
@@ -118,13 +119,13 @@ document.addEventListener('DOMContentLoaded', function () {
   // =========================================================================
   async function loadSubjects() {
     if (!currentUser) return;
-    const snap = await database.ref(`history/${currentUser.uid}/subjects`).once('value');
+    const snap = await database.ref(`history/${scopeUid}/subjects`).once('value');
     subjects = snap.val() || {};
   }
 
   async function loadStudySets() {
     if (!currentUser) return;
-    const snap = await database.ref(`history/${currentUser.uid}/study/sets`).once('value');
+    const snap = await database.ref(`history/${scopeUid}/study/sets`).once('value');
     studySets = snap.val() || {};
   }
 
@@ -132,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const trimmed = name.trim();
     const existingId = Object.keys(subjects).find(id => (subjects[id].name || '').toLowerCase() === trimmed.toLowerCase());
     if (existingId) return existingId;
-    const ref = database.ref(`history/${currentUser.uid}/subjects`).push();
+    const ref = database.ref(`history/${scopeUid}/subjects`).push();
     const record = { name: trimmed, topics: {}, createdAt: firebase.database.ServerValue.TIMESTAMP };
     await ref.set(record);
     subjects[ref.key] = { name: trimmed, topics: {}, createdAt: Date.now() };
@@ -145,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function () {
   async function updateTopicMastery(subjectId, topicName, correct, total) {
     if (!subjectId || !topicName || total === 0) return;
     const topicId = topicName.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40) || 'general';
-    const path = `history/${currentUser.uid}/subjects/${subjectId}/topics/${topicId}`;
+    const path = `history/${scopeUid}/subjects/${subjectId}/topics/${topicId}`;
     const snap = await database.ref(path).once('value');
     const existing = snap.val() || { name: topicName, masteryScore: 50, timesReviewed: 0 };
     const newPerformance = (correct / total) * 100;
@@ -340,7 +341,7 @@ Generate exactly ${flashcardCount} flashcards and exactly ${quizCount} quiz ques
       for (const topicName of parsed.topics) {
         const topicId = topicName.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 40) || 'general';
         if (!subjects[subjectId].topics || !subjects[subjectId].topics[topicId]) {
-          await database.ref(`history/${currentUser.uid}/subjects/${subjectId}/topics/${topicId}`).set({ name: topicName, masteryScore: 50, timesReviewed: 0, lastActivity: new Date().toISOString() });
+          await database.ref(`history/${scopeUid}/subjects/${subjectId}/topics/${topicId}`).set({ name: topicName, masteryScore: 50, timesReviewed: 0, lastActivity: new Date().toISOString() });
         }
       }
       await loadSubjects();
@@ -351,7 +352,7 @@ Generate exactly ${flashcardCount} flashcards and exactly ${quizCount} quiz ques
         box: 1, nextReview: Date.now(), timesReviewed: 0
       }));
 
-      const setRef = database.ref(`history/${currentUser.uid}/study/sets`).push();
+      const setRef = database.ref(`history/${scopeUid}/study/sets`).push();
       const setRecord = {
         subjectId,
         title: `${subjectName} — ${new Date().toLocaleDateString()}`,
@@ -505,7 +506,7 @@ Generate exactly ${flashcardCount} flashcards and exactly ${quizCount} quiz ques
     const set = studySets[card.setId];
     if (!set || !set.flashcards[card.cardIndex]) return;
     Object.assign(set.flashcards[card.cardIndex], update);
-    await database.ref(`history/${currentUser.uid}/study/sets/${card.setId}/flashcards/${card.cardIndex}`).update(update);
+    await database.ref(`history/${scopeUid}/study/sets/${card.setId}/flashcards/${card.cardIndex}`).update(update);
     // Flashcard performance nudges topic mastery too (lighter weight than a full quiz).
     const correctish = grade === 'good' || grade === 'easy';
     await updateTopicMastery(card.subjectId, card.topic, correctish ? 1 : 0, 1);
@@ -678,6 +679,20 @@ Generate exactly ${flashcardCount} flashcards and exactly ${quizCount} quiz ques
       return;
     }
     $('historyNavBtn').style.display = '';
+
+    if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+      try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('study'); }
+      catch (err) { scopeUid = user.uid; }
+    } else {
+      scopeUid = user.uid;
+    }
+    if (scopeUid === null) {
+      showToast('Your access to Study Buddy has been turned off by your center admin.', 'error', 6000);
+      return;
+    } else if (scopeUid !== user.uid) {
+      showToast('Working on your center\'s shared study sets', 'info', 3000);
+    }
+
     await refreshAllData();
 
     // Coming from Exam Simulator with a subject to focus on

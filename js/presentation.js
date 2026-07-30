@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // State & helpers
     // =========================================================================
     let currentUser = null;
+    let scopeUid = null; // center owner's uid for center members, so shared case history is used
     let aiConfig = { token: null, endpoint: 'https://api.deepseek.com/v1', model: 'deepseek-v4-flash' };
     let attachments = [];
     let isRestoring = false;
@@ -1503,7 +1504,7 @@ ${combinedText || 'No notes provided.'}`;
         const docType = modeLabels[currentMode] || 'Clinical Document';
         
         try {
-            const ref = await database.ref(`history/${currentUser.uid}/caseHistory`).push({
+            const ref = await database.ref(`history/${scopeUid}/caseHistory`).push({
                 contentType: currentMode,
                 fileName: `${docType} - ${patientName.value || 'Patient'}`,
                 documentType: docType,
@@ -1523,6 +1524,9 @@ ${combinedText || 'No notes provided.'}`;
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString()
             });
+            if (window.RehablixCenter) {
+                window.RehablixCenter.logActivity('presentation', `Generated ${docType}`, patientName.value.trim() || 'Patient').catch(() => {});
+            }
             return ref.key;
         } catch (error) {
             showToast('Could not save to history.', 'error');
@@ -1692,7 +1696,7 @@ ${combinedText || 'No notes provided.'}`;
         if (!currentUser) return showToast('Log in to manage history', 'error');
         if (!confirm('Delete this document?')) return;
         try {
-            await database.ref(`history/${currentUser.uid}/caseHistory/${key}`).remove();
+            await database.ref(`history/${scopeUid}/caseHistory/${key}`).remove();
             showToast('Deleted', 'success');
             loadHistory();
         } catch (error) {
@@ -1761,7 +1765,7 @@ ${combinedText || 'No notes provided.'}`;
 
     function loadHistory() {
         if (!currentUser) return;
-        database.ref(`history/${currentUser.uid}/caseHistory`)
+        database.ref(`history/${scopeUid}/caseHistory`)
             .orderByChild('timestamp')
             .on('value', snapshot => {
                 const data = snapshot.val();
@@ -1811,10 +1815,21 @@ ${combinedText || 'No notes provided.'}`;
     // =========================================================================
     // Auth & init
     // =========================================================================
-    firebase.auth().onAuthStateChanged(user => {
+    firebase.auth().onAuthStateChanged(async user => {
         currentUser = user;
         if (user) {
             console.log('[AUTH] Logged in:', user.email);
+            if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+                try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('presentation'); }
+                catch (err) { scopeUid = user.uid; }
+            } else {
+                scopeUid = user.uid;
+            }
+            if (scopeUid === null) {
+                showToast('Your access to Presentations has been turned off by your center admin.', 'error', 6000);
+            } else if (scopeUid !== user.uid) {
+                showToast('Working on your center\'s shared documents', 'info', 3000);
+            }
             if (historyNavBtn) historyNavBtn.style.display = 'block';
             loadHistory();
         } else {

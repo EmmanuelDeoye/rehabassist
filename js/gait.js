@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let maxRecordTimeout = null;
   let aiConfig = { token: null, endpoint: null, model: 'openai/gpt-4.1' };
   let currentUser = null;
+  let scopeUid = null; // center owner's uid for center members, so gait history is shared
   let analysisResults = null;
   let isCameraActive = false;
   let isRecording = false;
@@ -634,7 +635,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       const notes = gaitNotes.value.trim() || '';
       const patientName = patientNameInput.value.trim() || 'Unnamed Patient';
       
-      const newRef = await database.ref(`history/${currentUser.uid}/gaitHistory`).push({
+      const newRef = await database.ref(`history/${scopeUid}/gaitHistory`).push({
         contentType: 'gait',
         fileName: `Gait - ${patientName}`,
         documentType: 'Gait Analysis',
@@ -648,6 +649,9 @@ The video frames show the patient walking. Please analyze the gait pattern and p
       });
       
       showToast('Analysis saved to history', 'info', 2000);
+      if (window.RehablixCenter) {
+        window.RehablixCenter.logActivity('rom', 'Saved gait analysis', patientName).catch(() => {});
+      }
       return newRef.key;
     } catch (error) {
       console.error('Error saving to history:', error);
@@ -1164,7 +1168,7 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   function loadGaitHistory() {
     if (!currentUser) return;
     
-    database.ref(`history/${currentUser.uid}/gaitHistory`)
+    database.ref(`history/${scopeUid}/gaitHistory`)
       .orderByChild('timestamp')
       .on('value', (snapshot) => {
         const data = snapshot.val();
@@ -1254,10 +1258,21 @@ The video frames show the patient walking. Please analyze the gait pattern and p
   // =========================================================================
   // 18. AUTH STATE LISTENER
   // =========================================================================
-  firebase.auth().onAuthStateChanged((user) => {
+  firebase.auth().onAuthStateChanged(async (user) => {
     currentUser = user;
     if (user) {
       console.log('User logged in:', user.email);
+      if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+        try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('rom'); }
+        catch (err) { scopeUid = user.uid; }
+      } else {
+        scopeUid = user.uid;
+      }
+      if (scopeUid === null) {
+        showToast('Your access to the Motion Analyzer has been turned off by your center admin.', 'error', 6000);
+      } else if (scopeUid !== user.uid) {
+        showToast('Working on your center\'s shared records', 'info', 3000);
+      }
       loadGaitHistory();
       if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'block';
     } else {

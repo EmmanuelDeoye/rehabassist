@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // ===== State =====
   let currentUser = null;
+  let scopeUid = null; // center owner's uid for center members, so shared projects are used
   let projects = {};
   let currentProjectId = null;
   let currentProject = null;
@@ -1001,7 +1002,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     if (!currentUser) return;
 
     try {
-      const snap = await database.ref(`history/${currentUser.uid}/projects`).once('value');
+      const snap = await database.ref(`history/${scopeUid}/projects`).once('value');
       projects = snap.val() || {};
       renderHistoryList();
       updateProjectSelector();
@@ -1090,7 +1091,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
         const id = btn.dataset.id;
         if (confirm('Permanently delete this project? This cannot be undone.')) {
           try {
-            await database.ref(`history/${currentUser.uid}/projects/${id}`).remove();
+            await database.ref(`history/${scopeUid}/projects/${id}`).remove();
             delete projects[id];
 
             if (currentProjectId === id) {
@@ -1213,10 +1214,14 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     };
 
     try {
-      const ref = await database.ref(`history/${currentUser.uid}/projects`).push(newProject);
+      const ref = await database.ref(`history/${scopeUid}/projects`).push(newProject);
       const id = ref.key;
       newProject.id = id;
       projects[id] = newProject;
+
+      if (window.RehablixCenter) {
+        window.RehablixCenter.logActivity('project', 'Created project', newProject.title || 'Untitled project').catch(() => {});
+      }
 
       currentProjectId = id;
       currentProject = newProject;
@@ -1361,7 +1366,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     if (!currentUser || !currentProjectId || !currentProject) return;
 
     try {
-      await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}`).update({
+      await database.ref(`history/${scopeUid}/projects/${currentProjectId}`).update({
         chapters: currentProject.chapters,
         _versions: currentProject._versions || {},
         writingProfile: currentProject.writingProfile || 'undergraduate',
@@ -1690,7 +1695,7 @@ Return ONLY the polished HTML. No markdown fences.`;
       });
       
       if (messages.length > 0 && !aiChatMessages.querySelector('.ai-empty-state')) {
-        await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}/chatHistory`).set({
+        await database.ref(`history/${scopeUid}/projects/${currentProjectId}/chatHistory`).set({
           messages: messages.slice(-100),
           updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
@@ -1705,7 +1710,7 @@ Return ONLY the polished HTML. No markdown fences.`;
     if (!currentUser || !currentProjectId) return false;
     
     try {
-      const snap = await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}/chatHistory`).once('value');
+      const snap = await database.ref(`history/${scopeUid}/projects/${currentProjectId}/chatHistory`).once('value');
       const data = snap.val();
       
       if (data && data.messages && data.messages.length > 0) {
@@ -2235,6 +2240,19 @@ Respond as a supportive but rigorous university supervisor.`;
     if (user) {
       console.log('[AUTH] User logged in:', user.email);
       if (historyNavBtn) historyNavBtn.style.display = 'block';
+
+      if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+        try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('project'); }
+        catch (err) { scopeUid = user.uid; }
+      } else {
+        scopeUid = user.uid;
+      }
+      if (scopeUid === null) {
+        showToast('Your access to Projects has been turned off by your center admin.', 'error', 6000);
+        return;
+      } else if (scopeUid !== user.uid) {
+        showToast('Working on your center\'s shared projects', 'info', 3000);
+      }
 
       await fetchTokens();
       await loadProjects();

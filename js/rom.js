@@ -396,6 +396,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let capturedFrames = [];
   let aiConfig = { token: null, endpoint: null, model: 'openai/gpt-4.1' };
   let currentUser = null;
+  let scopeUid = null; // center owner's uid for center members, so ROM/gait history is shared
   let analysisResults = null;
   let currentMovement = null;
   let promptIndex = 0;
@@ -1344,7 +1345,7 @@ The images show the progression from start position through full range of motion
       const jointName = assessmentMode === 'isolate' ? currentMovement.name : `Full ${jointSelect.options[jointSelect.selectedIndex].text} Assessment`;
       const patientName = romPatientNameInput?.value.trim() || '';
       const measuredCount = (measurements || []).filter(m => m.measured).length;
-      const newRef = await database.ref(`history/${currentUser.uid}/analysisHistory`).push({
+      const newRef = await database.ref(`history/${scopeUid}/analysisHistory`).push({
         contentType: 'rom',
         fileName: `ROM - ${jointName}`,
         documentType: 'ROM Analysis',
@@ -1360,6 +1361,9 @@ The images show the progression from start position through full range of motion
       });
       
       showToast('Analysis saved to history', 'info', 2000);
+      if (window.RehablixCenter) {
+        window.RehablixCenter.logActivity('rom', 'Saved ROM analysis', patientName || jointName).catch(() => {});
+      }
       return newRef.key;
     } catch (error) {
       console.error('Error saving to history:', error);
@@ -1435,7 +1439,7 @@ The images show the progression from start position through full range of motion
   function loadRomHistory() {
     if (!currentUser) return;
     
-    database.ref(`history/${currentUser.uid}/analysisHistory`)
+    database.ref(`history/${scopeUid}/analysisHistory`)
       .orderByChild('timestamp')
       .on('value', (snapshot) => {
         historyList.innerHTML = '';
@@ -1655,10 +1659,21 @@ The images show the progression from start position through full range of motion
   // =========================================================================
   // 15. AUTH STATE LISTENER
   // =========================================================================
-  firebase.auth().onAuthStateChanged((user) => {
+  firebase.auth().onAuthStateChanged(async (user) => {
     currentUser = user;
     if (user) {
       console.log('User logged in:', user.email);
+      if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+        try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('rom'); }
+        catch (err) { scopeUid = user.uid; }
+      } else {
+        scopeUid = user.uid;
+      }
+      if (scopeUid === null) {
+        showToast('Your access to the Motion Analyzer has been turned off by your center admin.', 'error', 6000);
+      } else if (scopeUid !== user.uid) {
+        showToast('Working on your center\'s shared records', 'info', 3000);
+      }
       loadRomHistory();
       if (toggleHistoryBtn) toggleHistoryBtn.style.display = 'block';
     } else {

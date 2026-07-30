@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // State
     // =========================================================================
     let currentUser = null;
+    let scopeUid = null; // resolves to the center owner's uid for center members, so shared patient docs are visible
     let documentData = null;
     let docId = null;
     let docType = null; // 'summary', 'treatment', 'session', 'report', 'progress', 'discharge', 'nextsession'
@@ -309,7 +310,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             const htmlContent = editor.innerHTML;
             const plainText = editor.innerText || '';
-            const path = `history/${currentUser.uid}/patients/${docId}`;
+            const path = `history/${scopeUid}/patients/${docId}`;
             let ref, snap, data;
 
             switch (docType) {
@@ -528,7 +529,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         try {
             let data = null;
-            const path = `history/${currentUser.uid}/patients/${docId}`;
+            const path = `history/${scopeUid}/patients/${docId}`;
             let ref, snap;
 
             switch (docType) {
@@ -709,7 +710,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         let patientData = null;
         try {
-            const snap = await database.ref(`history/${currentUser.uid}/patients/${docId}`).once('value');
+            const snap = await database.ref(`history/${scopeUid}/patients/${docId}`).once('value');
             patientData = snap.val();
         } catch (e) {
             console.error('Could not fetch patient data:', e);
@@ -810,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         try {
-            const path = `history/${currentUser.uid}/patients/${docId}`;
+            const path = `history/${scopeUid}/patients/${docId}`;
             let ref, snap;
 
             switch (docType) {
@@ -1303,6 +1304,17 @@ document.addEventListener('DOMContentLoaded', async function() {
     firebase.auth().onAuthStateChanged(async (user) => {
         currentUser = user;
         if (user) {
+            if (window.RehablixCenter && typeof window.RehablixCenter.getEffectiveScopeUid === 'function') {
+                try { scopeUid = await window.RehablixCenter.getEffectiveScopeUid('doc'); }
+                catch (err) { scopeUid = user.uid; }
+            } else {
+                scopeUid = user.uid;
+            }
+            if (scopeUid === null) {
+                editor.innerHTML = '<div class="loading-editor"><i class="fas fa-exclamation-circle"></i> Your access to Documentation has been turned off by your center admin.</div>';
+                showToast('Access to Documentation has been turned off', 'error');
+                return;
+            }
             await fetchTokens();
             await loadDocument();
         } else {

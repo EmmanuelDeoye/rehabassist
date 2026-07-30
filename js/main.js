@@ -43,6 +43,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // Welcome toast after joining a center via its custom link (join.html)
+  (function showCenterWelcomeIfPresent() {
+    const params = new URLSearchParams(window.location.search);
+    const centerName = params.get('welcome');
+    if (!centerName) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'center-welcome-toast';
+    toast.innerHTML = `<i class="fas fa-circle-check"></i> Welcome to ${centerName.replace(/</g, '&lt;')} — you're all set.`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('welcome');
+    window.history.replaceState({}, '', url);
+  })();
+
   // Search input handler
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
