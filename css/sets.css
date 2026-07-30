@@ -569,6 +569,24 @@ input:checked + .toggle-slider:before {
 
 .invite-row .settings-input {
   flex: 1;
+  width: 80%;
+}
+
+.btn-settings-primary22 {
+  width: 20%;
+  padding: 0.7rem 1rem;
+  background: var(--settings-accent);
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .info-empty-inline {
@@ -704,4 +722,8 @@ input:checked + .toggle-slider:before {
   .activity-row {
     grid-template-columns: 1fr;
   }
+  
+  .btn-settings-primary22 span {
+    display: none;
+    }
 }

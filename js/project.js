@@ -1001,7 +1001,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     if (!currentUser) return;
 
     try {
-      const snap = await database.ref(`projects/${currentUser.uid}`).once('value');
+      const snap = await database.ref(`history/${currentUser.uid}/projects`).once('value');
       projects = snap.val() || {};
       renderHistoryList();
       updateProjectSelector();
@@ -1090,7 +1090,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
         const id = btn.dataset.id;
         if (confirm('Permanently delete this project? This cannot be undone.')) {
           try {
-            await database.ref(`projects/${currentUser.uid}/${id}`).remove();
+            await database.ref(`history/${currentUser.uid}/projects/${id}`).remove();
             delete projects[id];
 
             if (currentProjectId === id) {
@@ -1213,7 +1213,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     };
 
     try {
-      const ref = await database.ref(`projects/${currentUser.uid}`).push(newProject);
+      const ref = await database.ref(`history/${currentUser.uid}/projects`).push(newProject);
       const id = ref.key;
       newProject.id = id;
       projects[id] = newProject;
@@ -1361,7 +1361,7 @@ HUMANIZATION REQUIREMENTS — READ ALL CAREFULLY:
     if (!currentUser || !currentProjectId || !currentProject) return;
 
     try {
-      await database.ref(`projects/${currentUser.uid}/${currentProjectId}`).update({
+      await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}`).update({
         chapters: currentProject.chapters,
         _versions: currentProject._versions || {},
         writingProfile: currentProject.writingProfile || 'undergraduate',
@@ -1690,7 +1690,7 @@ Return ONLY the polished HTML. No markdown fences.`;
       });
       
       if (messages.length > 0 && !aiChatMessages.querySelector('.ai-empty-state')) {
-        await database.ref(`projects/${currentUser.uid}/${currentProjectId}/chatHistory`).set({
+        await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}/chatHistory`).set({
           messages: messages.slice(-100),
           updatedAt: firebase.database.ServerValue.TIMESTAMP
         });
@@ -1705,7 +1705,7 @@ Return ONLY the polished HTML. No markdown fences.`;
     if (!currentUser || !currentProjectId) return false;
     
     try {
-      const snap = await database.ref(`projects/${currentUser.uid}/${currentProjectId}/chatHistory`).once('value');
+      const snap = await database.ref(`history/${currentUser.uid}/projects/${currentProjectId}/chatHistory`).once('value');
       const data = snap.val();
       
       if (data && data.messages && data.messages.length > 0) {

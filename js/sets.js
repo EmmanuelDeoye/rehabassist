@@ -377,9 +377,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // ---------- CASE 2: Member of someone else's center ----------
     if (userData.memberOf) {
-      const centerSnap = await db.ref('centers/' + userData.memberOf).once('value');
+      const centerSnap = await db.ref('users/' + userData.memberOf + '/centers').once('value');
       const center = centerSnap.val() || {};
-      const memberSnap = await db.ref(`centers/${userData.memberOf}/members/${uid}`).once('value');
+      const memberSnap = await db.ref(`users/${userData.memberOf}/centers/members/${uid}`).once('value');
       const member = memberSnap.val() || {};
       const perms = member.permissions || {};
       const enabledTools = Object.keys(TOOL_LABELS).filter(k => perms[k] !== false);
@@ -396,11 +396,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ---------- CASE 3: Center owner — management console ----------
     if (accountType === 'center') {
       const centerUid = uid;
-      const centerSnap = await db.ref('centers/' + centerUid).once('value');
+      const centerSnap = await db.ref('users/' + centerUid + '/centers').once('value');
       const center = centerSnap.val() || {};
-      const membersSnap = await db.ref(`centers/${centerUid}/members`).once('value');
+      const membersSnap = await db.ref(`users/${centerUid}/centers/members`).once('value');
       const members = membersSnap.val() || {};
-      const activitySnap = await db.ref(`centers/${centerUid}/activity`).limitToLast(25).once('value');
+      const activitySnap = await db.ref(`users/${centerUid}/centers/activity`).limitToLast(25).once('value');
       const activityVal = activitySnap.val() || {};
       const activity = Object.values(activityVal).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <h4 class="settings-subheading">Invite a Team Member</h4>
         <div class="invite-row">
           <input type="email" id="inviteMemberEmail" class="settings-input" placeholder="colleague@email.com">
-          <button class="btn-settings-primary" id="inviteMemberBtn"><i class="fas fa-user-plus"></i> Invite</button>
+          <button class="btn-settings-primary22" id="inviteMemberBtn"><i class="fas fa-user-plus"></i> <span>Invite </span></button>
         </div>
         <small class="form-hint">If they don't have a rehablix account yet, they'll be linked automatically the moment they sign up or log in.</small>
 

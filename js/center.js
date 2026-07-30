@@ -8,10 +8,11 @@
 //   users/{uid}.accountType   = 'individual' | 'center'
 //   users/{uid}.centerId      = uid of the center this user OWNS (owners only)
 //   users/{uid}.memberOf      = uid of the center this user BELONGS to (members only)
-//   centers/{centerUid}                       = { name, ownerUid, ownerEmail, createdAt }
-//   centers/{centerUid}/members/{memberUid}   = { email, name, status: 'active'|'revoked', permissions: {tool: bool}, addedAt }
-//   centers/{centerUid}/pendingInvites/{key}  = { email, permissions, invitedAt }  (key = sanitized email, for users who don't have an account yet)
-//   centers/{centerUid}/activity/{pushId}     = { uid, email, name, page, action, detail, timestamp }
+//   users/{centerUid}/centers                       = { name, ownerUid, ownerEmail, createdAt }
+//   users/{centerUid}/centers/members/{memberUid}   = { email, name, status: 'active'|'revoked', permissions: {tool: bool}, addedAt }
+//   users/{centerUid}/centers/pendingInvites/{key}  = { email, permissions, invitedAt }  (key = sanitized email, for users who don't have an account yet)
+//   users/{centerUid}/centers/activity/{pushId}     = { uid, email, name, page, action, detail, timestamp }
+// (Nested under the owning user's own record rather than a separate top-level "centers" node.)
 
 (function () {
   const TOOL_KEYS = ['doc', 'presentation', 'rom', 'project', 'standardized', 'exam', 'study', 'assignment', 'ppt', 'audio'];
@@ -45,7 +46,7 @@
     };
 
     if (ctx.isMember && ctx.centerId) {
-      const memberSnap = await db().ref(`centers/${ctx.centerId}/members/${user.uid}`).once('value');
+      const memberSnap = await db().ref(`users/${ctx.centerId}/centers/members/${user.uid}`).once('value');
       const memberData = memberSnap.val() || {};
       ctx.memberStatus = memberData.status || 'active';
       ctx.permissions = memberData.permissions || {};
@@ -60,7 +61,7 @@
     if (!user) throw new Error('Not logged in.');
     if (!orgName || !orgName.trim()) throw new Error('Organization name is required.');
 
-    await db().ref('centers/' + user.uid).set({
+    await db().ref('users/' + user.uid + '/centers').set({
       name: orgName.trim(),
       ownerUid: user.uid,
       ownerEmail: user.email,
@@ -92,7 +93,7 @@
 
       if (memberUid === centerUid) throw new Error("You can't invite yourself.");
 
-      await db().ref(`centers/${centerUid}/members/${memberUid}`).set({
+      await db().ref(`users/${centerUid}/centers/members/${memberUid}`).set({
         email: cleanEmail,
         name: memberData.name || cleanEmail,
         status: 'active',
@@ -104,7 +105,7 @@
     }
 
     // No account yet — store a pending invite keyed by sanitized email.
-    await db().ref(`centers/${centerUid}/pendingInvites/${sanitizeEmailKey(cleanEmail)}`).set({
+    await db().ref(`users/${centerUid}/centers/pendingInvites/${sanitizeEmailKey(cleanEmail)}`).set({
       email: cleanEmail,
       permissions: perms,
       invitedAt: new Date().toISOString()
@@ -113,24 +114,28 @@
   }
 
   // Called on login/registration (from auth.js) to auto-link a pending invite
-  // if this user's email matches one, across ALL centers.
+  // if this user's email matches one, across ALL centers. Since centers now
+  // live nested under each owner's users/{uid}/centers record rather than a
+  // dedicated top-level node, this scans the users tree and checks each
+  // user's nested .centers.pendingInvites.
   async function linkPendingInviteForUser(uid, email, name) {
     if (!email) return;
     const key = sanitizeEmailKey(email);
-    const centersSnap = await db().ref('centers').once('value');
-    const centers = centersSnap.val() || {};
+    const usersSnap = await db().ref('users').once('value');
+    const users = usersSnap.val() || {};
 
-    for (const centerUid of Object.keys(centers)) {
-      const invite = centers[centerUid].pendingInvites && centers[centerUid].pendingInvites[key];
+    for (const centerUid of Object.keys(users)) {
+      const center = users[centerUid].centers;
+      const invite = center && center.pendingInvites && center.pendingInvites[key];
       if (invite) {
-        await db().ref(`centers/${centerUid}/members/${uid}`).set({
+        await db().ref(`users/${centerUid}/centers/members/${uid}`).set({
           email: email.toLowerCase(),
           name: name || email,
           status: 'active',
           permissions: invite.permissions || {},
           addedAt: new Date().toISOString()
         });
-        await db().ref(`centers/${centerUid}/pendingInvites/${key}`).remove();
+        await db().ref(`users/${centerUid}/centers/pendingInvites/${key}`).remove();
         await db().ref('users/' + uid).update({ memberOf: centerUid });
       }
     }
@@ -138,16 +143,16 @@
 
   // Toggle a specific tool's access on/off for a member, "at will", by the center owner.
   async function setMemberPermission(centerUid, memberUid, toolKey, enabled) {
-    await db().ref(`centers/${centerUid}/members/${memberUid}/permissions/${toolKey}`).set(!!enabled);
+    await db().ref(`users/${centerUid}/centers/members/${memberUid}/permissions/${toolKey}`).set(!!enabled);
   }
 
   // Fully revoke / restore a member's access to the center.
   async function setMemberStatus(centerUid, memberUid, status) {
-    await db().ref(`centers/${centerUid}/members/${memberUid}/status`).set(status);
+    await db().ref(`users/${centerUid}/centers/members/${memberUid}/status`).set(status);
   }
 
   async function removeMember(centerUid, memberUid) {
-    await db().ref(`centers/${centerUid}/members/${memberUid}`).remove();
+    await db().ref(`users/${centerUid}/centers/members/${memberUid}`).remove();
     await db().ref('users/' + memberUid + '/memberOf').remove();
   }
 
@@ -174,7 +179,7 @@
       const centerUid = userData.accountType === 'center' ? user.uid : userData.memberOf;
       if (!centerUid) return; // not part of any center — nothing to log
 
-      await db().ref(`centers/${centerUid}/activity`).push({
+      await db().ref(`users/${centerUid}/centers/activity`).push({
         uid: user.uid,
         email: user.email,
         name: userData.name || user.email,
@@ -188,12 +193,33 @@
     }
   }
 
+  // One-time, silent migration of legacy top-level centers/{uid} data (from
+  // before centers were nested under users/{uid}/centers) — no user prompt
+  // needed since this is just an internal restructuring of the owner's own data.
+  async function migrateLegacyCenterNode(uid) {
+    try {
+      const alreadyNested = await db().ref(`users/${uid}/centers`).once('value');
+      if (alreadyNested.exists()) return; // already on the new structure
+
+      const legacySnap = await db().ref('centers/' + uid).once('value');
+      const legacyData = legacySnap.val();
+      if (!legacyData) return; // nothing to migrate
+
+      await db().ref(`users/${uid}/centers`).set(legacyData);
+      await db().ref('centers/' + uid).remove();
+      console.log('[center.js] Migrated legacy centers/' + uid + ' to users/' + uid + '/centers');
+    } catch (err) {
+      console.warn('[center.js] Legacy center migration skipped:', err);
+    }
+  }
+
   window.RehablixCenter = {
     TOOL_KEYS,
     getContext,
     convertToCenter,
     inviteMember,
     linkPendingInviteForUser,
+    migrateLegacyCenterNode,
     setMemberPermission,
     setMemberStatus,
     removeMember,

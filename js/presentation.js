@@ -1693,7 +1693,6 @@ ${combinedText || 'No notes provided.'}`;
         if (!confirm('Delete this document?')) return;
         try {
             await database.ref(`history/${currentUser.uid}/caseHistory/${key}`).remove();
-            try { await database.ref(`publicAnalysis/${key}`).remove(); } catch (e) {}
             showToast('Deleted', 'success');
             loadHistory();
         } catch (error) {

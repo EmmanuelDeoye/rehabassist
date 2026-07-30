@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadDashboardData() {
         if (!currentUser) return;
         try {
-            const patientsSnap = await database.ref(`patients/${currentUser.uid}`).once('value');
+            const patientsSnap = await database.ref(`history/${currentUser.uid}/patients`).once('value');
             const patients = patientsSnap.val() || {};
             const patientCount = Object.keys(patients).length;
             dashStats.patients.textContent = patientCount;
@@ -422,7 +422,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadPatientsList() {
         if (!currentUser) return;
         try {
-            const snapshot = await database.ref(`patients/${currentUser.uid}`).once('value');
+            const snapshot = await database.ref(`history/${currentUser.uid}/patients`).once('value');
             const patients = snapshot.val() || {};
             allPatients = Object.entries(patients).map(([id, data]) => ({ id, ...data }));
             applyPatientsListView();
@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
             patientListenerRef = null;
         }
         try {
-            patientListenerRef = database.ref(`patients/${currentUser.uid}/${patientId}`);
+            patientListenerRef = database.ref(`history/${currentUser.uid}/patients/${patientId}`);
             patientListenerRef.on('value', snapshot => {
                 currentPatientData = snapshot.val() || {};
                 renderPatientData();
@@ -739,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const linkedRecords = currentPatientData.linkedRecords || [];
             linkedRecords.push({ source: match.source, key: match.key, type: match.type, date: match.date, linkedAt: new Date().toISOString() });
 
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}`).update({
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}`).update({
                 assessment: newAssessment,
                 linkedRecords: linkedRecords
             });
@@ -758,7 +758,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!currentPatientId || !currentUser) return;
         try {
             const linkedRecords = (currentPatientData.linkedRecords || []).filter(r => !(r.source === source && r.key === key));
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/linkedRecords`).set(linkedRecords);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/linkedRecords`).set(linkedRecords);
             currentPatientData.linkedRecords = linkedRecords;
             showToast('Unlinked. Text already added to Assessment was left as-is — edit it manually if you want it removed too.', 'info', 6000);
             loadLinkedRecords();
@@ -788,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!currentPatientId || !currentUser) return;
         if (!confirm('Are you sure you want to delete this patient? This action cannot be undone.')) return;
 
-        database.ref(`patients/${currentUser.uid}/${currentPatientId}`).remove()
+        database.ref(`history/${currentUser.uid}/patients/${currentPatientId}`).remove()
             .then(() => {
                 showToast('Patient deleted successfully', 'success');
                 switchScreen('patients');
@@ -887,7 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const id = btn.dataset.id;
                 const remaining = (currentPatientData?.problemList || []).filter(p => p.id !== id);
                 try {
-                    await database.ref(`patients/${currentUser.uid}/${currentPatientId}/problemList`).set(remaining);
+                    await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/problemList`).set(remaining);
                     currentPatientData.problemList = remaining;
                     renderProblemList();
                 } catch (err) {
@@ -906,7 +906,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (idx === -1) return;
                 problems[idx] = { ...problems[idx], title: titleEl.value.trim() || problems[idx].title, detail: detailEl.value.trim() };
                 try {
-                    await database.ref(`patients/${currentUser.uid}/${currentPatientId}/problemList`).set(problems);
+                    await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/problemList`).set(problems);
                     currentPatientData.problemList = problems;
                     editingProblemId = null;
                     renderProblemList();
@@ -939,7 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const problems = currentPatientData?.problemList || [];
         problems.push({ id: Date.now().toString(), title: stripMarkdown(result.title), detail: stripMarkdown(result.detail || '') });
         try {
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/problemList`).set(problems);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/problemList`).set(problems);
             currentPatientData.problemList = problems;
             renderProblemList();
             showToast('Problem added', 'success');
@@ -972,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 title: stripMarkdown(p.title || 'Problem'),
                 detail: stripMarkdown(p.detail || '')
             }));
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/problemList`).set(problems);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/problemList`).set(problems);
             currentPatientData.problemList = problems;
             updateLoadingProgress(100, 'Done!');
             setTimeout(() => {
@@ -1065,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 content: stripMarkdown(response),
                 date: new Date().toLocaleDateString()
             });
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/summaries`).set(summaries);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/summaries`).set(summaries);
             currentPatientData.summaries = summaries;
 
             updateLoadingProgress(100, 'Done!');
@@ -1160,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!plans[index]) return;
                 plans[index] = { ...plans[index], title: titleEl.value.trim() || plans[index].title, content: contentEl.value.trim(), lastEdited: new Date().toLocaleString() };
                 try {
-                    await database.ref(`patients/${currentUser.uid}/${currentPatientId}/treatmentPlans`).set(plans);
+                    await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/treatmentPlans`).set(plans);
                     currentPatientData.treatmentPlans = plans;
                     editingTreatmentPlanIndex = null;
                     loadPatientTreatmentPlans();
@@ -1206,7 +1206,7 @@ document.addEventListener('DOMContentLoaded', function() {
             state: currentPatientData?.state || ''
         });
         try {
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/treatmentPlans`).set(plans);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/treatmentPlans`).set(plans);
             currentPatientData.treatmentPlans = plans;
             showToast('Treatment plan added', 'success');
             loadPatientTreatmentPlans();
@@ -1251,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 profession: d?.profession || d?.department || '',
                 state: d?.state || ''
             });
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/treatmentPlans`).set(plans);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/treatmentPlans`).set(plans);
             currentPatientData.treatmentPlans = plans;
             updateLoadingProgress(100, 'Done!');
             setTimeout(() => { hideLoading(); showToast('Treatment plan generated!', 'success'); loadPatientTreatmentPlans(); }, 500);
@@ -1289,7 +1289,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const response = await callDeepSeek(systemPrompt, userPrompt, 1500);
             updateLoadingProgress(80, 'Saving…');
             plans[index] = { ...plan, content: stripMarkdown(response), lastEdited: new Date().toLocaleString() };
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/treatmentPlans`).set(plans);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/treatmentPlans`).set(plans);
             currentPatientData.treatmentPlans = plans;
             updateLoadingProgress(100, 'Done!');
             setTimeout(() => { hideLoading(); showToast('Treatment plan updated!', 'success'); loadPatientTreatmentPlans(); }, 400);
@@ -1452,7 +1452,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 treatmentPlanTitle: latestPlan ? (latestPlan.title || null) : null,
                 completed: false
             };
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).set(nextPlan);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/nextSessionPlan`).set(nextPlan);
             currentPatientData.nextSessionPlan = nextPlan;
 
             updateLoadingProgress(100, 'Done!');
@@ -1518,7 +1518,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ).join('\n\n');
             const combinedText = `Plan:\n${planText}\n\nSession Summary:\n${result.summary}`;
 
-            const newRef = database.ref(`patients/${currentUser.uid}/${currentPatientId}/sessions`).push();
+            const newRef = database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/sessions`).push();
             const sessionData = {
                 id: newRef.key,
                 date: new Date().toISOString().split('T')[0],
@@ -1537,9 +1537,9 @@ document.addEventListener('DOMContentLoaded', function() {
             await newRef.set(sessionData);
 
             const sessionCount = (currentPatientData.sessionCount || 0) + 1;
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/sessionCount`).set(sessionCount);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/sessionCount`).set(sessionCount);
 
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).remove();
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/nextSessionPlan`).remove();
             currentPatientData.nextSessionPlan = null;
 
             showToast('Session completed and moved to Previous Sessions!', 'success');
@@ -1611,7 +1611,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const nextPlan = currentPatientData.nextSessionPlan;
                 nextPlan.activities.splice(index, 1);
                 try {
-                    await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).set(nextPlan);
+                    await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/nextSessionPlan`).set(nextPlan);
                     currentPatientData.nextSessionPlan = nextPlan;
                     loadPatientNextSession();
                 } catch (err) {
@@ -1634,7 +1634,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     details: document.getElementById(`editActivityDetails_${index}`).value.trim()
                 };
                 try {
-                    await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).set(nextPlan);
+                    await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/nextSessionPlan`).set(nextPlan);
                     currentPatientData.nextSessionPlan = nextPlan;
                     editingActivityIndex = null;
                     loadPatientNextSession();
@@ -1681,7 +1681,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         try {
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/nextSessionPlan`).set(nextPlan);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/nextSessionPlan`).set(nextPlan);
             currentPatientData.nextSessionPlan = nextPlan;
             loadPatientNextSession();
             showToast('Activity added', 'success');
@@ -1729,7 +1729,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function saveProgressNotes(notes) {
         try {
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/progressNotes`).set(notes);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/progressNotes`).set(notes);
             currentPatientData.progressNotes = notes;
             showToast('Progress note saved', 'success');
             loadPatientProgress();
@@ -1958,7 +1958,7 @@ Use plain, professional language. Do not use markdown formatting.`;
                 content: stripMarkdown(response),
                 date: new Date().toLocaleDateString()
             });
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/dischargeSummaries`).set(summaries);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/dischargeSummaries`).set(summaries);
             currentPatientData.dischargeSummaries = summaries;
 
             updateLoadingProgress(100, 'Done!');
@@ -1978,7 +1978,7 @@ Use plain, professional language. Do not use markdown formatting.`;
         if (!currentPatientId || !currentUser) return;
         if (!confirm('Are you sure you want to discharge this patient? This will mark them as inactive.')) return;
         try {
-            await database.ref(`patients/${currentUser.uid}/${currentPatientId}/active`).set(false);
+            await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/active`).set(false);
             currentPatientData.active = false;
             showToast('Patient discharged successfully', 'success');
             
@@ -2103,7 +2103,7 @@ Use plain, professional language. Do not use markdown formatting.`;
 
         if (currentPatientId && currentUser) {
             try {
-                await database.ref(`patients/${currentUser.uid}/${currentPatientId}/uploadedFiles`).set(fileRefs);
+                await database.ref(`history/${currentUser.uid}/patients/${currentPatientId}/uploadedFiles`).set(fileRefs);
                 currentPatientData.uploadedFiles = fileRefs;
             } catch (err) {
                 console.error('Error saving file references:', err);
@@ -2141,7 +2141,7 @@ Use plain, professional language. Do not use markdown formatting.`;
         const data = collectIntakeData();
         if (!data.name || !data.primaryDx) { showToast('Please enter patient name and primary diagnosis', 'warning'); return; }
         try {
-            const ref = database.ref(`patients/${currentUser.uid}`).push();
+            const ref = database.ref(`history/${currentUser.uid}/patients`).push();
             await ref.set({
                 ...data,
                 status: isDraft ? 'draft' : 'active',
@@ -2183,7 +2183,7 @@ Use plain, professional language. Do not use markdown formatting.`;
         const data = collectIntakeData();
         data.status = isDraft ? 'draft' : 'active';
         try {
-            await database.ref(`patients/${currentUser.uid}/${editingPatientId}`).update(data);
+            await database.ref(`history/${currentUser.uid}/patients/${editingPatientId}`).update(data);
             showToast(isDraft ? 'Draft updated' : 'Patient updated!', 'success');
             isEditingPatient = false;
             editingPatientId = null;
@@ -2322,7 +2322,7 @@ Use plain, professional language. Do not use markdown formatting.`;
         }
         showLoading('Finding pending notes…', 5);
         try {
-            const patientsSnap = await database.ref(`patients/${currentUser.uid}`).once('value');
+            const patientsSnap = await database.ref(`history/${currentUser.uid}/patients`).once('value');
             const patients = patientsSnap.val() || {};
 
             // Collect every unsigned session that has no notes yet.
@@ -2351,7 +2351,7 @@ Use plain, professional language. Do not use markdown formatting.`;
                     const userPrompt = `Patient: ${patient.name || 'Patient'}\nDiagnosis: ${patient.primaryDx || 'Unknown'}\nChief Complaint: ${patient.chiefComplaint || ''}\nGoals: ${patient.goals || ''}`;
                     const response = await callDeepSeek(systemPrompt, userPrompt, 800);
                     const content = stripMarkdown(response);
-                    await database.ref(`patients/${currentUser.uid}/${patientId}/sessions/${sessionId}`).update({
+                    await database.ref(`history/${currentUser.uid}/patients/${patientId}/sessions/${sessionId}`).update({
                         notes: content,
                         content: content,
                         plainText: content,

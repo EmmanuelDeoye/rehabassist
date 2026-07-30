@@ -832,6 +832,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const spec = data.specialization || 'Not specified';
         const accountType = data.accountType === 'center' ? 'center' : 'individual';
+        const centerData = data.centers || null; // now nested under users/{uid}/centers
 
         return {
           uid: key,
@@ -848,19 +849,10 @@ document.addEventListener('DOMContentLoaded', function() {
           photoURL: data.photoURL || '',
           accountType: accountType,
           memberOf: data.memberOf || null,
+          centerName: centerData ? (centerData.name || '') : '',
+          memberCount: centerData && centerData.members ? Object.keys(centerData.members).length : 0,
           raw: data
         };
-      });
-
-      // Attach member counts to center-owner rows (used for the badge + detail view)
-      const centersSnap = await database.ref('centers').once('value');
-      const centersVal = centersSnap.val() || {};
-      allUsers.forEach(u => {
-        if (u.accountType === 'center' && centersVal[u.uid]) {
-          const members = centersVal[u.uid].members || {};
-          u.centerName = centersVal[u.uid].name || '';
-          u.memberCount = Object.keys(members).length;
-        }
       });
 
       const specs = [...new Set(allUsers.map(u => u.specialization))];

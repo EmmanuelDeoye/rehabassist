@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const urlParams = new URLSearchParams(window.location.search);
   const type = urlParams.get('type');
   const historyId = urlParams.get('id');
+  const sharedOwnerUid = urlParams.get('uid'); // present on shared/public links so a non-owner can locate the record
 
   const config = (window.RESULT_TYPES || {})[type];
 
@@ -172,14 +173,9 @@ document.addEventListener('DOMContentLoaded', function () {
       await database.ref(config.historyPath(currentUser.uid, historyId)).update(updates);
       resultData.isPublic = isChecked;
 
-      if (isChecked) {
-        const publicData = { ...resultData, ownerId: currentUser.uid, ...updates };
-        await database.ref(config.publicPath(historyId)).set(publicData);
-        showToast('✅ Document is now public. Anyone with the link can view it.', 'success');
-      } else {
-        await database.ref(config.publicPath(historyId)).remove();
-        showToast('🔒 Document is now private.', 'success');
-      }
+      showToast(isChecked
+        ? '✅ Document is now public. Anyone with the link can view it.'
+        : '🔒 Document is now private.', 'success');
       renderMetadata(resultData);
     } catch (err) {
       console.error('Error toggling public status:', err);
@@ -204,11 +200,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
 
-      if (!data) {
-        const publicSnapshot = await database.ref(config.publicPath(historyId)).once('value');
-        data = publicSnapshot.val();
-        if (data) {
-          ownerId = data.ownerId;
+      if (!data && sharedOwnerUid) {
+        // Shared/public link: read straight from the owner's own record and
+        // only accept it if it's actually flagged public (or we ARE the owner,
+        // handled above already). No separate public mirror node needed.
+        const sharedSnapshot = await database.ref(config.historyPath(sharedOwnerUid, historyId)).once('value');
+        const sharedData = sharedSnapshot.val();
+        if (sharedData && sharedData.isPublic === true) {
+          data = sharedData;
+          ownerId = sharedOwnerUid;
           currentIsOwner = !!(currentUser && currentUser.uid === ownerId);
         }
       }
@@ -273,11 +273,6 @@ document.addEventListener('DOMContentLoaded', function () {
       await database.ref(config.historyPath(currentUser.uid, historyId)).update(updates);
 
       Object.assign(resultData, updates);
-
-      if (resultData.isPublic) {
-        const publicData = { ...resultData, ownerId: currentUser.uid };
-        await database.ref(config.publicPath(historyId)).set(publicData);
-      }
 
       updateSaveStatus('Saved');
       showToast('Changes saved successfully', 'success');
@@ -348,7 +343,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // --- Action buttons --------------------------------------------------
   if (shareBtn) {
     shareBtn.addEventListener('click', () => {
-      const shareUrl = `${window.location.origin}${window.location.pathname}?type=${type}&id=${historyId}`;
+      const shareUrl = `${window.location.origin}${window.location.pathname}?type=${type}&id=${historyId}&uid=${currentUser ? currentUser.uid : (sharedOwnerUid || '')}`;
       shareLink.value = shareUrl;
       shareModal.classList.add('show');
     });

@@ -309,7 +309,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         try {
             const htmlContent = editor.innerHTML;
             const plainText = editor.innerText || '';
-            const path = `patients/${currentUser.uid}/${docId}`;
+            const path = `history/${currentUser.uid}/patients/${docId}`;
             let ref, snap, data;
 
             switch (docType) {
@@ -528,7 +528,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         try {
             let data = null;
-            const path = `patients/${currentUser.uid}/${docId}`;
+            const path = `history/${currentUser.uid}/patients/${docId}`;
             let ref, snap;
 
             switch (docType) {
@@ -709,7 +709,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         let patientData = null;
         try {
-            const snap = await database.ref(`patients/${currentUser.uid}/${docId}`).once('value');
+            const snap = await database.ref(`history/${currentUser.uid}/patients/${docId}`).once('value');
             patientData = snap.val();
         } catch (e) {
             console.error('Could not fetch patient data:', e);
@@ -810,7 +810,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         try {
-            const path = `patients/${currentUser.uid}/${docId}`;
+            const path = `history/${currentUser.uid}/patients/${docId}`;
             let ref, snap;
 
             switch (docType) {

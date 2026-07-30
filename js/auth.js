@@ -180,6 +180,12 @@ function initializeAuth() {
         .then(snap => window.RehablixCenter.linkPendingInviteForUser(userId, email, snap.val()))
         .catch(err => console.error('linkPendingInviteForUser error:', err));
     }
+
+    // One-time silent migration of any legacy top-level centers/{uid} data
+    // (from before centers were nested under users/{uid}/centers).
+    if (window.RehablixCenter && typeof window.RehablixCenter.migrateLegacyCenterNode === 'function') {
+      window.RehablixCenter.migrateLegacyCenterNode(userId).catch(err => console.error('migrateLegacyCenterNode error:', err));
+    }
     
     const now = Date.now();
     const visitData = {
@@ -815,7 +821,7 @@ function initializeAuth() {
         await database.ref('users/' + user.uid).set(userRecord);
 
         if (accountType === 'center') {
-          await database.ref('centers/' + user.uid).set({
+          await database.ref('users/' + user.uid + '/centers').set({
             name: orgName,
             ownerUid: user.uid,
             ownerEmail: email,
