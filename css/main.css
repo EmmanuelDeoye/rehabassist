@@ -1856,3 +1856,120 @@ main { flex: 1; }
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+/* ==================== Center context: welcome banner + workspace switcher ==================== */
+.center-context-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(0, 150, 136, 0.12));
+  color: var(--accent, #009688);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.workspace-switcher {
+  position: relative;
+}
+
+.workspace-switcher-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.workspace-switcher-btn:hover {
+  border-color: var(--accent, #009688);
+  color: var(--accent, #009688);
+}
+
+.workspace-switcher-icon {
+  flex-shrink: 0;
+}
+
+.workspace-switcher-text {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.workspace-switcher-caret {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+@media (min-width: 769px) {
+  .workspace-switcher-btn {
+    width: auto;
+    height: auto;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+  }
+
+  .workspace-switcher-text {
+    display: inline-flex;
+  }
+}
+
+.workspace-switcher-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-hover, 0 12px 30px rgba(0,0,0,0.15));
+  padding: 0.4rem;
+  display: none;
+  flex-direction: column;
+  gap: 0.2rem;
+  z-index: 500;
+}
+
+.workspace-switcher-menu.open {
+  display: flex;
+}
+
+.workspace-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.workspace-option:hover {
+  background: var(--accent-soft, rgba(0, 150, 136, 0.1));
+}
+
+.workspace-option.active {
+  color: var(--accent, #009688);
+  font-weight: 600;
+}
+
+.workspace-option-check {
+  margin-left: auto;
+}

@@ -37,7 +37,7 @@ body[data-active-mode="gait"] .rom-only { display: none !important; }
 }
 
 .motion-mode-tab.active {
-  background: var(--rom-accent, #009688);
+  background: var(--rom-accent, var(--accent));
   color: #fff;
   box-shadow: 0 2px 8px rgba(0, 150, 136, 0.35);
 }
@@ -50,15 +50,15 @@ body[data-active-mode="gait"] .rom-only { display: none !important; }
   margin-top: 0.75rem;
   padding: 0.5rem 0.9rem;
   border-radius: 999px;
-  border: 1px solid var(--rom-accent, #009688);
+  border: 1px solid var(--rom-accent, var(--accent));
   font-size: 0.8rem;
   cursor: pointer;
-  color: var(--rom-accent, #009688);
+  color: var(--rom-accent, var(--accent));
   width: fit-content;
 }
 
 .auto-guided-toggle input {
-  accent-color: var(--rom-accent, #009688);
+  accent-color: var(--rom-accent, var(--accent));
 }
 
 /* ---------- Live angle readout during Auto-Guided Scan ---------- */
@@ -76,7 +76,7 @@ body[data-active-mode="gait"] .rom-only { display: none !important; }
 .live-angle-value {
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--rom-accent, #009688);
+  color: var(--rom-accent, var(--accent));
 }
 
 .live-angle-label {

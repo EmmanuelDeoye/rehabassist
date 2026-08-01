@@ -1,38 +1,36 @@
-/* css/history-migration.css
-   Styling for the one-time "migrate your old history" prompt shown by
-   js/history-migration.js on pages whose data moved under history/{uid}/. */
+/* css/invite-modal.css - popup for pending center invitations */
 
-.hm-overlay {
+.im-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 10001;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
   padding: 1rem;
 }
 
-.hm-overlay.show {
+.im-overlay.show {
   opacity: 1;
   pointer-events: auto;
 }
 
-.hm-box {
+.im-box {
   background: var(--surface, #1e1e1e);
   color: var(--text-primary, #fff);
   border-radius: 1rem;
-  max-width: 420px;
+  max-width: 440px;
   width: 100%;
   padding: 1.75rem 1.5rem;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
 
-.hm-icon {
+.im-icon {
   width: 56px;
   height: 56px;
   border-radius: 50%;
@@ -45,52 +43,67 @@
   margin: 0 auto 1rem;
 }
 
-.hm-box h3 {
+.im-box h3 {
   font-size: 1.05rem;
-  margin-bottom: 0.6rem;
+  margin-bottom: 1.1rem;
 }
 
-.hm-box p {
-  font-size: 0.85rem;
-  opacity: 0.85;
-  line-height: 1.5;
-  margin-bottom: 1.25rem;
-}
-
-.hm-actions {
+.im-invite-list {
   display: flex;
-  gap: 0.6rem;
-  justify-content: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
 }
 
-.hm-btn {
-  padding: 0.6rem 1rem;
-  border-radius: 0.6rem;
-  font-size: 0.82rem;
+.im-invite-row {
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 150, 136, 0.08);
+  text-align: left;
+}
+
+.im-invite-row p {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+}
+
+.im-invite-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.im-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.55rem;
+  font-size: 0.8rem;
   font-weight: 600;
   border: none;
   cursor: pointer;
 }
 
-.hm-btn-secondary {
+.im-btn-decline {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: inherit;
 }
 
-.hm-btn-primary {
+.im-btn-accept {
   background: var(--accent);
   color: #fff;
 }
 
-.hm-btn:disabled {
+.im-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.hm-status {
-  margin-top: 1rem;
+.im-later-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #999);
   font-size: 0.8rem;
-  opacity: 0.85;
+  text-decoration: underline;
+  cursor: pointer;
 }

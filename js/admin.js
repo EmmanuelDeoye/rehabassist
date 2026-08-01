@@ -833,6 +833,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const spec = data.specialization || 'Not specified';
         const accountType = data.accountType === 'center' ? 'center' : 'individual';
         const centerData = data.centers || null; // now nested under users/{uid}/centers
+        const activeMemberships = Object.entries(data.memberships || {}).filter(([, m]) => m && m.status === 'active');
 
         return {
           uid: key,
@@ -848,7 +849,8 @@ document.addEventListener('DOMContentLoaded', function() {
           isBanned: isBanned,
           photoURL: data.photoURL || '',
           accountType: accountType,
-          memberOf: data.memberOf || null,
+          memberOf: activeMemberships.length ? activeMemberships[0][0] : null,
+          memberOfCount: activeMemberships.length,
           centerName: centerData ? (centerData.name || '') : '',
           memberCount: centerData && centerData.members ? Object.keys(centerData.members).length : 0,
           raw: data
@@ -938,7 +940,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const isAdmin = user.email === MASTER_ADMIN_EMAIL;
       const accountBadge = user.accountType === 'center'
         ? `<span class="badge-center" title="${escapeHtml(user.centerName || '')}">🏥 Center${user.memberCount ? ' · ' + user.memberCount + ' member' + (user.memberCount === 1 ? '' : 's') : ''}</span>`
-        : (user.memberOf ? `<span class="badge-member">👥 Center Member</span>` : `<span class="badge-individual">Individual</span>`);
+        : (user.memberOf ? `<span class="badge-member">👥 Center Member${user.memberOfCount > 1 ? ' ×' + user.memberOfCount : ''}</span>` : `<span class="badge-individual">Individual</span>`);
 
       html += `
         <tr class="${rowClass}" data-uid="${user.uid}">

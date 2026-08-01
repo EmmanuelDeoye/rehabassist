@@ -186,6 +186,12 @@ function initializeAuth() {
     if (window.RehablixCenter && typeof window.RehablixCenter.migrateLegacyCenterNode === 'function') {
       window.RehablixCenter.migrateLegacyCenterNode(userId).catch(err => console.error('migrateLegacyCenterNode error:', err));
     }
+
+    // One-time silent migration from the old single memberOf field to the
+    // new multi-center memberships map.
+    if (window.RehablixCenter && typeof window.RehablixCenter.migrateLegacyMembership === 'function') {
+      window.RehablixCenter.migrateLegacyMembership(userId).catch(err => console.error('migrateLegacyMembership error:', err));
+    }
     
     const now = Date.now();
     const visitData = {
@@ -622,7 +628,7 @@ function initializeAuth() {
       if (typeof window.openProfileModal === 'function') {
         window.openProfileModal();
       } else {
-        showToast('👤 Profile page coming soon!');
+        showToast('👤 loading profile');
       }
     });
   }
@@ -635,7 +641,7 @@ function initializeAuth() {
       if (typeof window.openSettingsModal === 'function') {
         window.openSettingsModal();
       } else {
-        showToast('⚙️ Settings page coming soon!');
+        showToast('⚙️ opening settings...');
       }
     });
   }

@@ -1,18 +1,25 @@
 // js/center.js
-// Shared "Center / Organization" logic used by settings.html, admin.html, and
-// any tool page (doc.html, presentation.html, rom.html, project.html, etc.)
-// that wants to (a) respect a center owner's per-member access toggles and
-// (b) log member activity so the center owner can track who did what.
+// Shared "Center / Organization" logic used by settings.html, admin.html,
+// index.html, and any tool page that wants to (a) respect a center owner's
+// per-member access toggles, (b) log member activity, and (c) let a user
+// belong to several centers (as a consenting member) while also possibly
+// owning their own center — switching between "workspaces" at will.
 //
 // Data model (Firebase Realtime Database):
-//   users/{uid}.accountType   = 'individual' | 'center'
-//   users/{uid}.centerId      = uid of the center this user OWNS (owners only)
-//   users/{uid}.memberOf      = uid of the center this user BELONGS to (members only)
-//   users/{centerUid}/centers                       = { name, ownerUid, ownerEmail, createdAt }
-//   users/{centerUid}/centers/members/{memberUid}   = { email, name, status: 'active'|'revoked', permissions: {tool: bool}, addedAt }
-//   users/{centerUid}/centers/pendingInvites/{key}  = { email, permissions, invitedAt }  (key = sanitized email, for users who don't have an account yet)
+//   users/{uid}.accountType         = 'individual' | 'center'   (whether THIS uid owns a center)
+//   users/{uid}.centerId            = uid of the center this user OWNS (owners only)
+//   users/{uid}.activeContext       = 'individual' | centerUid  (which workspace they're currently using)
+//   users/{uid}.memberships/{centerUid} = { centerName, status: 'invited'|'active'|'declined'|'revoked', invitedAt, respondedAt }
+//     — a user can have MANY of these (member of several centers), independent of owning one themselves.
+//
+//   users/{centerUid}/centers                       = { name, ownerUid, ownerEmail, createdAt, slug, slugUpdatedAt }
+//   users/{centerUid}/centers/members/{memberUid}   = { email, name, status: 'invited'|'active'|'declined'|'revoked', permissions: {tool: bool}, addedAt, respondedAt }
+//   users/{centerUid}/centers/pendingInvites/{key}  = { email, permissions, invitedAt }  (key = sanitized email, for people without a rehablix account yet)
 //   users/{centerUid}/centers/activity/{pushId}     = { uid, email, name, page, action, detail, timestamp }
-// (Nested under the owning user's own record rather than a separate top-level "centers" node.)
+//
+// A membership always starts as 'invited' — nobody is added to a center
+// without explicitly accepting (see respondToInvite / the invite modal in
+// js/invite-modal.js).
 
 (function () {
   const TOOL_KEYS = ['doc', 'presentation', 'rom', 'project', 'standardized', 'exam', 'study', 'assignment', 'ppt', 'audio'];
@@ -25,7 +32,9 @@
     return firebase.database();
   }
 
-  // Resolve the current user's center context. Cached per call (cheap - a couple of reads).
+  // Resolve the current user's FULL center picture: what they own, every
+  // center they're a member of (with status), and which "workspace" is
+  // currently active — plus permission details for that active workspace.
   async function getContext() {
     const user = firebase.auth().currentUser;
     if (!user) return { loggedIn: false };
@@ -33,29 +42,80 @@
     const userSnap = await db().ref('users/' + user.uid).once('value');
     const userData = userSnap.val() || {};
 
+    const isCenterOwner = userData.accountType === 'center';
+    const ownCenterId = isCenterOwner ? user.uid : null;
+    const memberships = userData.memberships || {};
+
+    const activeMemberships = Object.keys(memberships).filter(cid => memberships[cid].status === 'active');
+    const pendingInvites = Object.keys(memberships)
+      .filter(cid => memberships[cid].status === 'invited')
+      .map(cid => ({ centerUid: cid, ...memberships[cid] }));
+
+    const validContexts = ['individual'].concat(ownCenterId ? [ownCenterId] : []).concat(activeMemberships);
+    let activeContext = userData.activeContext || 'individual';
+    if (!validContexts.includes(activeContext)) activeContext = 'individual';
+
     const ctx = {
       loggedIn: true,
       uid: user.uid,
       email: user.email,
       name: userData.name || user.displayName || user.email,
       accountType: userData.accountType || 'individual',
-      isCenterOwner: userData.accountType === 'center',
-      centerId: userData.accountType === 'center' ? user.uid : (userData.memberOf || null),
-      isMember: !!userData.memberOf,
-      permissions: null
+      isCenterOwner,
+      ownCenterId,
+      memberships,
+      activeMemberships,
+      pendingInvites,
+      activeContext,
+      isActiveContextCenter: activeContext !== 'individual',
+      centerId: activeContext !== 'individual' ? activeContext : null,
+      permissions: null,
+      memberStatus: null
     };
 
-    if (ctx.isMember && ctx.centerId) {
-      const memberSnap = await db().ref(`users/${ctx.centerId}/centers/members/${user.uid}`).once('value');
-      const memberData = memberSnap.val() || {};
-      ctx.memberStatus = memberData.status || 'active';
-      ctx.permissions = memberData.permissions || {};
+    if (ctx.centerId) {
+      if (ctx.centerId === ownCenterId) {
+        ctx.memberStatus = 'active'; // owner always has full access to their own center
+        ctx.permissions = null;
+      } else {
+        const memberSnap = await db().ref(`users/${ctx.centerId}/centers/members/${user.uid}`).once('value');
+        const memberData = memberSnap.val() || {};
+        ctx.memberStatus = memberData.status || null;
+        ctx.permissions = memberData.permissions || {};
+      }
+      const centerSnap = await db().ref(`users/${ctx.centerId}/centers`).once('value');
+      ctx.activeCenterName = (centerSnap.val() || {}).name || '';
     }
 
     return ctx;
   }
 
+  // All the "workspaces" available to switch between, for the navbar switcher.
+  async function getAvailableContexts() {
+    const ctx = await getContext();
+    if (!ctx.loggedIn) return [];
+    const options = [{ id: 'individual', label: 'Personal Account', type: 'individual' }];
+    if (ctx.ownCenterId) {
+      const centerSnap = await db().ref(`users/${ctx.ownCenterId}/centers`).once('value');
+      options.push({ id: ctx.ownCenterId, label: (centerSnap.val() || {}).name || 'My Center', type: 'owner' });
+    }
+    for (const cid of ctx.activeMemberships) {
+      const centerSnap = await db().ref(`users/${cid}/centers`).once('value');
+      options.push({ id: cid, label: (centerSnap.val() || {}).name || 'Center', type: 'member' });
+    }
+    return options;
+  }
+
+  async function switchActiveContext(contextId) {
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error('Not logged in.');
+    const available = await getAvailableContexts();
+    if (!available.some(c => c.id === contextId)) throw new Error('You don\'t have access to that workspace.');
+    await db().ref('users/' + user.uid + '/activeContext').set(contextId);
+  }
+
   // Convert an existing individual account into a center, from settings.html.
+  // Does not touch any memberships the user already has elsewhere.
   async function convertToCenter(orgName) {
     const user = firebase.auth().currentUser;
     if (!user) throw new Error('Not logged in.');
@@ -76,13 +136,18 @@
     return user.uid;
   }
 
-  // Invite a member by email. If they already have a rehablix account, link immediately.
-  // Otherwise, store a pending invite that auto-links the next time that email logs in
-  // (see linkPendingInviteForUser, called from auth.js on login/registration).
+  // Invite a member by email. This only ever creates an 'invited' status —
+  // the person must explicitly accept (via respondToInvite) before they get
+  // any access or their data is scoped to the center. If they already have
+  // a rehablix account, the invite links immediately as 'invited'; otherwise
+  // it's stored and auto-linked (still as 'invited') the moment they sign up.
   async function inviteMember(centerUid, email, permissions) {
     if (!email) throw new Error('Email is required.');
     const cleanEmail = email.trim().toLowerCase();
     const perms = permissions || TOOL_KEYS.reduce((acc, k) => (acc[k] = true, acc), {});
+
+    const centerSnap = await db().ref(`users/${centerUid}/centers`).once('value');
+    const centerName = (centerSnap.val() || {}).name || 'a center';
 
     const usersSnap = await db().ref('users').orderByChild('email').equalTo(cleanEmail).once('value');
     const usersVal = usersSnap.val();
@@ -92,15 +157,23 @@
       const memberData = usersVal[memberUid];
 
       if (memberUid === centerUid) throw new Error("You can't invite yourself.");
+      if (memberData.memberships && memberData.memberships[centerUid] && memberData.memberships[centerUid].status === 'active') {
+        throw new Error('This person is already a member of your center.');
+      }
 
+      const invitedAt = new Date().toISOString();
       await db().ref(`users/${centerUid}/centers/members/${memberUid}`).set({
         email: cleanEmail,
         name: memberData.name || cleanEmail,
-        status: 'active',
+        status: 'invited',
         permissions: perms,
-        addedAt: new Date().toISOString()
+        addedAt: invitedAt
       });
-      await db().ref('users/' + memberUid).update({ memberOf: centerUid });
+      await db().ref(`users/${memberUid}/memberships/${centerUid}`).set({
+        centerName,
+        status: 'invited',
+        invitedAt
+      });
       return { linked: true, memberUid };
     }
 
@@ -114,10 +187,8 @@
   }
 
   // Called on login/registration (from auth.js) to auto-link a pending invite
-  // if this user's email matches one, across ALL centers. Since centers now
-  // live nested under each owner's users/{uid}/centers record rather than a
-  // dedicated top-level node, this scans the users tree and checks each
-  // user's nested .centers.pendingInvites.
+  // if this user's email matches one, across ALL centers — still landing as
+  // 'invited', never auto-activated, so consent is always required.
   async function linkPendingInviteForUser(uid, email, name) {
     if (!email) return;
     const key = sanitizeEmailKey(email);
@@ -128,17 +199,49 @@
       const center = users[centerUid].centers;
       const invite = center && center.pendingInvites && center.pendingInvites[key];
       if (invite) {
+        const invitedAt = new Date().toISOString();
         await db().ref(`users/${centerUid}/centers/members/${uid}`).set({
           email: email.toLowerCase(),
           name: name || email,
-          status: 'active',
+          status: 'invited',
           permissions: invite.permissions || {},
-          addedAt: new Date().toISOString()
+          addedAt: invitedAt
+        });
+        await db().ref(`users/${uid}/memberships/${centerUid}`).set({
+          centerName: center.name || 'a center',
+          status: 'invited',
+          invitedAt
         });
         await db().ref(`users/${centerUid}/centers/pendingInvites/${key}`).remove();
-        await db().ref('users/' + uid).update({ memberOf: centerUid });
       }
     }
+  }
+
+  // The invited user accepts or declines. Updates both sides of the
+  // relationship (the center's member record and the user's own
+  // memberships map) so each can be read independently and cheaply.
+  async function respondToInvite(centerUid, accept) {
+    const user = firebase.auth().currentUser;
+    if (!user) throw new Error('Not logged in.');
+
+    const status = accept ? 'active' : 'declined';
+    const respondedAt = new Date().toISOString();
+
+    await db().ref(`users/${centerUid}/centers/members/${user.uid}`).update({ status, respondedAt });
+    await db().ref(`users/${user.uid}/memberships/${centerUid}`).update({ status, respondedAt });
+
+    if (accept) {
+      // Make the newly-accepted center their active workspace right away.
+      await db().ref('users/' + user.uid + '/activeContext').set(centerUid);
+    }
+  }
+
+  // Pending invites for the current user — drives the popup modal + the
+  // "respond later" list on settings.html.
+  async function getPendingInvites() {
+    const ctx = await getContext();
+    if (!ctx.loggedIn) return [];
+    return ctx.pendingInvites;
   }
 
   // Toggle a specific tool's access on/off for a member, "at will", by the center owner.
@@ -149,48 +252,29 @@
   // Fully revoke / restore a member's access to the center.
   async function setMemberStatus(centerUid, memberUid, status) {
     await db().ref(`users/${centerUid}/centers/members/${memberUid}/status`).set(status);
+    await db().ref(`users/${memberUid}/memberships/${centerUid}/status`).set(status);
   }
 
   async function removeMember(centerUid, memberUid) {
     await db().ref(`users/${centerUid}/centers/members/${memberUid}`).remove();
-    await db().ref('users/' + memberUid + '/memberOf').remove();
+    await db().ref(`users/${memberUid}/memberships/${centerUid}`).remove();
+    // If that was their active workspace, drop them back to their personal account.
+    const activeSnap = await db().ref('users/' + memberUid + '/activeContext').once('value');
+    if (activeSnap.val() === centerUid) {
+      await db().ref('users/' + memberUid + '/activeContext').set('individual');
+    }
   }
 
-  // Check whether the current user is allowed to use a given tool page.
-  // Individuals and center owners always have access; members are gated by
-  // their center's per-tool permission + active status.
+  // Check whether the current user is allowed to use a given tool page,
+  // based on whichever workspace (activeContext) they're currently in.
   async function checkAccess(toolKey) {
     const ctx = await getContext();
     if (!ctx.loggedIn) return true; // let the page's own auth-gate logic handle logged-out state
-    if (!ctx.isMember) return true; // individuals & center owners
-    if (ctx.memberStatus === 'revoked') return false;
+    if (!ctx.isActiveContextCenter) return true; // personal workspace, or owns the active center
+    if (ctx.centerId === ctx.ownCenterId) return true; // owner, full access
+    if (ctx.memberStatus !== 'active') return false;
     if (ctx.permissions && ctx.permissions[toolKey] === false) return false;
     return true;
-  }
-
-  // Log an activity entry against the current user's center (if any), visible
-  // to the center owner in settings.html. No-op for individuals / non-members-in-a-center-context.
-  async function logActivity(page, action, detail) {
-    try {
-      const user = firebase.auth().currentUser;
-      if (!user) return;
-      const userSnap = await db().ref('users/' + user.uid).once('value');
-      const userData = userSnap.val() || {};
-      const centerUid = userData.accountType === 'center' ? user.uid : userData.memberOf;
-      if (!centerUid) return; // not part of any center — nothing to log
-
-      await db().ref(`users/${centerUid}/centers/activity`).push({
-        uid: user.uid,
-        email: user.email,
-        name: userData.name || user.email,
-        page: page,
-        action: action,
-        detail: detail || '',
-        timestamp: Date.now()
-      });
-    } catch (err) {
-      console.error('logActivity error:', err);
-    }
   }
 
   // One-time, silent migration of legacy top-level centers/{uid} data (from
@@ -213,23 +297,75 @@
     }
   }
 
+  // One-time, silent migration from the old single users/{uid}.memberOf
+  // string to the new memberships map. Anyone already linked under the old
+  // system is grandfathered in as 'active' (they already had access before
+  // this consent requirement existed), rather than being force-unlinked.
+  async function migrateLegacyMembership(uid) {
+    try {
+      const snap = await db().ref('users/' + uid + '/memberOf').once('value');
+      const legacyCenterUid = snap.val();
+      if (!legacyCenterUid) return;
+
+      const centerSnap = await db().ref(`users/${legacyCenterUid}/centers`).once('value');
+      const centerName = (centerSnap.val() || {}).name || 'a center';
+
+      await db().ref(`users/${uid}/memberships/${legacyCenterUid}`).set({
+        centerName,
+        status: 'active',
+        invitedAt: new Date().toISOString(),
+        respondedAt: new Date().toISOString(),
+        migratedFromLegacy: true
+      });
+      await db().ref(`users/${legacyCenterUid}/centers/members/${uid}/status`).set('active');
+
+      const activeSnap = await db().ref('users/' + uid + '/activeContext').once('value');
+      if (!activeSnap.exists()) {
+        await db().ref('users/' + uid + '/activeContext').set(legacyCenterUid);
+      }
+
+      await db().ref('users/' + uid + '/memberOf').remove();
+      console.log('[center.js] Migrated legacy memberOf for', uid);
+    } catch (err) {
+      console.warn('[center.js] Legacy membership migration skipped:', err);
+    }
+  }
+
   // Which uid's data should this tool page actually read/write?
-  // - Individuals and center OWNERS work on their own uid (which, for an
-  //   owner, IS the center's shared data root).
-  // - Center MEMBERS work on their center owner's uid instead of their own,
-  //   so everyone in the center sees and edits the SAME patients/records —
-  //   that's the whole point of a center account. Their own activity still
-  //   gets logged under their own name via logActivity().
-  // Returns null if the member's access to this specific tool has been
-  // revoked or turned off — callers should treat that as "no access" and
-  // show an appropriate message rather than silently falling back.
+  // - Personal workspace, or the workspace of a center you OWN: your own uid.
+  // - The workspace of a center you're an ACTIVE member of: the owner's uid,
+  //   so everyone on the team sees and edits the SAME patients/records.
+  // Returns null if access to this specific tool has been revoked/declined —
+  // callers should treat that as "no access" and show an appropriate message.
   async function getEffectiveScopeUid(toolKey) {
     const ctx = await getContext();
     if (!ctx.loggedIn) return null;
-    if (!ctx.isMember) return ctx.uid; // individual or center owner: own uid is the data root
-    if (ctx.memberStatus === 'revoked') return null;
+    if (!ctx.isActiveContextCenter) return ctx.uid;
+    if (ctx.centerId === ctx.ownCenterId) return ctx.uid;
+    if (ctx.memberStatus !== 'active') return null;
     if (toolKey && ctx.permissions && ctx.permissions[toolKey] === false) return null;
     return ctx.centerId;
+  }
+
+  // Log an activity entry against the CURRENTLY ACTIVE center workspace (if
+  // any), visible to that center's owner. No-op in the personal workspace.
+  async function logActivity(page, action, detail) {
+    try {
+      const ctx = await getContext();
+      if (!ctx.loggedIn || !ctx.isActiveContextCenter) return;
+
+      await db().ref(`users/${ctx.centerId}/centers/activity`).push({
+        uid: ctx.uid,
+        email: ctx.email,
+        name: ctx.name,
+        page: page,
+        action: action,
+        detail: detail || '',
+        timestamp: Date.now()
+      });
+    } catch (err) {
+      console.error('logActivity error:', err);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -323,11 +459,16 @@
   window.RehablixCenter = {
     TOOL_KEYS,
     getContext,
+    getAvailableContexts,
+    switchActiveContext,
     getEffectiveScopeUid,
     convertToCenter,
     inviteMember,
     linkPendingInviteForUser,
+    respondToInvite,
+    getPendingInvites,
     migrateLegacyCenterNode,
+    migrateLegacyMembership,
     setMemberPermission,
     setMemberStatus,
     removeMember,

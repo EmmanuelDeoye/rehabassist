@@ -1,0 +1,558 @@
+/* css/audio.css - Audio Transcription app */
+:root {
+  --audio-accent: var(--accent);
+  --audio-accent-soft: var(--accent-soft);
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --radius-lg: 1.5rem;
+  --radius-md: 1rem;
+  --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.02), 0 4px 8px rgba(0, 0, 0, 0.03);
+  --shadow-hover: 0 20px 30px -10px rgba(0, 150, 136, 0.15), 0 8px 18px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] {
+  --glass-bg: rgba(30, 42, 50, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.05);
+}
+
+.audio-main {
+  padding: 1.5rem 1rem 3rem;
+  min-height: calc(100vh - 140px);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ---------- Resume banner ---------- */
+.resume-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  margin-bottom: 1.5rem;
+}
+
+.resume-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  color: #b45309;
+}
+
+.resume-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ---------- Progress Steps ---------- */
+.audio-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+}
+
+.progress-step.active,
+.progress-step.completed {
+  opacity: 1;
+}
+
+.progress-step .step-number {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.progress-step.active .step-number {
+  border-color: var(--audio-accent);
+  background: var(--audio-accent-soft);
+  color: var(--audio-accent);
+}
+
+.progress-step .step-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* ---------- Stage containers ---------- */
+.stage-container {
+  display: none;
+  animation: audioFadeSlide 0.35s ease;
+}
+
+.stage-container.active {
+  display: block;
+}
+
+@keyframes audioFadeSlide {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  margin-bottom: 0.3rem;
+}
+
+.card-header p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+/* ---------- Form elements ---------- */
+.form-group {
+  margin-bottom: 1.1rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.form-group input[type="text"],
+.form-group select {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--audio-accent);
+  box-shadow: 0 0 0 3px var(--audio-accent-soft);
+}
+
+.settings-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Source mode tabs ---------- */
+.source-mode-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: var(--audio-accent-soft);
+  margin-bottom: 1.25rem;
+}
+
+.source-mode-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.source-mode-tab.active {
+  background: var(--audio-accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 150, 136, 0.35);
+}
+
+/* ---------- Buttons ---------- */
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.2rem;
+  border-radius: 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--audio-accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-large {
+  width: 100%;
+  padding: 0.95rem 1.2rem;
+  font-size: 0.95rem;
+}
+
+.btn-mini {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---------- Upload dropzone ---------- */
+.upload-dropzone {
+  border: 2px dashed var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 2.25rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 1rem;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.dragover {
+  border-color: var(--audio-accent);
+  background: var(--audio-accent-soft);
+}
+
+.upload-dropzone i {
+  font-size: 2rem;
+  color: var(--audio-accent);
+  margin-bottom: 0.6rem;
+  display: block;
+}
+
+.upload-dropzone p {
+  font-size: 0.9rem;
+  margin-bottom: 0.2rem;
+}
+
+.upload-dropzone small {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.upload-file-info {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.6rem;
+  background: var(--audio-accent-soft);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Recording screen ---------- */
+.recording-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.rec-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.rec-indicator.paused .rec-dot {
+  animation: none;
+  background: #eab308;
+}
+
+.rec-timer {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.waveform-canvas {
+  width: 100%;
+  height: 80px;
+  border-radius: 0.75rem;
+  background: var(--audio-accent-soft);
+  margin-bottom: 1.25rem;
+  display: block;
+}
+
+.recording-controls {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.recording-controls button {
+  flex: 1;
+}
+
+.live-transcript-feed h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.6rem;
+  color: var(--text-secondary);
+}
+
+.live-transcript-text {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  font-size: 0.88rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.transcript-placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.transcript-segment {
+  animation: audioFadeSlide 0.3s ease;
+}
+
+/* ---------- Processing ---------- */
+.processing-card {
+  text-align: center;
+  padding: 3rem 1.75rem;
+}
+
+.processing-spinner {
+  width: 46px;
+  height: 46px;
+  border: 4px solid var(--audio-accent-soft);
+  border-top-color: var(--audio-accent);
+  border-radius: 50%;
+  margin: 0 auto 1.25rem;
+  animation: audio-spin 0.8s linear infinite;
+}
+
+@keyframes audio-spin {
+  to { transform: rotate(360deg); }
+}
+
+.processing-card h3 {
+  font-size: 1.05rem;
+  margin-bottom: 0.4rem;
+}
+
+.processing-card p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.25rem;
+}
+
+.processing-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--audio-accent-soft);
+  overflow: hidden;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.processing-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--audio-accent);
+  transition: width 0.3s ease;
+}
+
+/* ---------- Result screen ---------- */
+.result-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.result-header-row h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.2rem;
+}
+
+.result-meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.transcript-view-toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.transcript-toggle-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.transcript-toggle-btn.active {
+  background: var(--audio-accent);
+  border-color: var(--audio-accent);
+  color: #fff;
+}
+
+.transcript-textarea {
+  width: 100%;
+  min-height: 340px;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-light);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  resize: vertical;
+  margin-bottom: 1.1rem;
+}
+
+.transcript-textarea:focus {
+  outline: none;
+  border-color: var(--audio-accent);
+  box-shadow: 0 0 0 3px var(--audio-accent-soft);
+}
+
+.result-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.result-actions button {
+  flex: 1;
+  min-width: 130px;
+}
+
+/* ---------- History entries (drawer content is shared class names) ---------- */
+.audio-history-item {
+  padding: 0.85rem 1rem;
+  border-radius: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  margin-bottom: 0.65rem;
+  cursor: pointer;
+}
+
+.audio-history-item:hover {
+  border-color: var(--audio-accent);
+}
+
+.audio-history-item .ahi-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin-bottom: 0.2rem;
+}
+
+.audio-history-item .ahi-meta {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 560px) {
+  .result-actions button { min-width: 45%; }
+  .recording-controls { flex-direction: column; }
+}

@@ -20,7 +20,7 @@
   </script>
 
   <!-- ============ PRIMARY SEO ============ -->
-  <title>rehablix | AI Clinical Tools for Healthcare professionals &amp; Rehab Students</title>
+  <title>rehablix | AI Clinical Tools for Physiotherapists, OTs &amp; Rehab Students</title>
   <meta name="description" content="rehablix is an AI clinical co-pilot for rehabilitation professionals and students. Generate assessment formats, analyze ROM and gait from video, transcribe clinical notes, and build academic projects — all in one platform.">
   <meta name="keywords" content="rehabilitation AI tools, physiotherapy software, ROM analyzer, gait analysis AI, clinical documentation assistant, occupational therapy tools, physiotherapy students app, standardized assessment generator, MMSE, Berg Balance Scale">
   <meta name="author" content="rehablix">
@@ -81,7 +81,7 @@
     ],
     "audience": {
       "@type": "Audience",
-      "audienceType": "Physiotherapists, Occupational Therapists, Psychologists, Social workers, Psychiatrists, Paediatrics, Rehabilitation Students, Clinical Researchers"
+      "audienceType": "Physiotherapists, Occupational Therapists, Rehabilitation Students, Clinical Researchers"
     }
   }
   </script>
@@ -111,6 +111,7 @@
       navigator.serviceWorker.register('/service-worker.js');
     }
   </script>
+  <link rel="stylesheet" href="css/invite-modal.css">
 </head>
 <body>
   <nav class="navbar">
@@ -122,6 +123,25 @@
         </div>
       </div>
       <div class="nav-right">
+        <div class="workspace-switcher" id="workspaceSwitcher" style="display:none;">
+          <button class="workspace-switcher-btn" id="workspaceSwitcherBtn" type="button" aria-label="Switch workspace">
+            <svg class="workspace-switcher-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="3" width="16" height="18" rx="1"></rect>
+              <line x1="9" y1="7" x2="9" y2="7.01"></line>
+              <line x1="15" y1="7" x2="15" y2="7.01"></line>
+              <line x1="9" y1="11" x2="9" y2="11.01"></line>
+              <line x1="15" y1="11" x2="15" y2="11.01"></line>
+              <line x1="9" y1="15" x2="9" y2="15.01"></line>
+              <line x1="15" y1="15" x2="15" y2="15.01"></line>
+              <path d="M10 21v-3a2 2 0 0 1 4 0v3"></path>
+            </svg>
+            <span class="workspace-switcher-text">
+              <span id="workspaceSwitcherLabel">Personal Account</span>
+              <span class="workspace-switcher-caret" aria-hidden="true">▾</span>
+            </span>
+          </button>
+          <div class="workspace-switcher-menu" id="workspaceSwitcherMenu"></div>
+        </div>
         <button class="icon-btn" id="searchToggle" aria-label="search">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -143,6 +163,7 @@
   <main>
     <header class="hero">
       <div class="hero-content">
+        <div id="centerContextBanner" class="center-context-banner" style="display:none;"></div>
         <h1 id="heroTitle">Welcome to <span class="hero-accent">rehablix</span></h1>
         <p class="hero-sub">Your clinical co-pilot, powered by AI</p>
       </div>
@@ -158,7 +179,7 @@
 
     <!-- Card grid - Static HTML cards -->
     <section class="tool-grid-section" aria-labelledby="toolsHeading">
-
+      
       <!-- Compact Ask AI banner card -->
       <a href="ask.html" class="ask-ai-mini-card">
         <span class="ask-ai-mini-icon" aria-hidden="true">💬</span>
@@ -196,12 +217,12 @@
         <!-- Documentation Assistant Card -->
         <a href="doc.html" class="tool-card-link" data-tool="documentation">
           <article class="tool-card">
-            <div class="tool-icon" aria-hidden="true">🎙️</div>
-            <h3 class="tool-title">Documentation Assistant</h3>
-            <p class="tool-description">Dictate, upload files, or upload record sessions – AI transcribes and organizes your clinical notes effortlessly.</p>
+            <div class="tool-icon" aria-hidden="true">🗂️</div>
+            <h3 class="tool-title">Smart EMR</h3>
+<p class="tool-description">An AI-powered workspace for documentation, patient management, treatment planning, progress tracking, and professional reports.</p>
             <div class="tool-meta">
-              <span>⚡ Speech‑to‑text · Files</span>
-            </div>
+  <span>⚡ AI EMR · Patients · Reports</span>
+</div>
           </article>
         </a>
 
@@ -223,8 +244,8 @@
             <div class="tool-icon" aria-hidden="true">🦵</div>
             <h3 class="tool-title">Motion & Gait Analyzer</h3>
             <p class="tool-description">
-              Measure joint range of motion or analyze a patient's gait with a guided, voice-prompted video scan — AI tracks positioning automatically and gives angle measurements, movement limitations, and clinical insights instantly.
-            </p>
+  Record a guided movement assessment and let AI measure joint angles, analyze gait, detect movement limitations, and generate clinical insights.
+</p>
             <div class="tool-meta">
               <span>⚡ AI · Voice-guided scan</span>
             </div>
@@ -233,15 +254,15 @@
 
         <!-- Presentation Maker Card -->
         <a href="presentation.html" class="tool-card-link" data-tool="presentation">
-          <article class="tool-card">
-            <div class="tool-icon" aria-hidden="true">📊</div>
-            <h3 class="tool-title">Presentation Maker</h3>
-            <p class="tool-description">Turn your notes or research into professional presentations with AI‑generated slides and visuals.</p>
-            <div class="tool-meta">
-              <span>⚡ AI slides · Export</span>
-            </div>
-          </article>
-        </a>
+  <article class="tool-card">
+    <div class="tool-icon" aria-hidden="true">📑</div>
+    <h3 class="tool-title">Report & Presentation Studio</h3>
+    <p class="tool-description">Turn your notes, research, or patient records into professional presentations, reports, and polished documents in minutes.</p>
+    <div class="tool-meta">
+      <span>⚡ Slides · Reports · Export</span>
+    </div>
+  </article>
+</a>
       </div>
 
 
@@ -572,7 +593,7 @@
   </main>
 
   <footer class="site-footer">
-    <p>© rehablix — Clinical co‑pilot for rehab professionals and students</p>
+    <p>© rehablix — Clinical co‑pilot for rehab professionals</p>
   </footer>
 
   <!-- Payment Gateway SDKs -->
@@ -584,7 +605,9 @@
   <script src="js/plan.js" defer></script>
   <script src="js/modal.js" defer></script>
   <script src="js/center.js" defer></script>
+  <script src="js/invite-modal.js" defer></script>
   <script src="js/auth.js" defer></script>
   <script src="js/main.js" defer></script>
+  <script src="js/index-center.js" defer></script>
 </body>
 </html>
