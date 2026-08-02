@@ -96,14 +96,36 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (ctx.isMember && ctx.centerId === center.centerUid) {
-        if (ctx.memberStatus === 'revoked') { renderRevoked(center.name); return; }
-        renderWelcome(center.name, 'your tools');
-        setTimeout(() => { window.location.href = 'index.html?welcome=' + encodeURIComponent(center.name); }, 900);
+      // `ctx.centerId` only reflects whichever workspace is already the
+      // user's *active* context — which, for someone landing on this link
+      // for the first time (the whole point of this page), usually isn't
+      // set to this center yet. So look up their membership for THIS
+      // specific center directly, rather than relying on activeContext.
+      const membership = (ctx.memberships || {})[center.centerUid] || null;
+
+      if (!membership) { renderNoAccess(center.name); return; }
+      if (membership.status === 'revoked') { renderRevoked(center.name); return; }
+      if (membership.status === 'declined') { renderNoAccess(center.name); return; }
+
+      try {
+        if (membership.status === 'invited') {
+          // First time following this link: accept the invite, which also
+          // switches their active workspace to this center.
+          await window.RehablixCenter.respondToInvite(center.centerUid, true);
+        } else if (ctx.activeContext !== center.centerUid) {
+          // Already an active member, just not currently "in" this
+          // workspace — switch them into it so the tools/pages read the
+          // right data.
+          await window.RehablixCenter.switchActiveContext(center.centerUid);
+        }
+      } catch (err) {
+        console.error('Could not activate center membership:', err);
+        renderNoAccess(center.name);
         return;
       }
 
-      renderNoAccess(center.name);
+      renderWelcome(center.name, 'your tools');
+      setTimeout(() => { window.location.href = 'index.html?welcome=' + encodeURIComponent(center.name); }, 900);
     });
   }
 

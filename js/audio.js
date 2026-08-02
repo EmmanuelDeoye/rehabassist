@@ -1,7 +1,7 @@
-// js/audio.js — Audio Transcription: live recording or file upload, chunked
-// Whisper transcription, a careful non-hallucinating AI cleanup pass, and
-// local-first persistence so a reload/crash/background-tab never loses
-// a recording in progress.
+// js/audio.js — Audio Transcription: live recording (with Web Speech API
+// live captions) or file upload (Whisper transcription), a careful
+// non-hallucinating AI cleanup pass, and local-first persistence so a
+// reload/crash/background-tab never loses a recording in progress.
 
 document.addEventListener('DOMContentLoaded', () => {
   const database = firebase.database();
@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const DB_VERSION = 1;
   const STORE_SESSIONS = 'sessions';
   const STORE_CHUNKS = 'chunks';
-  const CHUNK_INTERVAL_MS = 60000; // record in ~1 minute segments
+  const CHUNK_INTERVAL_MS = 20000; // periodic local backup chunks, for crash-recovery + audio download only
   const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // Whisper's practical file-size ceiling
   const CLEANUP_CHUNK_CHARS = 6000; // split very long transcripts before the AI cleanup pass
 
@@ -91,16 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
   let timerInterval = null;
   let pauseStartedAt = null;
   let wakeLockSentinel = null;
-  let transcriptionQueue = [];
-  let queueRunning = false;
-  let pendingQueueCount = 0;
-  let rawSegments = []; // ordered array of transcribed text per chunk index
+  let rawSegments = []; // ordered array of finalized speech-recognition segments (or one Whisper fallback segment)
   let cleanedTranscript = '';
   let audioContext = null, analyser = null, waveformRAF = null;
   let uploadedFile = null;
   let firebaseAudioId = null; // once saved, the history record's key
   let currentView = 'cleaned';
   let recordedMimeType = 'audio/webm';
+  let interimEl = null; // trailing <span> showing not-yet-final speech recognition text
 
   // =========================================================================
   // TOAST (self-contained, matches the rest of the app's look)
@@ -346,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chunkIndex = 0;
     rawSegments = [];
     isPaused = false;
+    interimEl = null;
 
     recordedMimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
       : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
@@ -366,10 +365,21 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     await idbPutSession(sessionMeta);
 
+    if (!SpeechRecognitionAPI) {
+      showToast('Live captions aren\'t supported in this browser — your words will be transcribed once you tap Stop.', 'info', 6000);
+    }
+
     beginRecorder();
   }
 
   function beginRecorder() {
+    // A single continuous recorder, purely for local crash-recovery backup
+    // and the optional audio download — NOT for transcription. (Live text
+    // comes from the Web Speech API below; if that's unavailable, the whole
+    // assembled recording is sent to Whisper once, after Stop, since a
+    // complete file is always safely decodable — unlike individual
+    // timesliced fragments, which only the first of would have a valid
+    // container header.)
     mediaRecorder = recordedMimeType
       ? new MediaRecorder(mediaStream, { mimeType: recordedMimeType })
       : new MediaRecorder(mediaStream);
@@ -378,7 +388,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!e.data || e.data.size === 0) return;
       const idx = chunkIndex++;
       await idbPutChunk(localSessionId, idx, e.data);
-      enqueueTranscription(idx, e.data);
     };
 
     mediaRecorder.onstop = () => {
@@ -390,11 +399,13 @@ document.addEventListener('DOMContentLoaded', () => {
     requestWakeLock();
     setupWaveform();
     startTimer();
+    startLiveTranscription();
 
     recIndicator.classList.remove('paused');
     recStatusText.textContent = 'Recording';
-    pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
-    liveTranscriptText.innerHTML = '<span class="transcript-placeholder">Your words will appear here as each segment finishes transcribing…</span>';
+    pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i>';
+    pauseResumeBtn.setAttribute('aria-label', 'Pause recording');
+    liveTranscriptText.innerHTML = '<span class="transcript-placeholder">Your words will appear here as you speak…</span>';
 
     setStage(2);
     showToast('Recording started — you can switch tabs, it keeps going.', 'info', 3500);
@@ -403,28 +414,32 @@ document.addEventListener('DOMContentLoaded', () => {
   pauseResumeBtn.addEventListener('click', async () => {
     if (!mediaRecorder) return;
     if (isPaused) {
-      mediaRecorder.resume();
       isPaused = false;
       recIndicator.classList.remove('paused');
       recStatusText.textContent = 'Recording';
-      pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i> Pause';
+      pauseResumeBtn.innerHTML = '<i class="fas fa-pause"></i>';
+      pauseResumeBtn.setAttribute('aria-label', 'Pause recording');
       if (pauseStartedAt) {
         sessionMeta.pausedAccumMs = (sessionMeta.pausedAccumMs || 0) + (Date.now() - pauseStartedAt);
         pauseStartedAt = null;
       }
       startTimer();
       requestWakeLock();
+      if (mediaRecorder.state === 'paused') mediaRecorder.resume();
+      startLiveTranscription();
     } else {
-      mediaRecorder.pause();
       isPaused = true;
       pauseStartedAt = Date.now();
       recIndicator.classList.add('paused');
       recStatusText.textContent = 'Paused';
-      pauseResumeBtn.innerHTML = '<i class="fas fa-play"></i> Resume';
+      pauseResumeBtn.innerHTML = '<i class="fas fa-play"></i>';
+      pauseResumeBtn.setAttribute('aria-label', 'Resume recording');
       stopTimer();
       sessionMeta.status = 'paused';
       idbPutSession(sessionMeta);
       releaseWakeLock();
+      if (mediaRecorder.state === 'recording') mediaRecorder.pause();
+      stopLiveTranscription();
     }
   });
 
@@ -432,17 +447,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!mediaRecorder) return;
     stopTimer();
     stopWaveform();
+    stopLiveTranscription();
     sessionMeta.status = 'transcribing';
     await idbPutSession(sessionMeta);
 
-    mediaRecorder.stop();
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
 
-    showProcessing('Finishing up transcription…', 'Wrapping up the last few segments.', 40);
+    showProcessing('Finishing up transcription…', 'Wrapping up.', 40);
     setStage(3);
 
-    // Give the final ondataavailable a moment to fire and enqueue, then wait for the queue.
     setTimeout(async () => {
-      await waitForTranscriptionQueue();
+      let hasText = rawSegments.some(s => s && s.trim());
+
+      if (!hasText) {
+        // Live captions weren't available (or picked nothing up) — fall
+        // back to transcribing the whole recording in one Whisper call,
+        // the same reliable approach the file-upload flow already uses.
+        try {
+          updateProcessingProgress(55, 'Transcribing the recording…');
+          const chunks = await idbGetChunksForSession(localSessionId);
+          if (chunks.length) {
+            const fullBlob = new Blob(chunks.map(c => c.blob), { type: sessionMeta.mimeType || 'audio/webm' });
+            const text = await transcribeBlob(fullBlob);
+            if (text) { rawSegments = [text]; appendLiveTranscript(text); }
+          }
+        } catch (err) {
+          console.error('Fallback transcription failed:', err);
+        }
+      }
+
       sessionMeta.rawSegments = rawSegments;
       await idbPutSession(sessionMeta);
       await finalizeSession();
@@ -546,43 +579,81 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // =========================================================================
-  // TRANSCRIPTION QUEUE — chunks are transcribed one at a time, in the
-  // background, as they're recorded, so the transcript grows "live" and a
-  // stop doesn't leave a mountain of untranscribed audio behind.
+  // LIVE TRANSCRIPTION (Web Speech API) — same mic-to-text mechanism used
+  // by the mic button on ask.html. Runs alongside the recording so text
+  // appears as the person talks, rather than waiting on file uploads.
   // =========================================================================
-  function enqueueTranscription(index, blob) {
-    transcriptionQueue.push({ index, blob });
-    pendingQueueCount++;
-    if (!queueRunning) runQueue();
-  }
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let recognitionShouldRun = false; // true whenever we're recording and not paused
 
-  async function runQueue() {
-    queueRunning = true;
-    while (transcriptionQueue.length > 0) {
-      const { index, blob } = transcriptionQueue.shift();
-      try {
-        const text = await transcribeBlob(blob);
-        rawSegments[index] = text || '';
-        appendLiveTranscript(text);
-        sessionMeta.rawSegments = rawSegments;
-        idbPutSession(sessionMeta); // fire-and-forget autosave of progress
-      } catch (err) {
-        console.error('Chunk transcription failed:', err);
-        rawSegments[index] = rawSegments[index] || '';
+  if (SpeechRecognitionAPI) {
+    recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          const clean = transcript.trim();
+          if (clean) {
+            rawSegments.push(clean);
+            sessionMeta.rawSegments = rawSegments;
+            idbPutSession(sessionMeta); // fire-and-forget autosave of progress
+            appendLiveTranscript(clean);
+          }
+        } else {
+          interim += transcript;
+        }
       }
-      pendingQueueCount = Math.max(0, pendingQueueCount - 1);
-    }
-    queueRunning = false;
+      setInterimTranscript(interim);
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event.error);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        recognitionShouldRun = false;
+        showToast('Microphone permission is needed for live captions.', 'error', 5000);
+      }
+      // 'no-speech' fires constantly during natural pauses — not an error worth surfacing.
+    };
+
+    recognition.onend = () => {
+      // Chrome/Safari can end recognition on their own after a stretch of
+      // silence, even mid-session — restart it automatically as long as
+      // we're still meant to be listening.
+      if (recognitionShouldRun) {
+        try { recognition.start(); } catch (e) { /* already running */ }
+      }
+    };
   }
 
-  function waitForTranscriptionQueue() {
-    return new Promise((resolve) => {
-      const check = () => {
-        if (!queueRunning && transcriptionQueue.length === 0) resolve();
-        else setTimeout(check, 250);
-      };
-      check();
-    });
+  function startLiveTranscription() {
+    if (!recognition) return;
+    recognitionShouldRun = true;
+    try { recognition.start(); } catch (e) { /* already started */ }
+  }
+
+  function stopLiveTranscription() {
+    recognitionShouldRun = false;
+    if (recognition) { try { recognition.stop(); } catch (e) { /* ignore */ } }
+    setInterimTranscript('');
+  }
+
+  function setInterimTranscript(text) {
+    const placeholder = liveTranscriptText.querySelector('.transcript-placeholder');
+    if (text && placeholder) placeholder.remove();
+    if (!interimEl || !interimEl.isConnected) {
+      interimEl = document.createElement('span');
+      interimEl.className = 'transcript-interim';
+      liveTranscriptText.appendChild(interimEl);
+    }
+    const needsSpace = liveTranscriptText.textContent && !liveTranscriptText.textContent.endsWith(' ') && text;
+    interimEl.textContent = text ? (needsSpace ? ' ' : '') + text : '';
+    liveTranscriptText.scrollTop = liveTranscriptText.scrollHeight;
   }
 
   function appendLiveTranscript(text) {
@@ -591,8 +662,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (placeholder) placeholder.remove();
     const span = document.createElement('span');
     span.className = 'transcript-segment';
-    span.textContent = (liveTranscriptText.textContent ? ' ' : '') + text;
-    liveTranscriptText.appendChild(span);
+    const needsSpace = liveTranscriptText.textContent && !liveTranscriptText.textContent.endsWith(' ');
+    span.textContent = (needsSpace ? ' ' : '') + text;
+    if (interimEl && interimEl.isConnected) {
+      liveTranscriptText.insertBefore(span, interimEl);
+    } else {
+      liveTranscriptText.appendChild(span);
+    }
     liveTranscriptText.scrollTop = liveTranscriptText.scrollHeight;
   }
 
@@ -862,7 +938,7 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
     uploadedFile = null;
     firebaseAudioId = null;
     chunkIndex = 0;
-    transcriptionQueue = [];
+    stopLiveTranscription();
     uploadFileInfo.style.display = 'none';
     transcribeUploadBtn.disabled = true;
     audioFileInput.value = '';
@@ -921,6 +997,21 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
     historyDrawer.classList.add('active');
   });
   closeDrawerBtn.addEventListener('click', () => historyDrawer.classList.remove('active'));
+
+  document.addEventListener('click', (e) => {
+    if (historyDrawer.classList.contains('active') &&
+        !historyDrawer.contains(e.target) &&
+        e.target !== toggleHistoryBtn &&
+        !toggleHistoryBtn.contains(e.target)) {
+      historyDrawer.classList.remove('active');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && historyDrawer.classList.contains('active')) {
+      historyDrawer.classList.remove('active');
+    }
+  });
 
   async function loadHistory() {
     if (!scopeUid) return;
