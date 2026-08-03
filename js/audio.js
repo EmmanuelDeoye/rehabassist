@@ -15,7 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const STORE_CHUNKS = 'chunks';
   const CHUNK_INTERVAL_MS = 20000; // periodic local backup chunks, for crash-recovery + audio download only
   const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // Whisper's practical file-size ceiling
-  const CLEANUP_CHUNK_CHARS = 6000; // split very long transcripts before the AI cleanup pass
+  const CLEANUP_CHUNK_CHARS = 6000; // split very long transcripts before the AI narrative pass
+
+  const PROFESSIONAL_LABELS = {
+    occupational_therapist: 'Occupational Therapist',
+    physiotherapist: 'Physiotherapist',
+    speech_language_therapist: 'Speech-Language Therapist',
+    psychologist: 'Psychologist',
+    psychiatrist: 'Psychiatrist',
+    rehab_nurse: 'Rehabilitation Nurse',
+    general_clinician: 'Clinician'
+  };
 
   // =========================================================================
   // DOM REFS
@@ -35,6 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const sessionTitleInput = $('sessionTitle');
   const sessionTypeSelect = $('sessionType');
+  const professionalSelect = $('professionalType');
   const sourceModeTabs = $('sourceModeTabs');
   const liveSetupPanel = $('liveSetupPanel');
   const uploadSetupPanel = $('uploadSetupPanel');
@@ -99,6 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentView = 'cleaned';
   let recordedMimeType = 'audio/webm';
   let interimEl = null; // trailing <span> showing not-yet-final speech recognition text
+  let hasReceivedAnyResult = false; // did recognition produce anything this session?
+  let noResultWatchdog = null;
 
   // =========================================================================
   // TOAST (self-contained, matches the rest of the app's look)
@@ -280,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
       id: localSessionId,
       title: sessionTitleInput.value.trim() || defaultTitle(),
       sessionType: sessionTypeSelect.value,
+      professional: professionalSelect.value,
       sourceType: 'upload',
       status: 'transcribing',
       startedAt: new Date().toISOString(),
@@ -324,6 +338,26 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    localSessionId = newSessionId();
+    chunkIndex = 0;
+    rawSegments = [];
+    isPaused = false;
+    interimEl = null;
+    hasReceivedAnyResult = false;
+
+    // On phones, the OS/browser's own speech-recognition engine and our
+    // getUserMedia backup recorder both want the microphone, and — unlike
+    // desktop Chrome, which happily shares it between the two — mobile
+    // devices often only deliver real audio to whichever claims it first.
+    // Starting recognition here, before opening our own stream below,
+    // gives it first claim.
+    if (SpeechRecognitionAPI) {
+      startLiveTranscription();
+      await new Promise(resolve => setTimeout(resolve, 250));
+    } else {
+      showToast('Live captions aren\'t supported in this browser — your words will be transcribed once you tap Stop.', 'info', 6000);
+    }
+
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
@@ -337,14 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
         SecurityError: 'Microphone access was blocked for security reasons on this page.'
       };
       showToast(messages[err.name] || `Couldn't access the microphone (${err.name || 'unknown error'}). Please check your browser's site permissions.`, 'error', 7000);
+      stopLiveTranscription();
       return;
     }
-
-    localSessionId = newSessionId();
-    chunkIndex = 0;
-    rawSegments = [];
-    isPaused = false;
-    interimEl = null;
 
     recordedMimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
       : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
@@ -355,6 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
       id: localSessionId,
       title: sessionTitleInput.value.trim() || defaultTitle(),
       sessionType: sessionTypeSelect.value,
+      professional: professionalSelect.value,
       sourceType: 'live',
       status: 'recording',
       startedAt: new Date().toISOString(),
@@ -364,10 +394,6 @@ document.addEventListener('DOMContentLoaded', () => {
       mimeType: recordedMimeType || 'audio/webm'
     };
     await idbPutSession(sessionMeta);
-
-    if (!SpeechRecognitionAPI) {
-      showToast('Live captions aren\'t supported in this browser — your words will be transcribed once you tap Stop.', 'info', 6000);
-    }
 
     beginRecorder();
   }
@@ -594,6 +620,8 @@ document.addEventListener('DOMContentLoaded', () => {
     recognition.lang = 'en-US';
 
     recognition.onresult = (event) => {
+      hasReceivedAnyResult = true;
+      clearTimeout(noResultWatchdog);
       let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
@@ -635,10 +663,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!recognition) return;
     recognitionShouldRun = true;
     try { recognition.start(); } catch (e) { /* already started */ }
+
+    // On some phones, the browser's speech engine and our own microphone
+    // stream both want the mic, and recognition can end up listening to
+    // silence without ever erroring — it just never produces a result.
+    // If nothing comes through for a while, let the person know the full
+    // recording will still be transcribed once they stop, rather than
+    // leaving them staring at an apparently-broken box.
+    clearTimeout(noResultWatchdog);
+    noResultWatchdog = setTimeout(() => {
+      if (recognitionShouldRun && !hasReceivedAnyResult) {
+        showToast('Live captions aren\'t picking up audio on this device — no problem, the full recording will still be transcribed once you tap Stop.', 'info', 7000);
+      }
+    }, 15000);
   }
 
   function stopLiveTranscription() {
     recognitionShouldRun = false;
+    clearTimeout(noResultWatchdog);
     if (recognition) { try { recognition.stop(); } catch (e) { /* ignore */ } }
     setInterimTranscript('');
   }
@@ -712,25 +754,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // =========================================================================
-  // AI CLEANUP PASS — punctuation/paragraphs/filler removal ONLY. No
-  // rewriting, no summarizing, no invented content. Long transcripts are
-  // split into pieces so nothing gets silently truncated by the model.
+  // AI NARRATIVE PASS — turns the raw transcript into a professional
+  // session narrative, written from the perspective of the chosen
+  // professional's documentation style. Unlike a literal formatter, this
+  // may reorganize and paraphrase into flowing prose — but it must never
+  // invent facts, observations, or outcomes that weren't actually said.
+  // Long transcripts are split into pieces so nothing gets silently
+  // truncated by the model.
   // =========================================================================
-  const CLEANUP_SYSTEM_PROMPT = `You are a transcript formatter, not a writer. You will receive a raw speech-to-text transcript from a clinical, therapy, or classroom audio recording. It may contain filler words, false starts, stutters, and missing punctuation.
+  function buildNarrativeSystemPrompt(professionalLabel) {
+    return `You are helping a ${professionalLabel} turn a raw speech-to-text transcript of a real session into a professional session narrative — the kind of note this ${professionalLabel} would write to document what took place, for the clinical record.
 
-Your ONLY job is to:
-1. Add appropriate punctuation and paragraph breaks.
-2. Remove obvious filler words (um, uh, you know, like) and exact word repetitions caused by stuttering or the speech engine.
-3. Fix clear transcription artifacts (e.g. mis-joined or duplicated words from chunk boundaries).
+Your job:
+1. Write a clear, well-organized narrative, in third person, describing what happened throughout the session — what was discussed, done, observed, or reported, in the order it makes sense as a summary (you do not need to follow the transcript's exact sentence order).
+2. Use professional documentation language and terminology appropriate to a ${professionalLabel}, while staying faithful to what was actually said.
+3. You may paraphrase, combine related points, and smooth out filler words, false starts, and speech-to-text artifacts — this is expected and different from a verbatim transcript.
 
 You must NOT:
-- Rephrase sentences or change word choice.
-- Summarize, shorten, or omit content.
-- Add information, explanations, or headings that were not spoken.
-- Correct grammar beyond what's listed above — if a sentence is grammatically imperfect but its meaning is clear, leave it as spoken.
-- Alter clinical, technical, or proper-noun terminology in any way.
+- Invent observations, assessments, measurements, scores, outcomes, diagnoses, or clinical judgments that are not present in the transcript.
+- Add details, names, numbers, or events that were not mentioned.
+- Fill in gaps with assumptions when the transcript is ambiguous, sparse, or unclear — in that case, just describe plainly what is known and leave it at that.
+- Include a title, heading, signature block, or placeholder fields (e.g. "Patient Name: ___").
+- Include meta-commentary, disclaimers, or notes about the transcript itself.
 
-Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown formatting.`;
+Output ONLY the narrative text, as flowing paragraphs.`;
+  }
 
   function splitForCleanup(text) {
     if (text.length <= CLEANUP_CHUNK_CHARS) return [text];
@@ -746,11 +794,13 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
     return pieces;
   }
 
-  async function cleanupTranscript(rawText, onProgress) {
+  async function cleanupTranscript(rawText, professionalKey, onProgress) {
     if (!rawText || !rawText.trim()) return '';
     if (!aiConfig.token) await loadAiConfig();
     if (!aiConfig.token || !aiConfig.endpoint) return rawText; // graceful fallback: show raw text rather than fail entirely
 
+    const professionalLabel = PROFESSIONAL_LABELS[professionalKey] || 'clinician';
+    const systemPrompt = buildNarrativeSystemPrompt(professionalLabel);
     const pieces = splitForCleanup(rawText);
     const cleanedPieces = [];
 
@@ -764,18 +814,18 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
           body: JSON.stringify({
             model: aiConfig.model,
             messages: [
-              { role: 'system', content: CLEANUP_SYSTEM_PROMPT },
+              { role: 'system', content: systemPrompt },
               { role: 'user', content: pieces[i] }
             ],
             max_tokens: 4000,
-            temperature: 0.1
+            temperature: 0.3
           })
         });
-        if (!response.ok) throw new Error('Cleanup request failed');
+        if (!response.ok) throw new Error('Narrative request failed');
         const data = await response.json();
         cleanedPieces.push(data.choices?.[0]?.message?.content?.trim() || pieces[i]);
       } catch (err) {
-        console.error('Cleanup pass failed for a section, keeping raw text for it:', err);
+        console.error('Narrative pass failed for a section, keeping raw text for it:', err);
         cleanedPieces.push(pieces[i]); // never lose content — fall back to raw for that piece
       }
     }
@@ -788,11 +838,13 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
   // =========================================================================
   async function finalizeSession() {
     const rawText = rawSegments.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    const professionalKey = sessionMeta.professional || professionalSelect.value;
+    const professionalLabel = PROFESSIONAL_LABELS[professionalKey] || 'Clinician';
 
-    showProcessing('Cleaning up the transcript…', 'Formatting punctuation and paragraphs — not changing your words.', 70);
-    cleanedTranscript = await cleanupTranscript(rawText, (i, total) => {
+    showProcessing('Writing the session narrative…', `Summarizing what happened, from a ${professionalLabel}'s documentation perspective.`, 70);
+    cleanedTranscript = await cleanupTranscript(rawText, professionalKey, (i, total) => {
       const pct = 70 + Math.round(((i + 1) / total) * 25);
-      updateProcessingProgress(pct, `Cleaning section ${i + 1} of ${total}…`);
+      updateProcessingProgress(pct, `Writing section ${i + 1} of ${total}…`);
     });
 
     sessionMeta.rawTranscript = rawText;
@@ -805,6 +857,7 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
       const payload = {
         title: sessionMeta.title,
         sessionType: sessionMeta.sessionType,
+        professional: professionalKey,
         sourceType: sessionMeta.sourceType,
         createdAt: sessionMeta.startedAt,
         updatedAt: new Date().toISOString(),
@@ -842,7 +895,11 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
   function showResult() {
     resultTitle.textContent = sessionMeta.title;
     const dateStr = new Date(sessionMeta.startedAt).toLocaleString();
-    resultMeta.textContent = `${capitalize(sessionMeta.sessionType)} · ${formatTime(sessionMeta.elapsedSeconds || 0)} · ${dateStr}`;
+    const professionalLabel = PROFESSIONAL_LABELS[sessionMeta.professional];
+    const metaParts = [capitalize(sessionMeta.sessionType)];
+    if (professionalLabel) metaParts.push(professionalLabel);
+    metaParts.push(formatTime(sessionMeta.elapsedSeconds || 0), dateStr);
+    resultMeta.textContent = metaParts.join(' · ');
     currentView = 'cleaned';
     viewCleanedBtn.classList.add('active');
     viewRawBtn.classList.remove('active');
@@ -1026,16 +1083,38 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
       }
       historyList.innerHTML = items.map(item => `
         <div class="audio-history-item" data-key="${item.key}">
+          <button class="ahi-delete-btn" data-key="${item.key}" title="Delete"><i class="fas fa-trash-alt"></i></button>
           <div class="ahi-title">${escapeHtml(item.title || 'Untitled')}</div>
           <div class="ahi-meta">${capitalize(item.sessionType || '')} · ${formatTime(item.durationSeconds || 0)} · ${new Date(item.createdAt).toLocaleDateString()}</div>
         </div>
       `).join('');
 
       historyList.querySelectorAll('.audio-history-item').forEach(el => {
-        el.addEventListener('click', () => openHistoryItem(el.dataset.key, val[el.dataset.key]));
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.ahi-delete-btn')) return;
+          openHistoryItem(el.dataset.key, val[el.dataset.key]);
+        });
+      });
+      historyList.querySelectorAll('.ahi-delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => deleteHistoryItem(btn.dataset.key, e));
       });
     } catch (err) {
       console.error('Could not load history:', err);
+    }
+  }
+
+  async function deleteHistoryItem(key, event) {
+    event.stopPropagation();
+    if (!scopeUid) return;
+    if (!confirm('Delete this transcription? This cannot be undone.')) return;
+    try {
+      await database.ref(`history/${scopeUid}/audio/${key}`).remove();
+      if (firebaseAudioId === key) firebaseAudioId = null;
+      showToast('Transcription deleted', 'success');
+      loadHistory();
+    } catch (err) {
+      console.error('Could not delete history item:', err);
+      showToast('Failed to delete', 'error');
     }
   }
 
@@ -1045,6 +1124,7 @@ Output ONLY the cleaned transcript text. No commentary, no preamble, no markdown
     sessionMeta = {
       title: data.title,
       sessionType: data.sessionType,
+      professional: data.professional,
       sourceType: data.sourceType,
       startedAt: data.createdAt,
       elapsedSeconds: data.durationSeconds,
