@@ -121,6 +121,7 @@
 .stage-container {
   display: none;
   animation: audioFadeSlide 0.35s ease;
+  padding: 0px;
 }
 
 .stage-container.active {
@@ -704,17 +705,20 @@
 .result-actions {
   display: flex;
   gap: 0.6rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .result-actions button {
   flex: 1;
-  min-width: 130px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* ---------- History entries (drawer content) ---------- */
 .audio-history-item {
-  padding: 0.9rem 1rem;
+  position: relative;
+  padding: 0.9rem 2.6rem 0.9rem 1rem;
   border-radius: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border-light);
@@ -732,11 +736,34 @@
   font-weight: 600;
   font-size: 0.88rem;
   margin-bottom: 0.2rem;
+  padding-right: 0.25rem;
 }
 
 .audio-history-item .ahi-meta {
   font-size: 0.72rem;
   color: var(--text-secondary);
+}
+
+.ahi-delete-btn {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+}
+
+.ahi-delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* ---------- History drawer ----------
@@ -837,5 +864,27 @@
 }
 
 @media (max-width: 560px) {
-  .result-actions button { min-width: 45%; }
+  .result-actions button span {
+    display: none;
+  }
+  .result-actions button i {
+    margin: 0;
+  }
+  .result-actions button {
+    padding: 0.5rem 0.5rem;
+    border-radius: 50px;
+    width: auto;
+    height: auto;
+  }
+  
+  .glass-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+    }
 }
