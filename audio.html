@@ -107,6 +107,19 @@
             </select>
           </div>
 
+          <div class="form-group">
+            <label for="professionalType">Professional Involved</label>
+            <select id="professionalType">
+              <option value="occupational_therapist">Occupational Therapist</option>
+              <option value="physiotherapist">Physiotherapist</option>
+              <option value="speech_language_therapist">Speech-Language Therapist</option>
+              <option value="psychologist">Psychologist</option>
+              <option value="psychiatrist">Psychiatrist</option>
+              <option value="rehab_nurse">Rehabilitation Nurse</option>
+              <option value="general_clinician">General / Other Clinician</option>
+            </select>
+          </div>
+
           <div class="source-mode-tabs" id="sourceModeTabs">
             <button type="button" class="source-mode-tab active" data-source="live" id="sourceModeLive">
               <i class="fas fa-microphone"></i> Record Live
@@ -202,17 +215,17 @@
           </div>
 
           <div class="transcript-view-toggle">
-            <button type="button" class="transcript-toggle-btn active" data-view="cleaned" id="viewCleanedBtn">Cleaned</button>
+            <button type="button" class="transcript-toggle-btn active" data-view="cleaned" id="viewCleanedBtn">Narrative</button>
             <button type="button" class="transcript-toggle-btn" data-view="raw" id="viewRawBtn">Raw</button>
           </div>
 
           <textarea id="transcriptTextarea" class="transcript-textarea" spellcheck="true"></textarea>
 
           <div class="result-actions">
-            <button class="btn-secondary" id="copyTranscriptBtn"><i class="fas fa-copy"></i> Copy</button>
-            <button class="btn-secondary" id="downloadTranscriptBtn"><i class="fas fa-download"></i> Download .txt</button>
-            <button class="btn-secondary" id="downloadAudioBtn" style="display:none;"><i class="fas fa-file-audio"></i> Download Audio</button>
-            <button class="btn-primary" id="saveTranscriptBtn"><i class="fas fa-floppy-disk"></i> Save</button>
+            <button class="btn-secondary" id="copyTranscriptBtn" title="Copy"><i class="fas fa-copy"></i> <span>Copy</span></button>
+            <button class="btn-secondary" id="downloadTranscriptBtn" title="Download .txt"><i class="fas fa-download"></i> <span>Download .txt</span></button>
+            <button class="btn-secondary" id="downloadAudioBtn" title="Download Audio" style="display:none;"><i class="fas fa-file-audio"></i> <span>Download Audio</span></button>
+            <button class="btn-primary" id="saveTranscriptBtn" title="Save"><i class="fas fa-floppy-disk"></i> <span>Save</span></button>
           </div>
         </div>
       </div>
