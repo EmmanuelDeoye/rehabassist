@@ -1,4 +1,4 @@
-<!-- project.html – Academic Project Maker (humanized AI, multi-pass, profiles, context, scoring, versions, streaming, professional export) -->
+<!-- project.html – Academic Project Maker v3.2 (independent scrolling, improved supervisor, floating button, auto word count) -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -68,6 +68,15 @@
     </div>
   </nav>
 
+  <!-- ===== Unsaved Changes Overlay ===== -->
+  <div class="unsaved-overlay" id="unsavedOverlay" style="display:none;">
+    <div class="unsaved-banner">
+      <i class="fas fa-exclamation-circle"></i>
+      <span>You have unsaved changes</span>
+      <button class="save-now-btn" id="saveNowBtn">Save Now</button>
+    </div>
+  </div>
+
   <!-- ===== Main Project Workspace ===== -->
   <main class="project-main" id="projectMain">
     <!-- Mobile Toggle Buttons -->
@@ -81,13 +90,18 @@
     </div>
 
     <div class="project-workspace" id="projectWorkspace">
-      <!-- ===== Left Sidebar: Chapters ===== -->
+      <!-- ===== Left Sidebar: Chapters + Resources ===== -->
       <aside class="chapters-sidebar" id="chaptersSidebar">
         <div class="sidebar-header">
           <h3><i class="fas fa-book"></i> Chapters</h3>
-          <button class="sidebar-close" id="closeChaptersBtn" title="Close sidebar">
-            <i class="fas fa-times"></i>
-          </button>
+          <div class="sidebar-header-actions">
+            <button class="icon-btn resource-toggle-btn" id="resourceToggleBtn" title="Resources">
+              <i class="fas fa-file-medical-alt"></i>
+            </button>
+            <button class="sidebar-close" id="closeChaptersBtn" title="Close sidebar">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
         </div>
         <!-- Project Selector -->
         <div class="project-selector" id="projectSelector">
@@ -104,6 +118,31 @@
             <i class='bx bx-book-open'></i>
             <p>No project selected</p>
             <small>Create or select a project to begin</small>
+          </div>
+        </div>
+        <!-- Resources Panel (hidden by default) -->
+        <div class="resources-panel" id="resourcesPanel" style="display:none;">
+          <div class="resources-panel-header">
+            <span><i class="fas fa-paperclip"></i> Resources</span>
+            <button class="back-to-chapters-btn" id="backToChaptersBtn">
+              <i class="fas fa-arrow-left"></i> Back to Chapters
+            </button>
+          </div>
+          <div class="resource-upload-area">
+            <label class="upload-label" for="resourceFileInput">
+              <i class="fas fa-cloud-upload-alt"></i>
+              <span>Upload Files</span>
+            </label>
+            <input type="file" id="resourceFileInput" multiple accept=".pdf,.docx,.txt,.doc" style="display:none;">
+            <small style="display:block; color:var(--text-secondary); margin-top:0.25rem;">PDF, DOCX, TXT supported</small>
+          </div>
+          <div id="uploadStatus" style="font-size:0.8rem; padding:0.5rem 0.75rem;"></div>
+          <div class="resource-list" id="resourceList">
+            <div class="empty-state" style="padding:1.5rem;">
+              <i class='bx bx-cloud-upload'></i>
+              <p style="font-size:0.85rem;">No resources uploaded</p>
+              <small>Upload articles, journals, or past projects for AI reference</small>
+            </div>
           </div>
         </div>
       </aside>
@@ -214,7 +253,7 @@
           <div id="sectionEditor" class="section-editor" contenteditable="true"></div>
         </div>
 
-        <!-- AI Controls (Profile, Word Count, Reference, Tone, Modification, Score, Versions) -->
+        <!-- AI Controls -->
         <div class="ai-controls">
           <!-- Row 1: Writing Profile + Word Count + Reference Style -->
           <div class="ai-controls-row">
@@ -232,8 +271,9 @@
             <div class="gen-option">
               <label for="wordCountSelect">Word Count</label>
               <select id="wordCountSelect">
+                <option value="auto" selected>Auto (AI decides)</option>
                 <option value="300">Short (~300 words)</option>
-                <option value="500" selected>Medium (~500 words)</option>
+                <option value="500">Medium (~500 words)</option>
                 <option value="1000">Long (~1000 words)</option>
                 <option value="2000">Extended (~2000 words)</option>
                 <option value="custom">Custom</option>
@@ -255,15 +295,25 @@
             </div>
           </div>
 
-          <!-- Row 2: Tone Selector -->
-          <div class="ai-tone-selector">
-            <label>AI Writing Tone</label>
-            <select id="aiToneSelect">
-              <option value="academic">Academic & Formal</option>
-              <option value="conversational">Conversational & Natural</option>
-              <option value="imperfect" selected>Student-Like (Avoids AI Detection)</option>
-              <option value="clinical">Clinical & Practical</option>
-            </select>
+          <!-- Row 2: Tone Selector + Humanize Checkbox -->
+          <div class="ai-tone-row">
+            <div class="ai-tone-selector">
+              <label>AI Writing Tone</label>
+              <select id="aiToneSelect">
+                <option value="academic">Academic & Formal</option>
+                <option value="conversational">Conversational & Natural</option>
+                <option value="imperfect" selected>Student-Like (Avoids AI Detection)</option>
+                <option value="clinical">Clinical & Practical</option>
+              </select>
+            </div>
+
+            <div class="humanize-option" id="humanizeOption">
+              <label class="checkbox-label">
+                <input type="checkbox" id="humanizeCheckbox">
+                <span>Humanize content</span>
+              </label>
+              <small class="humanize-note">Evades AI detection (use responsibly)</small>
+            </div>
           </div>
 
           <!-- Modification Area -->
@@ -281,10 +331,16 @@
             <div class="score-bar">
               <div class="score-fill" id="scoreFill"></div>
             </div>
-            <div class="score-details">
+            <div class="score-details" id="scoreDetails">
               <span id="scoreSentenceVar">Sentence Variation: --</span>
               <span id="scorePredictability">Predictability: --</span>
               <span id="scoreAILikely">AI-Likelihood: --</span>
+            </div>
+            <div class="score-plan-badge" id="scorePlanBadge">
+              <span class="badge-free">Free Plan - Basic Score</span>
+              <span class="badge-premium" style="display:none;">
+                <i class="fas fa-shield-alt"></i> Deep Scan Active
+              </span>
             </div>
           </div>
 
@@ -300,11 +356,16 @@
           </div>
         </div>
 
-        <!-- AI Generate Button -->
+        <!-- AI Generate Buttons -->
         <div class="ai-section-generate">
-          <button id="aiGenerateSectionBtn" class="generate-btn">
-            <i class="fas fa-magic"></i> AI Generate This Section
-          </button>
+          <div class="generate-buttons-row">
+            <button id="aiGenerateSectionBtn" class="generate-btn">
+              <i class="fas fa-magic"></i> AI Generate This Section
+            </button>
+            <button id="aiGenerateChapterBtn" class="generate-btn chapter-gen-btn" style="display:none;">
+              <i class="fas fa-layer-group"></i> <span id="chapterGenBtnText">Generate Entire Chapter</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -316,6 +377,25 @@
             <i class="fas fa-times"></i>
           </button>
         </div>
+        <!-- Supervisor Personality Settings -->
+        <div class="supervisor-personality" id="supervisorPersonality">
+          <div class="personality-row">
+            <div class="form-group-compact">
+              <label>Strictness</label>
+              <select id="supervisorStrictness">
+                <option value="easy">😊 Easy</option>
+                <option value="moderate" selected>🤔 Moderate</option>
+                <option value="strict">😤 Strict</option>
+              </select>
+            </div>
+            <div class="form-group-compact">
+              <label>Profession</label>
+              <input type="text" id="supervisorProfession" 
+                     placeholder="e.g., Professor of Physiotherapy" 
+                     value="Academic Supervisor">
+            </div>
+          </div>
+        </div>
         <div class="ai-chat-area" id="aiChatArea">
           <div class="ai-chat-messages" id="aiChatMessages">
             <div class="ai-empty-state">
@@ -323,6 +403,10 @@
               <p>Your AI supervisor is ready</p>
               <small>Ask for guidance, corrections, or suggestions about your project</small>
             </div>
+          </div>
+          <!-- Default prompts horizontal bar -->
+          <div class="default-prompts-bar" id="defaultPromptsBar" style="display:none;">
+            <div class="default-prompts-scroll" id="defaultPromptsScroll"></div>
           </div>
           <div class="ai-chat-input">
             <textarea id="aiMessageInput" rows="2" placeholder="Ask your supervisor..."></textarea>
@@ -333,6 +417,11 @@
         </div>
       </aside>
     </div>
+
+    <!-- ===== Floating Scroll Button ===== -->
+    <button id="floatingScrollBtn" class="floating-scroll-btn" title="Scroll to AI controls">
+      <i class="fas fa-chevron-down"></i>
+    </button>
   </main>
 
   <!-- ===== Project Creation Modal ===== -->
@@ -343,47 +432,121 @@
         <button class="modal-close" id="closeProjectModal">&times;</button>
       </div>
       <div class="modal-body">
-        <div class="form-row">
+        <!-- Step 1: Basic Info -->
+        <div id="projectCreateStep1">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Project Type</label>
+              <select id="projectType">
+                <option value="Undergraduate Project">Undergraduate Project</option>
+                <option value="Thesis">Thesis</option>
+                <option value="Dissertation">Dissertation</option>
+                <option value="Seminar">Seminar</option>
+                <option value="Case Study">Case Study</option>
+                <option value="SIWES Report">SIWES Report</option>
+                <option value="Research Proposal">Research Proposal</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Department</label>
+              <select id="projectDept">
+                <option value="Occupational Therapy">Occupational Therapy</option>
+                <option value="Physiotherapy">Physiotherapy</option>
+                <option value="Nursing">Nursing</option>
+                <option value="Medicine">Medicine</option>
+                <option value="Public Health">Public Health</option>
+                <option value="Psychology">Psychology</option>
+                <option value="Speech Therapy">Speech Therapy</option>
+                <option value="Social Work">Social Work</option>
+              </select>
+            </div>
+          </div>
           <div class="form-group">
-            <label>Project Type</label>
-            <select id="projectType">
-              <option value="Undergraduate Project">Undergraduate Project</option>
-              <option value="Thesis">Thesis</option>
-              <option value="Dissertation">Dissertation</option>
-              <option value="Seminar">Seminar</option>
-              <option value="Case Study">Case Study</option>
-              <option value="SIWES Report">SIWES Report</option>
-              <option value="Research Proposal">Research Proposal</option>
+            <label>Research Approach</label>
+            <select id="projectApproach">
+              <option value="quantitative">Quantitative (Multiple Cases / Statistics)</option>
+              <option value="qualitative">Qualitative (Single Case / Interview-Based)</option>
             </select>
           </div>
           <div class="form-group">
-            <label>Department</label>
-            <select id="projectDept">
-              <option value="Occupational Therapy">Occupational Therapy</option>
-              <option value="Physiotherapy">Physiotherapy</option>
-              <option value="Nursing">Nursing</option>
-              <option value="Medicine">Medicine</option>
-              <option value="Public Health">Public Health</option>
-              <option value="Psychology">Psychology</option>
-              <option value="Speech Therapy">Speech Therapy</option>
-              <option value="Social Work">Social Work</option>
+            <label>Outline Type</label>
+            <select id="projectOutlineType">
+              <option value="default">Default Outline</option>
+              <option value="custom">Custom Outline</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Project Title</label>
+            <input type="text" id="projectTitle" placeholder="e.g., Effects of Vestibular Rehabilitation on Balance in Stroke Patients">
+          </div>
+          <button class="generate-btn" id="nextToOutlineBtn">
+            <i class="fas fa-arrow-right"></i> Next: Configure Outline
+          </button>
         </div>
-        <div class="form-group">
-          <label>Research Approach</label>
-          <select id="projectApproach">
-            <option value="quantitative">Quantitative (Multiple Cases / Statistics)</option>
-            <option value="qualitative">Qualitative (Single Case / Interview-Based)</option>
-          </select>
+
+        <!-- Step 2: Custom Outline -->
+        <div id="projectCreateStep2" style="display:none;">
+          <div class="form-group">
+            <label>Custom Chapter Outline</label>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin:0.25rem 0 0.5rem;">
+              Enter chapters and sections below. Use format: <strong>Chapter Title</strong> on its own line, 
+              then sections below it with a dash (-) prefix.
+            </p>
+            <textarea id="customOutlineInput" rows="12" 
+                      placeholder="Chapter 1: Introduction&#10;- Background of Study&#10;- Statement of Problem&#10;- Aim & Objectives&#10;&#10;Chapter 2: Literature Review&#10;- Theoretical Framework&#10;- Empirical Review&#10;&#10;Chapter 3: Methodology&#10;- Research Design&#10;- Data Collection&#10;&#10;...and so on"></textarea>
+          </div>
+          <div style="display:flex; gap:0.5rem;">
+            <button class="btn-secondary" id="backToStep1Btn">
+              <i class="fas fa-arrow-left"></i> Back
+            </button>
+            <button class="generate-btn" id="createProjectBtn">
+              <i class="fas fa-check"></i> Create Project
+            </button>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Project Title</label>
-          <input type="text" id="projectTitle" placeholder="e.g., Effects of Vestibular Rehabilitation on Balance in Stroke Patients">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Humanize Warning Modal ===== -->
+  <div class="modal humanize-warning-modal" id="humanizeWarningModal">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h2><i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i> Academic Integrity Warning</h2>
+        <button class="modal-close" id="closeHumanizeWarning">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="warning-content">
+          <div class="warning-icon">
+            <i class="fas fa-shield-haltered"></i>
+          </div>
+          <p style="color:var(--text-primary); font-weight:500; font-size:1rem;">
+            You are about to enable <strong>AI-detection evasion</strong>.
+          </p>
+          <p style="color:var(--text-secondary); line-height:1.6;">
+            This feature will rewrite AI-generated content to appear more human-written, 
+            potentially bypassing AI detection tools like Turnitin or GPTZero.
+          </p>
+          <div class="warning-box">
+            <p style="color:#dc2626; font-weight:600; margin:0;">
+              ⚠️ WARNING: Using evasion techniques may violate your institution's academic 
+              integrity policy. The responsibility for any consequences rests 
+              <strong>solely with you</strong>, the student.
+            </p>
+          </div>
+          <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:1rem;">
+            By enabling this feature, you acknowledge that you understand the risks and 
+            accept full responsibility for how the generated content is used.
+          </p>
         </div>
-        <button class="generate-btn" id="createProjectBtn">
-          <i class="fas fa-check"></i> Create Project
-        </button>
+        <div style="margin-top:1.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+          <button id="cancelHumanizeBtn" class="btn-secondary">
+            <i class="fas fa-times"></i> Cancel
+          </button>
+          <button id="confirmHumanizeBtn" class="generate-btn" style="padding:0.6rem 1.5rem; background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fas fa-check"></i> I Understand, Enable Humanization
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -401,7 +564,11 @@
         <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
           The AI is using multi-pass generation for natural, human-like output.
         </p>
-        <button class="btn-secondary" id="cancelGenerateBtn">
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+        </div>
+        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;" id="progressDetail"></p>
+        <button class="btn-secondary" id="cancelGenerateBtn" style="margin-top:1rem;">
           <i class="fas fa-times"></i> Cancel Generation
         </button>
       </div>

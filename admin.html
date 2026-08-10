@@ -18,6 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer>
     </script>
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="css/admin.css" />
     <link rel="stylesheet" href="css/main.css" />
 
@@ -461,6 +462,11 @@
                         <span>Users</span>
                         <span id="userCountBadge" class="badge-sidebar">0</span>
                     </a>
+                    <a href="#" class="sidebar-link" data-view="reviews">
+                        <span class="sidebar-icon">🚩</span>
+                        <span>Reviews</span>
+                        <span id="reviewCountBadge" class="badge-sidebar">0</span>
+                    </a>
                     <a href="#" class="sidebar-link" data-view="settings">
                         <span class="sidebar-icon">⚙️</span>
                         <span>Settings</span>
@@ -614,6 +620,72 @@
                     </div>
                 </section>
 
+                <!-- ======= REVIEWS VIEW ======= -->
+                <section id="viewReviews" class="admin-view" style="display:none;">
+                    <div class="view-header">
+                        <h1>Reviews &amp; Issue Reports</h1>
+                        <p class="view-subtitle">API failures reported automatically or submitted by users</p>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="users-toolbar glass-card">
+                        <div class="toolbar-row">
+                            <div class="search-wrapper">
+                                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                                <input type="search" id="reviewSearch" placeholder="Search by tool, context, or email…" />
+                            </div>
+                            <div class="toolbar-filters">
+                                <select id="filterReviewType">
+                                    <option value="">All Types</option>
+                                    <option value="insufficient_funds">Insufficient Funds</option>
+                                    <option value="api_error">Other API Error</option>
+                                </select>
+                                <select id="filterReviewTool">
+                                    <option value="">All Tools</option>
+                                </select>
+                                <select id="filterReviewStatus">
+                                    <option value="">All</option>
+                                    <option value="unresolved">Unresolved</option>
+                                    <option value="resolved">Resolved</option>
+                                </select>
+                                <select id="sortReviews">
+                                    <option value="newest">Newest First</option>
+                                    <option value="oldest">Oldest First</option>
+                                </select>
+                            </div>
+                            <button id="refreshReviewsBtn" class="admin-btn outline small">⟳ Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- Review table -->
+                    <div class="table-container glass-card">
+                        <div class="table-scroll">
+                            <table id="reviewTable">
+                                <thead>
+                                    <tr>
+                                        <th>Issue</th>
+                                        <th style="text-align:center;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reviewTableBody">
+                                    <!-- dynamically rendered -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="reviewsEmpty" class="empty-table-state">
+                            <span>🔍</span>
+                            <p>No reviews match your filters.</p>
+                        </div>
+                        <div id="reviewsLoading" class="table-loading">
+                            <div class="loading-spinner"></div>
+                            <p>Loading reviews…</p>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- ======= SETTINGS VIEW ======= -->
                 <section id="viewSettings" class="admin-view" style="display:none;">
                     <div class="view-header">
@@ -714,17 +786,21 @@
         </div>
     </div>
 
-    <!-- Contact User Modal -->
+    <!-- Contact Modal (used for both Users and Reviews) -->
     <div id="contactModal" class="admin-modal">
         <div class="modal-content glass-card">
             <div class="modal-header">
-                <h2>Contact User</h2>
+                <h2 id="contactModalTitle">Contact User</h2>
                 <button class="modal-close" data-modal="contactModal">&times;</button>
             </div>
             <div class="modal-body">
-                <p>User: <strong id="contactUserEmail">—</strong></p>
+                <p>Contacting: <strong id="contactUserEmail">—</strong></p>
                 <div class="form-group">
-                    <label>Subject</label>
+                    <label>Phone Number <span class="field-optional">(for WhatsApp — include country code, e.g. +234...)</span></label>
+                    <input type="tel" id="contactPhone" placeholder="+234 801 234 5678" />
+                </div>
+                <div class="form-group">
+                    <label>Subject <span class="field-optional">(email only)</span></label>
                     <input type="text" id="contactSubject" placeholder="Subject" />
                 </div>
                 <div class="form-group">
@@ -735,7 +811,27 @@
             </div>
             <div class="modal-footer">
                 <button class="admin-btn outline small" data-modal="contactModal">Cancel</button>
-                <button id="sendContactBtn" class="admin-btn primary">Send</button>
+                <button id="sendWhatsAppBtn" class="admin-btn whatsapp">
+                    <i class="fab fa-whatsapp"></i> WhatsApp
+                </button>
+                <button id="sendContactBtn" class="admin-btn primary">Send Email</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Detail Modal -->
+    <div id="reviewDetailModal" class="admin-modal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Review Details</h2>
+                <button class="modal-close" data-modal="reviewDetailModal">&times;</button>
+            </div>
+            <div class="modal-body" id="reviewDetailBody">
+                <!-- filled by JS -->
+            </div>
+            <div class="modal-footer">
+                <button class="admin-btn outline small" data-modal="reviewDetailModal">Close</button>
+                <button id="reviewDetailResolveBtn" class="admin-btn primary">Mark Resolved</button>
             </div>
         </div>
     </div>
