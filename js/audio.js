@@ -734,7 +734,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!response.ok) {
       let msg = 'Transcription request failed';
-      try { const err = await response.json(); msg = err.error?.message || msg; } catch (e) {}
+      let errBody = '';
+      try { const err = await response.json(); msg = err.error?.message || msg; errBody = JSON.stringify(err); } catch (e) {}
+      if (window.reportApiError) {
+        window.reportApiError({
+          status: response.status,
+          bodyText: errBody,
+          tool: 'audio',
+          context: 'transcribe audio'
+        });
+      }
       throw new Error(msg);
     }
     const data = await response.json();
@@ -821,7 +830,18 @@ Output ONLY the narrative text, as flowing paragraphs.`;
             temperature: 0.3
           })
         });
-        if (!response.ok) throw new Error('Narrative request failed');
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => '');
+          if (window.reportApiError) {
+            window.reportApiError({
+              status: response.status,
+              bodyText: errBody,
+              tool: 'audio',
+              context: 'narrative cleanup pass'
+            });
+          }
+          throw new Error('Narrative request failed');
+        }
         const data = await response.json();
         cleanedPieces.push(data.choices?.[0]?.message?.content?.trim() || pieces[i]);
       } catch (err) {

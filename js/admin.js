@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Views
   const viewDashboard = document.getElementById('viewDashboard');
   const viewUsers = document.getElementById('viewUsers');
+  const viewReviews = document.getElementById('viewReviews');
   const viewSettings = document.getElementById('viewSettings');
   const sidebarLinks = document.querySelectorAll('.sidebar-link');
 
@@ -58,10 +59,23 @@ document.addEventListener('DOMContentLoaded', function() {
   const sortUsers = document.getElementById('sortUsers');
   const refreshUsersBtn = document.getElementById('refreshUsersBtn');
 
+  // Reviews table
+  const reviewTableBody = document.getElementById('reviewTableBody');
+  const reviewsEmpty = document.getElementById('reviewsEmpty');
+  const reviewsLoading = document.getElementById('reviewsLoading');
+  const reviewSearch = document.getElementById('reviewSearch');
+  const filterReviewType = document.getElementById('filterReviewType');
+  const filterReviewTool = document.getElementById('filterReviewTool');
+  const filterReviewStatus = document.getElementById('filterReviewStatus');
+  const sortReviews = document.getElementById('sortReviews');
+  const refreshReviewsBtn = document.getElementById('refreshReviewsBtn');
+  const reviewCountBadge = document.getElementById('reviewCountBadge');
+
   // Modals
   const userDetailModal = document.getElementById('userDetailModal');
   const changePlanModal = document.getElementById('changePlanModal');
   const contactModal = document.getElementById('contactModal');
+  const reviewDetailModal = document.getElementById('reviewDetailModal');
   const confirmModal = document.getElementById('confirmModal');
 
   // Settings
@@ -98,6 +112,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // ==============================================================
   let allUsers = [];
   let filteredUsers = [];
+  let allReviews = [];
+  let filteredReviews = [];
+  let selectedReviewKey = null;
+  let contactContext = null; // { email, phone, label, kind: 'user'|'review', refId }
   let currentView = 'dashboard';
   let selectedUserId = null;
   let confirmAction = null;
@@ -198,6 +216,10 @@ document.addEventListener('DOMContentLoaded', function() {
         viewUsers.style.display = 'block';
         currentView = 'users';
         loadUsers();
+      } else if (view === 'reviews') {
+        viewReviews.style.display = 'block';
+        currentView = 'reviews';
+        loadReviews();
       } else if (view === 'settings') {
         viewSettings.style.display = 'block';
         currentView = 'settings';
@@ -463,6 +485,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (planStudentCount) planStudentCount.textContent = student;
       if (planProCount) planProCount.textContent = pro;
       if (userCountBadge) userCountBadge.textContent = totalUsers;
+      updateReviewBadge();
 
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -1042,7 +1065,13 @@ document.addEventListener('DOMContentLoaded', function() {
         openChangePlan(uid);
         break;
       case 'contact':
-        openContact(uid);
+        openContact({
+          email: user.email,
+          phone: '',
+          label: user.name || user.email,
+          kind: 'user',
+          refId: uid
+        });
         break;
       case 'ban':
         toggleBan(uid);
@@ -1052,6 +1081,309 @@ document.addEventListener('DOMContentLoaded', function() {
         break;
     }
   }
+
+  // ==============================================================
+  // REVIEWS (API ISSUE REPORTS)
+  // ==============================================================
+  let isLoadingReviews = false;
+
+  async function updateReviewBadge() {
+    try {
+      const snapshot = await database.ref('reviews').once('value');
+      const data = snapshot.val() || {};
+      const unresolvedCount = Object.values(data).filter(r => !r.resolved).length;
+      if (reviewCountBadge) reviewCountBadge.textContent = unresolvedCount;
+    } catch (error) {
+      console.error('Error updating review badge:', error);
+    }
+  }
+
+  async function loadReviews(force = false) {
+    if (isLoadingReviews && !force) return;
+    if (!viewReviews || viewReviews.style.display === 'none') return;
+
+    try {
+      isLoadingReviews = true;
+      reviewsLoading.classList.add('show');
+      reviewsEmpty.classList.remove('show');
+      reviewTableBody.innerHTML = '';
+
+      const snapshot = await database.ref('reviews').once('value');
+      const reviews = snapshot.val() || {};
+
+      allReviews = Object.keys(reviews).map(key => {
+        const data = reviews[key];
+        return {
+          key,
+          type: data.type || 'api_error',
+          tool: data.tool || 'unknown',
+          context: data.context || '',
+          status: data.status ?? null,
+          detail: data.detail || '',
+          comment: data.comment || '',
+          page: data.page || '',
+          userAgent: data.userAgent || '',
+          userId: data.userId || '',
+          userEmail: data.userEmail || '',
+          resolved: data.resolved === true,
+          timestamp: data.timestamp || 0
+        };
+      });
+
+      // Populate the tool filter dynamically from what's actually in the data
+      const tools = [...new Set(allReviews.map(r => r.tool))].sort();
+      const currentTool = filterReviewTool.value;
+      filterReviewTool.innerHTML = '<option value="">All Tools</option>';
+      tools.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        filterReviewTool.appendChild(opt);
+      });
+      filterReviewTool.value = currentTool;
+
+      reviewsLoading.classList.remove('show');
+      isLoadingReviews = false;
+      applyReviewFilters();
+      updateReviewBadge();
+
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+      reviewsLoading.classList.remove('show');
+      isLoadingReviews = false;
+      showToast('Error loading reviews. Please refresh.', 'error');
+    }
+  }
+
+  function applyReviewFilters() {
+    const search = reviewSearch.value.toLowerCase().trim();
+    const type = filterReviewType.value;
+    const tool = filterReviewTool.value;
+    const status = filterReviewStatus.value;
+    const sort = sortReviews.value;
+
+    filteredReviews = allReviews.filter(r => {
+      if (search) {
+        const toolMatch = r.tool.toLowerCase().includes(search);
+        const contextMatch = r.context.toLowerCase().includes(search);
+        const emailMatch = r.userEmail.toLowerCase().includes(search);
+        if (!toolMatch && !contextMatch && !emailMatch) return false;
+      }
+      if (type && r.type !== type) return false;
+      if (tool && r.tool !== tool) return false;
+      if (status === 'resolved' && !r.resolved) return false;
+      if (status === 'unresolved' && r.resolved) return false;
+      return true;
+    });
+
+    filteredReviews.sort((a, b) => sort === 'oldest' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp);
+
+    renderReviewsTable();
+  }
+
+  function renderReviewsTable() {
+    if (!reviewTableBody) return;
+
+    if (filteredReviews.length === 0) {
+      reviewTableBody.innerHTML = '';
+      reviewsEmpty.classList.add('show');
+      return;
+    }
+    reviewsEmpty.classList.remove('show');
+
+    let html = '';
+    filteredReviews.forEach(r => {
+      const rowClass = r.resolved ? 'resolved-row' : '';
+      const typeLabel = r.type === 'insufficient_funds' ? 'Insufficient Funds' : 'API Error';
+      const dateStr = r.timestamp ? new Date(r.timestamp).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : 'Unknown';
+
+      html += `
+        <tr class="${rowClass}" data-key="${r.key}">
+          <td>
+            <div class="review-cell" data-key="${r.key}">
+              <div class="review-cell-top">
+                <span class="badge-review-type ${r.type}">${typeLabel}</span>
+                ${r.resolved ? '<span class="badge-review-resolved">Resolved</span>' : ''}
+                <span class="review-cell-meta">${escapeHtml(r.tool)}${r.status ? ' · HTTP ' + r.status : ''}</span>
+              </div>
+              <span class="review-cell-context">${escapeHtml(r.context || r.detail || 'No description provided')}</span>
+              <span class="review-cell-meta">${r.userEmail ? escapeHtml(r.userEmail) : 'No user on file'} · ${dateStr}</span>
+            </div>
+          </td>
+          <td>
+            <div class="table-cell-actions">
+              <button class="action-menu-btn" data-key="${r.key}" title="Actions">⋮</button>
+              <div class="action-dropdown" data-key="${r.key}">
+                <button class="action-dropdown-item" data-action="detail">
+                  <span class="action-icon">👁️</span>
+                  <span class="action-label">View Details</span>
+                </button>
+                <button class="action-dropdown-item" data-action="email">
+                  <span class="action-icon">✉️</span>
+                  <span class="action-label">Contact via Email</span>
+                </button>
+                <button class="action-dropdown-item" data-action="whatsapp">
+                  <span class="action-icon">💬</span>
+                  <span class="action-label">Contact via WhatsApp</span>
+                </button>
+                <button class="action-dropdown-item" data-action="resolve">
+                  <span class="action-icon">${r.resolved ? '↩️' : '✅'}</span>
+                  <span class="action-label">${r.resolved ? 'Mark Unresolved' : 'Mark Resolved'}</span>
+                </button>
+                <button class="action-dropdown-item danger" data-action="delete">
+                  <span class="action-icon">🗑️</span>
+                  <span class="action-label">Delete</span>
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    reviewTableBody.innerHTML = html;
+
+    reviewTableBody.querySelectorAll('.review-cell').forEach(cell => {
+      cell.addEventListener('click', () => openReviewDetail(cell.dataset.key));
+    });
+
+    reviewTableBody.querySelectorAll('.action-menu-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = btn.dataset.key;
+        const dropdown = document.querySelector(`#reviewTableBody .action-dropdown[data-key="${key}"]`);
+
+        document.querySelectorAll('.action-dropdown.show').forEach(d => {
+          if (d !== dropdown) d.classList.remove('show');
+        });
+
+        dropdown.classList.toggle('show');
+      });
+    });
+
+    reviewTableBody.querySelectorAll('.action-dropdown-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        const dropdown = item.closest('.action-dropdown');
+        const key = dropdown.dataset.key;
+        dropdown.classList.remove('show');
+        handleReviewAction(action, key);
+      });
+    });
+  }
+
+  function handleReviewAction(action, key) {
+    const review = allReviews.find(r => r.key === key);
+    if (!review) {
+      showToast('Review not found.', 'error');
+      return;
+    }
+
+    switch (action) {
+      case 'detail':
+        openReviewDetail(key);
+        break;
+      case 'email':
+        if (!review.userEmail) {
+          showToast('No email on file for this review.', 'warning');
+          return;
+        }
+        openContact({
+          email: review.userEmail,
+          phone: '',
+          label: `Review · ${review.tool}`,
+          kind: 'review',
+          refId: key
+        });
+        break;
+      case 'whatsapp':
+        openContact({
+          email: review.userEmail || '',
+          phone: '',
+          label: `Review · ${review.tool}`,
+          kind: 'review',
+          refId: key
+        });
+        // Nudge the admin straight to the WhatsApp field/button since that's why they clicked this action.
+        setTimeout(() => document.getElementById('contactPhone')?.focus(), 50);
+        break;
+      case 'resolve':
+        toggleReviewResolved(key);
+        break;
+      case 'delete':
+        confirmDeleteReview(key);
+        break;
+    }
+  }
+
+  async function toggleReviewResolved(key) {
+    const review = allReviews.find(r => r.key === key);
+    if (!review) return;
+    try {
+      await database.ref(`reviews/${key}/resolved`).set(!review.resolved);
+      showToast(review.resolved ? 'Marked as unresolved.' : 'Marked as resolved.');
+      loadReviews(true);
+    } catch (error) {
+      console.error('Error updating review:', error);
+      showToast('Error updating review.', 'error');
+    }
+  }
+
+  function confirmDeleteReview(key) {
+    confirmAction = 'deleteReview';
+    confirmData = key;
+    document.getElementById('confirmTitle').textContent = 'Delete Review';
+    document.getElementById('confirmMessage').textContent = 'Are you sure you want to permanently delete this review? This cannot be undone.';
+    confirmModal.classList.add('show');
+  }
+
+  // ==============================================================
+  // REVIEW DETAIL MODAL
+  // ==============================================================
+  function openReviewDetail(key) {
+    const review = allReviews.find(r => r.key === key);
+    if (!review) {
+      showToast('Review not found.', 'error');
+      return;
+    }
+
+    selectedReviewKey = key;
+    const typeLabel = review.type === 'insufficient_funds' ? 'Insufficient Funds' : 'Other API Error';
+    const dateStr = review.timestamp ? new Date(review.timestamp).toLocaleString() : 'Unknown';
+
+    const body = document.getElementById('reviewDetailBody');
+    body.innerHTML = `
+      <div class="review-detail-row"><span class="review-detail-label">Type</span><span class="review-detail-value">${escapeHtml(typeLabel)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Tool</span><span class="review-detail-value">${escapeHtml(review.tool)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Context</span><span class="review-detail-value">${escapeHtml(review.context || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">HTTP Status</span><span class="review-detail-value">${review.status ?? '—'}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Detail</span><span class="review-detail-value mono">${escapeHtml(review.detail || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">User Comment</span><span class="review-detail-value">${escapeHtml(review.comment || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">User Email</span><span class="review-detail-value">${escapeHtml(review.userEmail || 'Not signed in')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Page</span><span class="review-detail-value mono">${escapeHtml(review.page || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Browser</span><span class="review-detail-value mono">${escapeHtml(review.userAgent || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Reported</span><span class="review-detail-value">${dateStr}</span></div>
+    `;
+
+    const resolveBtn = document.getElementById('reviewDetailResolveBtn');
+    resolveBtn.textContent = review.resolved ? 'Mark Unresolved' : 'Mark Resolved';
+    resolveBtn.onclick = () => {
+      toggleReviewResolved(key);
+      reviewDetailModal.classList.remove('show');
+    };
+
+    reviewDetailModal.classList.add('show');
+  }
+
+  if (refreshReviewsBtn) {
+    refreshReviewsBtn.addEventListener('click', () => loadReviews(true));
+  }
+  [reviewSearch, filterReviewType, filterReviewTool, filterReviewStatus, sortReviews].forEach(el => {
+    if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', applyReviewFilters);
+  });
 
   // ==============================================================
   // USER DETAIL MODAL
@@ -1150,24 +1482,33 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ==============================================================
-  // CONTACT USER MODAL
+  // CONTACT MODAL (Email + WhatsApp) - shared by Users and Reviews
   // ==============================================================
-  function openContact(uid) {
-    const user = allUsers.find(u => u.uid === uid);
-    if (!user) return;
+  function openContact(context) {
+    contactContext = context;
 
-    selectedUserId = uid;
-    document.getElementById('contactUserEmail').textContent = user.email;
-    document.getElementById('contactSubject').value = '';
+    document.getElementById('contactModalTitle').textContent =
+      context.kind === 'review' ? 'Contact About Review' : 'Contact User';
+    document.getElementById('contactUserEmail').textContent = context.email || 'No email on file';
+    document.getElementById('contactPhone').value = context.phone || '';
+    document.getElementById('contactSubject').value = context.kind === 'review'
+      ? `Regarding your rehablix issue report (${context.label || ''})`
+      : '';
     document.getElementById('contactMessage').value = '';
     document.getElementById('contactMsg').textContent = '';
     document.getElementById('contactMsg').className = 'form-msg';
+
+    const emailBtn = document.getElementById('sendContactBtn');
+    if (emailBtn) emailBtn.disabled = !context.email;
+
     contactModal.classList.add('show');
   }
 
   document.getElementById('sendContactBtn').addEventListener('click', () => {
-    const user = allUsers.find(u => u.uid === selectedUserId);
-    if (!user) return;
+    if (!contactContext || !contactContext.email) {
+      showToast('No email address available for this contact.', 'warning');
+      return;
+    }
 
     const subject = document.getElementById('contactSubject').value.trim();
     const message = document.getElementById('contactMessage').value.trim();
@@ -1179,12 +1520,40 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    const mailto = `mailto:${user.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+    const mailto = `mailto:${contactContext.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
     window.open(mailto, '_blank');
 
     msgEl.textContent = '✅ Email client opened.';
     msgEl.className = 'form-msg success';
     showToast('Email client opened.');
+
+    setTimeout(() => {
+      contactModal.classList.remove('show');
+    }, 1000);
+  });
+
+  document.getElementById('sendWhatsAppBtn').addEventListener('click', () => {
+    const msgEl = document.getElementById('contactMsg');
+    const message = document.getElementById('contactMessage').value.trim();
+    const rawPhone = document.getElementById('contactPhone').value.trim();
+
+    if (!message) {
+      msgEl.textContent = '❌ Please write a message first.';
+      msgEl.className = 'form-msg error';
+      return;
+    }
+
+    const digitsOnly = rawPhone.replace(/[^\d]/g, '');
+    const text = encodeURIComponent(message);
+
+    // With a phone number on file, open a direct chat. Otherwise fall back
+    // to WhatsApp's own share sheet so the admin can pick a contact manually.
+    const url = digitsOnly ? `https://wa.me/${digitsOnly}?text=${text}` : `https://wa.me/?text=${text}`;
+    window.open(url, '_blank');
+
+    msgEl.textContent = digitsOnly ? '✅ WhatsApp opened.' : '✅ WhatsApp share opened — choose a recipient.';
+    msgEl.className = 'form-msg success';
+    showToast('WhatsApp opened.');
 
     setTimeout(() => {
       contactModal.classList.remove('show');
@@ -1257,6 +1626,20 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch (error) {
         console.error('Error deleting user:', error);
         showToast('Error deleting user.', 'error');
+      }
+    }
+
+    if (confirmAction === 'deleteReview' && confirmData) {
+      const key = confirmData;
+
+      try {
+        await database.ref(`reviews/${key}`).remove();
+        showToast('✅ Review deleted successfully.');
+        modal.classList.remove('show');
+        loadReviews(true);
+      } catch (error) {
+        console.error('Error deleting review:', error);
+        showToast('Error deleting review.', 'error');
       }
     }
 

@@ -46,14 +46,14 @@ const firebaseConfig = {
 async function fetchTokens() {
     try {
         const db = firebase.database();
-        const snapshot = await db.ref('tokens/openAI').once('value');
+        const snapshot = await db.ref('tokens/open_ai').once('value');
         const data = snapshot.val();
         
-        if (data) {
+        if (data && data.api_key) {
             console.log('✅ Tokens fetched successfully');
             return {
-                token: data.openai_token,
-                endpoint: data.github_endpoint
+                token: data.api_key,
+                endpoint: 'https://api.openai.com/v1'
             };
         } else {
             console.error('❌ No token data found in Firebase');

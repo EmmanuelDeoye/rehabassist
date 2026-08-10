@@ -107,11 +107,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function fetchVisionTokens() {
     if (visionConfig.token) return true;
     try {
-      const snapshot = await database.ref('tokens/openAI').once('value');
+      const snapshot = await database.ref('tokens/open_ai').once('value');
       const data = snapshot.val();
-      if (data?.openai_token && data?.github_endpoint) {
-        visionConfig.token = data.openai_token;
-        visionConfig.endpoint = data.github_endpoint.replace(/\/$/, '');
+      if (data?.api_key) {
+        visionConfig.token = data.api_key;
+        visionConfig.endpoint = 'https://api.openai.com/v1';
         return true;
       }
       console.warn('Vision (OpenAI) credentials missing');
@@ -1021,28 +1021,74 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
   async function generateConversationTitle(userText, aiReply) {
     if (!aiConfig.token) {
       const ok = await fetchTokens();
-      if (!ok) return null;
+      if (!ok) {
+        console.warn('[generateConversationTitle] No API token available');
+        return null;
+      }
     }
+    
+    // Make sure we have enough text to work with
+    const userSnippet = (userText || '').slice(0, 300);
+    const aiSnippet = (aiReply || '').slice(0, 300);
+    
+    if (!userSnippet || !aiSnippet) {
+      console.warn('[generateConversationTitle] Insufficient text for title generation');
+      return null;
+    }
+    
     try {
+      console.log('[generateConversationTitle] Calling API for title generation...');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+      
       const response = await fetch(`${aiConfig.endpoint}/chat/completions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiConfig.token}` },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${aiConfig.token}` 
+        },
         body: JSON.stringify({
           model: aiConfig.model,
           messages: [
-            { role: 'system', content: 'Generate a short, professional conversation title (4-7 words, title case, no quotes, no trailing period) that summarizes what the user is asking about. Return ONLY the title text.' },
-            { role: 'user', content: `User asked: "${(userText || '').slice(0, 300)}"\n\nAI answered about: "${(aiReply || '').slice(0, 300)}"` }
+            { 
+              role: 'system', 
+              content: 'Generate a short, professional conversation title (4-7 words, title case, no quotes, no trailing period) that summarizes what the user is asking about. Return ONLY the title text, nothing else.' 
+            },
+            { 
+              role: 'user', 
+              content: `User asked: "${userSnippet}"\n\nAI answered about: "${aiSnippet}"` 
+            }
           ],
           max_tokens: 30,
           temperature: 0.5
-        })
+        }),
+        signal: controller.signal
       });
-      if (!response.ok) return null;
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.error('[generateConversationTitle] API returned error:', response.status);
+        return null;
+      }
+      
       const data = await response.json();
       let title = (data.choices?.[0]?.message?.content || '').trim().replace(/^["']|["']$/g, '');
-      return title || null;
+      
+      // Validate the title
+      if (!title || title.length < 3 || title.length > 50) {
+        console.warn('[generateConversationTitle] Invalid title generated:', title);
+        return null;
+      }
+      
+      console.log('[generateConversationTitle] Generated title:', title);
+      return title;
     } catch (err) {
-      console.warn('Title generation failed:', err);
+      if (err.name === 'AbortError') {
+        console.warn('[generateConversationTitle] Title generation timed out');
+      } else {
+        console.error('[generateConversationTitle] Error:', err);
+      }
       return null;
     }
   }
@@ -1102,6 +1148,14 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
       const msg = errData?.error?.message || `API error (${response.status})`;
+      if (window.reportApiError) {
+        window.reportApiError({
+          status: response.status,
+          bodyText: JSON.stringify(errData),
+          tool: 'ask',
+          context: `chat completion (${needsVision ? 'vision' : 'text'})`
+        });
+      }
       throw new Error(msg);
     }
 
@@ -1123,29 +1177,43 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       messages.push(assistantMsg);
       renderMessages();
 
-      // Give a brand-new conversation a proper AI-written title once we
-      // have a real exchange to summarize.
+      // ---- FIX: Generate title BEFORE saving, with better error handling ----
       if (currentUser && !titleIsFinal && messages.filter(m => m.role === 'user').length === 1) {
-        generateConversationTitle(promptTextForSuggestions, reply).then(title => {
-          if (title) {
-            conversationTitle = title;
+        console.log('[runAssistantTurn] Attempting to generate title for new conversation...');
+        try {
+          const generatedTitle = await generateConversationTitle(promptTextForSuggestions, reply);
+          if (generatedTitle && generatedTitle.trim().length > 0) {
+            conversationTitle = generatedTitle;
             titleIsFinal = true;
-            if (currentConversationId) {
-              database.ref(`history/${currentUser.uid}/askConversations/${currentConversationId}`).update({ title })
-                .then(() => loadHistoryList()) // sidebar is a one-time fetch — refresh it so the new title actually shows up
-                .catch(() => {});
-            }
+            console.log('[runAssistantTurn] Title generated successfully:', conversationTitle);
+          } else {
+            console.warn('[runAssistantTurn] Title generation returned empty or null, using fallback');
+            conversationTitle = 'New Conversation';
+            titleIsFinal = true;
           }
-        });
+        } catch (titleError) {
+          console.error('[runAssistantTurn] Title generation failed with error:', titleError);
+          conversationTitle = 'New Conversation';
+          titleIsFinal = true;
+        }
+      } else if (currentUser && titleIsFinal) {
+        console.log('[runAssistantTurn] Title already finalized:', conversationTitle);
+      } else if (!currentUser) {
+        console.log('[runAssistantTurn] No user logged in, skipping title generation');
       }
 
       if (currentUser) {
+        console.log('[runAssistantTurn] Saving conversation with title:', conversationTitle || 'New Conversation');
         const saved = await saveConversation();
         if (!saved) {
-          // Try one more time with a short delay (Firebase might need a moment)
+          console.warn('[runAssistantTurn] First save attempt failed, retrying...');
           setTimeout(async () => {
             await saveConversation();
           }, 500);
+        } else {
+          console.log('[runAssistantTurn] Conversation saved successfully');
+          // Refresh the history list to show the new title
+          await loadHistoryList();
         }
       }
     } catch (error) {
@@ -1185,12 +1253,10 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       timestamp: m.timestamp || Date.now()
     }));
 
-    // Generate a title if we don't have one yet
+    // ---- FIX: Use conversationTitle or fallback to generic title ----
     let title = conversationTitle;
     if (!title) {
-      const firstUserMsg = messages.find(m => m.role === 'user');
-      const titleSource = (firstUserMsg?.displayContent || firstUserMsg?.content || 'Untitled');
-      title = titleSource.substring(0, 60).replace(/\n/g, ' ') + (titleSource.length > 60 ? '...' : '');
+      title = 'New Conversation';   // no raw user question
     }
 
     try {
@@ -1301,18 +1367,28 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
   let allConversations = [];
 
   async function loadHistoryList() {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.warn('[loadHistoryList] No user logged in');
+      return;
+    }
     try {
+      console.log('[loadHistoryList] Fetching conversations for user:', currentUser.uid);
       const snap = await database.ref(`history/${currentUser.uid}/askConversations`).orderByChild('updatedAt').once('value');
       const data = snap.val();
       allConversations = [];
       if (data) {
         allConversations = Object.entries(data).map(([id, item]) => ({ id, ...item }));
         allConversations.sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+        console.log('[loadHistoryList] Loaded', allConversations.length, 'conversations');
+        allConversations.forEach(c => {
+          console.log('  -', c.title, '(ID:', c.id, ')');
+        });
+      } else {
+        console.log('[loadHistoryList] No conversations found');
       }
       renderHistoryList(allConversations);
     } catch (error) {
-      console.error('Error loading history:', error);
+      console.error('[loadHistoryList] Error:', error);
     }
   }
 
