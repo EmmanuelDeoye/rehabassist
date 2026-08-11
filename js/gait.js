@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let recordingStartTime = null;
   let timerInterval = null;
   let maxRecordTimeout = null;
-  let aiConfig = { token: null, endpoint: null, model: 'openai/gpt-4.1' };
+  let aiConfig = { token: null, endpoint: 'https://api.openai.com/v1', model: 'gpt-4.1' };
   let currentUser = null;
   let scopeUid = null; // center owner's uid for center members, so gait history is shared
   let analysisResults = null;
@@ -108,11 +108,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   async function fetchTokens() {
     try {
-      const snapshot = await database.ref('tokens/openAI').once('value');
+      const snapshot = await database.ref('tokens/open_ai').once('value');
       const data = snapshot.val();
-      if (data && data.openai_token && data.github_endpoint) {
-        aiConfig.token = data.openai_token;
-        aiConfig.endpoint = data.github_endpoint;
+      if (data && data.api_key) {
+        aiConfig.token = data.api_key;
+        aiConfig.endpoint = 'https://api.openai.com/v1';
         console.log('AI tokens loaded');
         return true;
       }
@@ -619,7 +619,15 @@ The video frames show the patient walking. Please analyze the gait pattern and p
     });
     
     if (!response.ok) {
-      const err = await response.json();
+      const err = await response.json().catch(() => ({}));
+      if (window.reportApiError) {
+        window.reportApiError({
+          status: response.status,
+          bodyText: JSON.stringify(err),
+          tool: 'gait',
+          context: 'analyze gait images'
+        });
+      }
       throw new Error(err.error?.message || 'API error');
     }
     

@@ -175,13 +175,13 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   async function fetchTokens() {
     try {
-      const snapshot = await database.ref('tokens/openAI').once('value');
+      const snapshot = await database.ref('tokens/open_ai').once('value');
       const data = snapshot.val();
       
-      if (data) {
+      if (data && data.api_key) {
         return {
-          token: data.openai_token,
-          endpoint: data.github_endpoint
+          token: data.api_key,
+          endpoint: 'https://api.openai.com/v1'
         };
       }
       return null;
@@ -724,13 +724,22 @@ Return ONLY the HTML.`;
             { role: 'system', content: 'You are a senior rehabilitation therapist. You always return clean, printable HTML forms. Never use Markdown or code fences.' },
             { role: 'user', content: prompt }
           ],
-          model: 'openai/gpt-4.1',
+          model: 'gpt-4.1',
           temperature: 0.7,
           max_tokens: 4000
         })
       });
 
       if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        if (window.reportApiError) {
+          window.reportApiError({
+            status: response.status,
+            bodyText: errBody,
+            tool: 'format',
+            context: 'generate formatted document'
+          });
+        }
         throw new Error(`API error: ${response.status}`);
       }
 

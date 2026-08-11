@@ -72,12 +72,12 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   async function fetchTokens() {
     try {
-      const snapshot = await database.ref('tokens/openAI').once('value');
+      const snapshot = await database.ref('tokens/open_ai').once('value');
       const data = snapshot.val();
-      if (data) {
+      if (data && data.api_key) {
         return {
-          token: data.openai_token,
-          endpoint: data.github_endpoint
+          token: data.api_key,
+          endpoint: 'https://api.openai.com/v1'
         };
       }
       return null;
@@ -740,13 +740,24 @@ Requirements:
             { role: 'system', content: 'You output clean HTML with proper tables. No extra text.' },
             { role: 'user', content: prompt }
           ],
-          model: 'openai/gpt-4.1',
+          model: 'gpt-4.1',
           temperature: 0.3,
           max_tokens: 4000
         })
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        if (window.reportApiError) {
+          window.reportApiError({
+            status: response.status,
+            bodyText: errBody,
+            tool: 'standardized',
+            context: 'generate standardized tool'
+          });
+        }
+        throw new Error(`API error: ${response.status}`);
+      }
 
       const data = await response.json();
       let content = data.choices[0].message.content;

@@ -190,7 +190,7 @@ if (typeof THEMES === 'undefined') {
 let selectedTheme = THEMES[0];
 let selectedArtStyle = 'professional';
 let contentData = null;
-let aiConfig = { token: null, endpoint: 'https://api.openai.com/v1', model: 'gpt-4' };
+let aiConfig = { token: null, endpoint: 'https://api.openai.com/v1', model: 'gpt-4.1' };
 let structuredSlides = null;
 let currentUser = null;
 let isInitialized = false;
@@ -281,13 +281,12 @@ async function fetchTokens() {
             return false;
         }
         const database = firebase.database();
-        const snapshot = await database.ref('tokens/openAI').once('value');
+        const snapshot = await database.ref('tokens/open_ai').once('value');
         const data = snapshot.val();
-        if (data?.openai_token) {
-            aiConfig.token = data.openai_token;
-            aiConfig.endpoint = (data.github_endpoint && data.github_endpoint.startsWith('http'))
-                ? data.github_endpoint : 'https://api.openai.com/v1';
-            aiConfig.model = 'gpt-4';
+        if (data?.api_key) {
+            aiConfig.token = data.api_key;
+            aiConfig.endpoint = 'https://api.openai.com/v1';
+            aiConfig.model = 'gpt-4.1';
             return true;
         }
         console.warn('OpenAI API key missing. Using fallback local structuring.');
@@ -531,6 +530,14 @@ Return ONLY the JSON array.`;
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
             console.warn('AI error:', errData);
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: response.status,
+                    bodyText: JSON.stringify(errData),
+                    tool: 'ppt',
+                    context: 'structure slides'
+                });
+            }
             return createFallbackStructure(rawContent, modeLabel, patientName);
         }
 
@@ -551,6 +558,13 @@ Return ONLY the JSON array.`;
         return cleaned;
     } catch (error) {
         console.error('AI structuring error:', error);
+        if (window.reportApiError) {
+            window.reportApiError({
+                bodyText: String(error && error.message || error),
+                tool: 'ppt',
+                context: 'structure slides (network/exception)'
+            });
+        }
         return createFallbackStructure(rawContent, modeLabel, patientName);
     }
 }

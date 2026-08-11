@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // =========================================================================
     // 2. STATE & CONFIG
     // =========================================================================
-    let aiConfig = { token: null, endpoint: null, model: "openai/gpt-4.1" };
+    let aiConfig = { token: null, endpoint: 'https://api.openai.com/v1', model: "gpt-4.1" };
     let currentUser = null;
     let activeMode = 'text';
     let documentType = null;
@@ -104,11 +104,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function fetchAPITokens() {
         try {
-            const snapshot = await database.ref('tokens/openAI').once('value');
+            const snapshot = await database.ref('tokens/open_ai').once('value');
             const data = snapshot.val();
-            if (data && data.openai_token && data.github_endpoint) {
-                aiConfig.token = data.openai_token;
-                aiConfig.endpoint = data.github_endpoint;
+            if (data && data.api_key) {
+                aiConfig.token = data.api_key;
+                aiConfig.endpoint = 'https://api.openai.com/v1';
                 console.log('AI tokens loaded');
                 return true;
             }
@@ -604,7 +604,18 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: { 'Authorization': `Bearer ${aiConfig.token}` },
             body: formData
         });
-        if (!response.ok) throw new Error(`Transcription failed: ${response.status}`);
+        if (!response.ok) {
+            const errBody = await response.text().catch(() => '');
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: response.status,
+                    bodyText: errBody,
+                    tool: 'documentation',
+                    context: 'transcribe audio'
+                });
+            }
+            throw new Error(`Transcription failed: ${response.status}`);
+        }
         const data = await response.json();
         return data.text;
     }
@@ -872,7 +883,15 @@ document.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(requestBody)
         });
         if (!response.ok) {
-            const err = await response.json();
+            const err = await response.json().catch(() => ({}));
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: response.status,
+                    bodyText: JSON.stringify(err),
+                    tool: 'documentation',
+                    context: 'analyze content'
+                });
+            }
             throw new Error(err.error?.message || 'API error');
         }
         const data = await response.json();
