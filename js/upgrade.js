@@ -297,7 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ever charged, but users were still being granted paid access. Replace
   // this with your LIVE Flutterwave public key (starts with FLWPUBK-, no
   // "_TEST") from your Flutterwave dashboard before going live.
-  const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK-REPLACE_WITH_YOUR_LIVE_KEY-X';
+  const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK-a433c420ff08c5ffe8d0edb484e5b6bc-X';
   const GPAY_MERCHANT_ID = 'BCR2DN7TTCZMPJCG';
 
   // ===== Helpers =====
