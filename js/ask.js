@@ -1018,12 +1018,20 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
 
   // Turns the first exchange into a short, professional conversation title,
   // instead of just truncating the user's raw first message (feature 3).
+  //
+  // FIX: this used to request only max_tokens: 30 and simply give up (falling
+  // back to the literal string "New Conversation") on any failure — including
+  // the AI backend returning a 200 OK with empty content, which happens more
+  // often than you'd expect with a tight token budget. It now retries once
+  // with more headroom, and if the AI is genuinely unavailable, falls back to
+  // a title derived from the user's own first message instead of a useless
+  // generic placeholder.
   async function generateConversationTitle(userText, aiReply) {
     if (!aiConfig.token) {
       const ok = await fetchTokens();
       if (!ok) {
         console.warn('[generateConversationTitle] No API token available');
-        return null;
+        return localTitleFallback(userText);
       }
     }
     
@@ -1033,11 +1041,29 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
     
     if (!userSnippet || !aiSnippet) {
       console.warn('[generateConversationTitle] Insufficient text for title generation');
-      return null;
+      return localTitleFallback(userText);
     }
-    
+
+    const aiTitle = await requestTitleFromAI(userSnippet, aiSnippet, 1)
+      || await requestTitleFromAI(userSnippet, aiSnippet, 2);
+
+    return aiTitle || localTitleFallback(userText);
+  }
+
+  // Derives a readable title straight from the user's own message when the
+  // AI is unavailable/empty, so the history list never shows the generic
+  // "New Conversation" placeholder just because a single API call failed.
+  function localTitleFallback(userText) {
+    const cleaned = (userText || '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return 'New Conversation';
+    const words = cleaned.split(' ').slice(0, 8).join(' ');
+    const title = words.length < cleaned.length ? `${words}…` : words;
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  }
+
+  async function requestTitleFromAI(userSnippet, aiSnippet, attempt) {
     try {
-      console.log('[generateConversationTitle] Calling API for title generation...');
+      console.log(`[generateConversationTitle] Calling API for title generation (attempt ${attempt})...`);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
       
@@ -1059,7 +1085,9 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
               content: `User asked: "${userSnippet}"\n\nAI answered about: "${aiSnippet}"` 
             }
           ],
-          max_tokens: 30,
+          // Bumped from 30: too tight a budget is exactly what let a 200 OK
+          // response come back with zero visible content on the first attempt.
+          max_tokens: attempt === 1 ? 60 : 150,
           temperature: 0.5
         }),
         signal: controller.signal
@@ -1073,11 +1101,13 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       }
       
       const data = await response.json();
-      let title = (data.choices?.[0]?.message?.content || '').trim().replace(/^["']|["']$/g, '');
+      const choice = data.choices && data.choices[0];
+      let title = (choice && choice.message && choice.message.content ? choice.message.content : '')
+        .trim().replace(/^["']|["']$/g, '');
       
       // Validate the title
       if (!title || title.length < 3 || title.length > 50) {
-        console.warn('[generateConversationTitle] Invalid title generated:', title);
+        console.warn(`[generateConversationTitle] Invalid/empty title on attempt ${attempt}:`, title);
         return null;
       }
       
@@ -1177,23 +1207,19 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       messages.push(assistantMsg);
       renderMessages();
 
-      // ---- FIX: Generate title BEFORE saving, with better error handling ----
+      // ---- Generate title BEFORE saving, with retry + local fallback ----
       if (currentUser && !titleIsFinal && messages.filter(m => m.role === 'user').length === 1) {
         console.log('[runAssistantTurn] Attempting to generate title for new conversation...');
         try {
           const generatedTitle = await generateConversationTitle(promptTextForSuggestions, reply);
-          if (generatedTitle && generatedTitle.trim().length > 0) {
-            conversationTitle = generatedTitle;
-            titleIsFinal = true;
-            console.log('[runAssistantTurn] Title generated successfully:', conversationTitle);
-          } else {
-            console.warn('[runAssistantTurn] Title generation returned empty or null, using fallback');
-            conversationTitle = 'New Conversation';
-            titleIsFinal = true;
-          }
+          conversationTitle = generatedTitle && generatedTitle.trim().length > 0
+            ? generatedTitle
+            : localTitleFallback(promptTextForSuggestions);
+          titleIsFinal = true;
+          console.log('[runAssistantTurn] Title finalized:', conversationTitle);
         } catch (titleError) {
           console.error('[runAssistantTurn] Title generation failed with error:', titleError);
-          conversationTitle = 'New Conversation';
+          conversationTitle = localTitleFallback(promptTextForSuggestions);
           titleIsFinal = true;
         }
       } else if (currentUser && titleIsFinal) {
@@ -1253,10 +1279,12 @@ Do NOT include any other text, explanations, or markdown. Return ONLY the JSON a
       timestamp: m.timestamp || Date.now()
     }));
 
-    // ---- FIX: Use conversationTitle or fallback to generic title ----
+    // Use the AI-refined title if we have one; otherwise derive something
+    // useful from the conversation itself rather than a generic placeholder.
     let title = conversationTitle;
     if (!title) {
-      title = 'New Conversation';   // no raw user question
+      const firstUserMsg = messages.find(m => m.role === 'user');
+      title = localTitleFallback(firstUserMsg ? firstUserMsg.content : '');
     }
 
     try {

@@ -58,6 +58,27 @@ function initializeAuth() {
   const auth = firebase.auth();
   const database = firebase.database();
 
+  // ==============================================================
+  // REHABLIX PARTNERS: resolve a stored referral code to a partner uid
+  // ==============================================================
+  // js/modal.js captures ?ref=CODE into localStorage on any page load.
+  // At signup time we look that code up in the referralCodes index
+  // (referralCodes/{code} -> partnerUid) to find who to credit. We don't
+  // clear localStorage here — the caller clears it only after a
+  // successful account creation, so a failed signup attempt can still
+  // retry with the same code.
+  async function resolveReferralCode() {
+    try {
+      const code = localStorage.getItem('rehablix_ref_code');
+      if (!code) return null;
+      const snap = await database.ref('referralCodes/' + code).once('value');
+      return snap.val() || null;
+    } catch (err) {
+      console.warn('Referral code lookup failed:', err);
+      return null;
+    }
+  }
+
   // Show toast message
   function showToast(message, duration = 3000, isError = false) {
     if (!toast) return;
@@ -507,7 +528,25 @@ function initializeAuth() {
             termsAgreed: true,
             termsAgreedAt: new Date().toISOString()
           };
+
+          // Rehablix Partners: attribute this signup to a referring
+          // partner if a valid ?ref= code is on file (see resolveReferralCode).
+          const referrerUid = await resolveReferralCode();
+          if (referrerUid && referrerUid !== user.uid) {
+            userData.referredBy = referrerUid;
+          }
+
           await userRef.set(userData);
+
+          if (referrerUid && referrerUid !== user.uid) {
+            database.ref(`partners/${referrerUid}/referrals/${user.uid}`).set({
+              name: userData.name,
+              email: userData.email,
+              joinedAt: new Date().toISOString()
+            }).catch(err => console.warn('Referral tracking failed:', err));
+          }
+          localStorage.removeItem('rehablix_ref_code');
+
           showToast('🎉 Account created with Google!');
           showWelcomeAnimation();
         } else {
@@ -824,7 +863,24 @@ function initializeAuth() {
           userRecord.centerId = user.uid; // a center owner's own uid doubles as the center id
         }
 
+        // Rehablix Partners: if this visitor arrived via a partner's
+        // referral link, resolve the code to a partner uid and attach it
+        // so future subscription payments can be attributed & commissioned.
+        const referrerUid = await resolveReferralCode();
+        if (referrerUid && referrerUid !== user.uid) {
+          userRecord.referredBy = referrerUid;
+        }
+
         await database.ref('users/' + user.uid).set(userRecord);
+
+        if (referrerUid && referrerUid !== user.uid) {
+          database.ref(`partners/${referrerUid}/referrals/${user.uid}`).set({
+            name: name,
+            email: email,
+            joinedAt: new Date().toISOString()
+          }).catch(err => console.warn('Referral tracking failed:', err));
+        }
+        localStorage.removeItem('rehablix_ref_code');
 
         if (accountType === 'center') {
           await database.ref('users/' + user.uid + '/centers').set({

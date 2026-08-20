@@ -230,19 +230,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function getAvailableOutputSizes() {
         switch (currentPlan) {
-            case 'free': return ['2000'];  // Minimal only
-            case 'student': return ['2000', '3500'];  // Minimal & Moderate
-            case 'pro': return ['2000', '3500', '5000'];  // All
-            default: return ['2000'];
+            case 'free': return ['3500'];  // Minimal only
+            case 'student': return ['3500', '5000'];  // Minimal & Moderate
+            case 'pro': return ['3500', '5000', '8000'];  // All
+            default: return ['3500'];
         }
     }
 
     function getDefaultOutputSize() {
         switch (currentPlan) {
-            case 'free': return '2000';
-            case 'student': return '3500';
-            case 'pro': return '5000';
-            default: return '2000';
+            case 'free': return '3500';
+            case 'student': return '5000';
+            case 'pro': return '8000';
+            default: return '3500';
         }
     }
 
@@ -1440,7 +1440,7 @@ ${fidelityRule}
    - Clear clinical reasoning
    - Actionable recommendations
 
-3. **Format:** Markdown headings (##), bullet points (-), **bold** for emphasis. No tables.
+3. **Format:** Markdown headings (##), bullet points (-), **bold** for emphasis. Use a markdown table for structured tabular data where it aids clarity — vitals, ROM/strength measurements, medication lists — but don't force data into a table if plain prose reads better.
 
 4. **Tone:** Professional, objective, patient-centered.`;
 
@@ -1465,6 +1465,26 @@ ${combinedText || 'No notes provided.'}`;
 
         console.log('[AI] Generating... Mode:', currentMode, '| Fidelity:', fidelityMode);
 
+        // ---------------------------------------------------------------
+        // BUGFIX: the old code did `data.choices[0].message.content` and
+        // returned it as-is. Occasionally the AI backend returns a 200 OK
+        // with NO usable content — most commonly because:
+        //   (a) the model's safety/content filter silently rejected the
+        //       clinical notes (diagnoses, drug names, injury descriptions
+        //       are common false-positive triggers), or
+        //   (b) the response was truncated by max_tokens before any real
+        //       content was written.
+        // Either way, that empty string used to get saved straight to
+        // Firebase as the result, which is exactly what produced the
+        // "No content available" screen. We now validate the response,
+        // retry once automatically (with headroom added to the token
+        // budget, in case (b) was the cause), and only fail with a clear,
+        // actionable message if it's still empty.
+        const result = await callAIWithValidation(messages, maxTokens);
+        return result.content;
+    }
+
+    async function callAIWithValidation(messages, maxTokens, attempt = 1) {
         const url = `${aiConfig.endpoint}/chat/completions`;
         const response = await fetch(url, {
             method: 'POST',
@@ -1483,6 +1503,14 @@ ${combinedText || 'No notes provided.'}`;
 
         if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: response.status,
+                    bodyText: JSON.stringify(errData),
+                    tool: 'presentation',
+                    context: `generate ${currentMode} (attempt ${attempt})`
+                });
+            }
             if (response.status === 401) throw new Error('Authentication failed.');
             if (response.status === 429) throw new Error('Too many requests. Wait a moment.');
             if (response.status === 503) throw new Error('Service temporarily busy.');
@@ -1490,7 +1518,50 @@ ${combinedText || 'No notes provided.'}`;
         }
 
         const data = await response.json();
-        return data.choices[0].message.content;
+        const choice = data.choices && data.choices[0];
+        const finishReason = choice ? choice.finish_reason : null;
+        const content = (choice && choice.message && typeof choice.message.content === 'string')
+            ? choice.message.content.trim()
+            : '';
+
+        if (finishReason === 'content_filter') {
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: 200,
+                    bodyText: `content_filter triggered (attempt ${attempt})`,
+                    tool: 'presentation',
+                    context: `generate ${currentMode}`
+                });
+            }
+            throw new Error('The AI declined to generate this content, most likely due to sensitive wording in the notes (certain diagnoses, medications, or injury descriptions can trigger this). Try rephrasing and generate again.');
+        }
+
+        // Empty/near-empty content: retry once with a bigger token budget
+        // before giving up, in case it was truncated mid-reasoning.
+        if (content.length < 20) {
+            if (attempt < 2) {
+                console.warn(`[AI] Empty/short response (finish_reason=${finishReason}). Retrying with more headroom…`);
+                return callAIWithValidation(messages, Math.min(maxTokens + 1500, 8000), attempt + 1);
+            }
+            if (window.reportApiError) {
+                window.reportApiError({
+                    status: 200,
+                    bodyText: `Empty response after ${attempt} attempts, finish_reason=${finishReason}`,
+                    tool: 'presentation',
+                    context: `generate ${currentMode}`
+                });
+            }
+            throw new Error('The AI returned an empty response after two attempts. Please try again, or choose a larger output size and retry.');
+        }
+
+        // Truncated but non-empty: still usable, but warn the user so they
+        // know to pick a larger output size next time rather than assume
+        // the document is complete.
+        if (finishReason === 'length') {
+            showToast('⚠️ Output may be cut short — consider choosing a larger output size for a complete document.', 'info', 6000);
+        }
+
+        return { content, finishReason };
     }
 
     async function saveToHistory(rawMarkdown, htmlContent) {
@@ -1665,6 +1736,15 @@ ${combinedText || 'No notes provided.'}`;
         try {
             const start = Date.now();
             const rawMarkdown = await generatePresentation();
+
+            // Defense in depth: even though callAIWithValidation() already
+            // rejects empty/near-empty responses, never let a near-empty
+            // result reach Firebase — this is the last line of defense
+            // against "No content available" ever showing up again.
+            if (!rawMarkdown || rawMarkdown.trim().length < 20) {
+                throw new Error('Generation produced no usable content. Please try again.');
+            }
+
             const htmlContent = marked.parse(rawMarkdown);
             const historyId = await saveToHistory(rawMarkdown, htmlContent);
             currentHistoryIdInput.value = historyId || '';

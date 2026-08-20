@@ -18,6 +18,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer>
     </script>
 
+    <!-- EmailJS: sends partner approval/rejection emails client-side since
+         this site has no backend. See js/admin.js EMAILJS_CONFIG for setup. -->
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" defer>
+    </script>
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="css/admin.css" />
     <link rel="stylesheet" href="css/main.css" />
@@ -467,6 +472,11 @@
                         <span>Reviews</span>
                         <span id="reviewCountBadge" class="badge-sidebar">0</span>
                     </a>
+                    <a href="#" class="sidebar-link" data-view="partners">
+                        <span class="sidebar-icon">🤝</span>
+                        <span>Partners</span>
+                        <span id="partnerCountBadge" class="badge-sidebar">0</span>
+                    </a>
                     <a href="#" class="sidebar-link" data-view="settings">
                         <span class="sidebar-icon">⚙️</span>
                         <span>Settings</span>
@@ -623,8 +633,17 @@
                 <!-- ======= REVIEWS VIEW ======= -->
                 <section id="viewReviews" class="admin-view" style="display:none;">
                     <div class="view-header">
-                        <h1>Reviews &amp; Issue Reports</h1>
-                        <p class="view-subtitle">API failures reported automatically or submitted by users</p>
+                        <h1>Reviews &amp; Ratings</h1>
+                        <p class="view-subtitle">User star/emoji ratings &amp; feedback, plus API failures reported automatically</p>
+                    </div>
+
+                    <!-- Rating summary -->
+                    <div class="stats-breakdown glass-card" id="ratingSummaryCard">
+                        <h3>Average User Rating</h3>
+                        <div class="plan-breakdown">
+                            <span>Average: <strong id="avgRatingValue">—</strong></span>
+                            <span>Total Ratings: <strong id="totalRatingsCount">0</strong></span>
+                        </div>
                     </div>
 
                     <!-- Toolbar -->
@@ -635,11 +654,12 @@
                                     <circle cx="11" cy="11" r="8" />
                                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                                 </svg>
-                                <input type="search" id="reviewSearch" placeholder="Search by tool, context, or email…" />
+                                <input type="search" id="reviewSearch" placeholder="Search by tool, context, feedback, or email…" />
                             </div>
                             <div class="toolbar-filters">
                                 <select id="filterReviewType">
                                     <option value="">All Types</option>
+                                    <option value="user_feedback">User Ratings &amp; Feedback</option>
                                     <option value="insufficient_funds">Insufficient Funds</option>
                                     <option value="api_error">Other API Error</option>
                                 </select>
@@ -666,7 +686,7 @@
                             <table id="reviewTable">
                                 <thead>
                                     <tr>
-                                        <th>Issue</th>
+                                        <th>Item</th>
                                         <th style="text-align:center;">Actions</th>
                                     </tr>
                                 </thead>
@@ -682,6 +702,66 @@
                         <div id="reviewsLoading" class="table-loading">
                             <div class="loading-spinner"></div>
                             <p>Loading reviews…</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ======= PARTNERS VIEW ======= -->
+                <section id="viewPartners" class="admin-view" style="display:none;">
+                    <div class="view-header">
+                        <h1>Rehablix Partners</h1>
+                        <p class="view-subtitle">Review, approve, or disallow affiliate partner applications</p>
+                    </div>
+
+                    <!-- Toolbar -->
+                    <div class="users-toolbar glass-card">
+                        <div class="toolbar-row">
+                            <div class="search-wrapper">
+                                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                </svg>
+                                <input type="search" id="partnerSearch" placeholder="Search by name, email, or code…" />
+                            </div>
+                            <div class="toolbar-filters">
+                                <select id="filterPartnerStatus">
+                                    <option value="">All Statuses</option>
+                                    <option value="pending">Pending Review</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                                <select id="sortPartners">
+                                    <option value="newest">Newest First</option>
+                                    <option value="oldest">Oldest First</option>
+                                    <option value="earnings">Highest Earnings</option>
+                                </select>
+                            </div>
+                            <button id="refreshPartnersBtn" class="admin-btn outline small">⟳ Refresh</button>
+                        </div>
+                    </div>
+
+                    <!-- Partner table -->
+                    <div class="table-container glass-card">
+                        <div class="table-scroll">
+                            <table id="partnerTable">
+                                <thead>
+                                    <tr>
+                                        <th>Partner</th>
+                                        <th style="text-align:center;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="partnerTableBody">
+                                    <!-- dynamically rendered -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="partnersEmpty" class="empty-table-state">
+                            <span>🔍</span>
+                            <p>No partner applications match your filters.</p>
+                        </div>
+                        <div id="partnersLoading" class="table-loading">
+                            <div class="loading-spinner"></div>
+                            <p>Loading partners…</p>
                         </div>
                     </div>
                 </section>
@@ -832,6 +912,44 @@
             <div class="modal-footer">
                 <button class="admin-btn outline small" data-modal="reviewDetailModal">Close</button>
                 <button id="reviewDetailResolveBtn" class="admin-btn primary">Mark Resolved</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Partner Detail Modal -->
+    <div id="partnerDetailModal" class="admin-modal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Partner Application</h2>
+                <button class="modal-close" data-modal="partnerDetailModal">&times;</button>
+            </div>
+            <div class="modal-body" id="partnerDetailBody">
+                <!-- filled by JS -->
+            </div>
+            <div class="modal-footer" id="partnerDetailFooter">
+                <button class="admin-btn outline small" data-modal="partnerDetailModal">Close</button>
+                <button id="partnerRejectBtn" class="admin-btn danger">Reject</button>
+                <button id="partnerApproveBtn" class="admin-btn primary">Approve</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reject Reason Modal -->
+    <div id="rejectReasonModal" class="admin-modal">
+        <div class="modal-content glass-card" style="max-width:420px;">
+            <div class="modal-header">
+                <h2>Reject Application</h2>
+                <button class="modal-close" data-modal="rejectReasonModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="rejectReasonInput">Reason (included in the email to the applicant)</label>
+                    <textarea id="rejectReasonInput" rows="3" placeholder="e.g. We're not able to approve applications without an established audience yet."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="admin-btn outline small" data-modal="rejectReasonModal">Cancel</button>
+                <button id="confirmRejectBtn" class="admin-btn danger">Reject &amp; Notify</button>
             </div>
         </div>
     </div>

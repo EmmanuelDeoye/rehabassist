@@ -327,6 +327,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // ==================== LOAD CENTER / ORGANIZATION CARD ====================
       await loadCenterCard(uid, userData);
+
+      // ==================== LOAD REHABLIX PARTNERS CARD ====================
+      await loadPartnerCard(uid);
       
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -334,7 +337,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // ==================== CENTER / ORGANIZATION CARD ====================
+  // ==================== REHABLIX PARTNERS CARD ====================
+  async function loadPartnerCard(uid) {
+    const card = document.getElementById('partnerCard');
+    const body = document.getElementById('partnerCardBody');
+    if (!card || !body) return;
+
+    try {
+      const snap = await db.ref(`users/${uid}/partner`).once('value');
+      const partner = snap.val();
+      const status = partner && partner.status;
+
+      card.style.display = 'block';
+
+      if (!status || status === 'none') {
+        body.innerHTML = `
+          <p style="color: var(--settings-text-secondary); margin: 0 0 1rem;">
+            Share rehablix with your network and earn <strong>20% commission</strong> on every subscription
+            payment made by people you refer.
+          </p>
+          <a href="partner.html" class="btn-settings-primary" style="display:inline-flex; text-decoration:none;">
+            <i class="fas fa-hand-holding-usd"></i> Earn with Rehablix
+          </a>
+        `;
+      } else if (status === 'pending') {
+        body.innerHTML = `
+          <div class="info-row">
+            <span class="info-label">Application Status:</span>
+            <span class="info-value"><span class="badge-warning">Pending Review ⏳</span></span>
+          </div>
+          <p style="color: var(--settings-text-secondary); margin: 0.75rem 0 0; font-size: 0.9rem;">
+            We'll email you as soon as a decision is made.
+          </p>
+        `;
+      } else if (status === 'approved') {
+        body.innerHTML = `
+          <div class="info-row">
+            <span class="info-label">Partner Status:</span>
+            <span class="info-value"><span class="badge-success">Approved ✓</span></span>
+          </div>
+          <a href="partner.html" class="btn-settings-primary" style="display:inline-flex; text-decoration:none; margin-top: 0.75rem;">
+            <i class="fas fa-chart-line"></i> View Partner Dashboard
+          </a>
+        `;
+      } else if (status === 'rejected') {
+        body.innerHTML = `
+          <div class="info-row">
+            <span class="info-label">Application Status:</span>
+            <span class="info-value"><span class="badge-warning">Not Approved</span></span>
+          </div>
+          <a href="partner.html" class="btn-settings-primary" style="display:inline-flex; text-decoration:none; margin-top: 0.75rem;">
+            <i class="fas fa-redo"></i> Apply Again
+          </a>
+        `;
+      } else {
+        card.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Error loading partner card:', err);
+      card.style.display = 'none';
+    }
+  }
+
+
   const TOOL_LABELS = {
     doc: 'Documentation', presentation: 'Presentations', rom: 'ROM & Gait Analyzer',
     project: 'Projects', standardized: 'Standardized Tests', exam: 'Exam Prep',

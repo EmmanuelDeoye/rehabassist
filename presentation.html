@@ -38,6 +38,7 @@
     <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="css/presentation.css">
   <link rel="stylesheet" href="css/invite-modal.css">
+  <link rel="stylesheet" href="css/error-reporter.css">
 </head>
 <body>
     <nav class="navbar">
@@ -305,16 +306,16 @@
                         <label>Output Detail Level</label>
                         <div class="size-options">
                             <label class="size-option">
-                                <input type="radio" name="outputSize" value="2000">
-                                <span>Minimal (2000 tokens)</span>
-                            </label>
-                            <label class="size-option">
                                 <input type="radio" name="outputSize" value="3500">
-                                <span>Moderate (3500 tokens)</span>
+                                <span>Minimal</span>
                             </label>
                             <label class="size-option">
-                                <input type="radio" name="outputSize" value="5000" checked>
-                                <span>Detailed (5000 tokens)</span>
+                                <input type="radio" name="outputSize" value="5000">
+                                <span>Moderate</span>
+                            </label>
+                            <label class="size-option">
+                                <input type="radio" name="outputSize" value="8000" checked>
+                                <span>Detailed</span>
                             </label>
                         </div>
                     </div>
@@ -422,6 +423,7 @@
     <script src="js/theme.js" defer></script>
     <script src="js/tools.js" defer></script>
     <script src="js/handoff.js" defer></script>
+    <script src="js/error-reporter.js" defer></script>
     <script src="js/presentation.js" defer></script>
     <script>
       // Bring over anything the user shared with Ask AI (feature 7)

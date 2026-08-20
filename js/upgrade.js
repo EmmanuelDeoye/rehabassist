@@ -298,7 +298,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // this with your LIVE Flutterwave public key (starts with FLWPUBK-, no
   // "_TEST") from your Flutterwave dashboard before going live.
   const FLUTTERWAVE_PUBLIC_KEY = 'FLWPUBK-a433c420ff08c5ffe8d0edb484e5b6bc-X';
-  const GPAY_MERCHANT_ID = 'BCR2DN7TTCZMPJCG';
 
   // ===== Helpers =====
   function showToast(message, type = 'success', duration = 3500) {
@@ -633,7 +632,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         case 'gpay':
           iconClass = 'gpay';
           name = 'Google Pay';
-          desc = 'Credit/Debit Card, UPI';
+          desc = 'Fast checkout with Google Pay';
           icon = 'G';
           break;
       }
@@ -729,75 +728,64 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ===== Google Pay =====
-  async function initGooglePay(amount, pricing) {
-    const baseRequest = {
-      apiVersion: 2,
-      apiVersionMinor: 0
-    };
-
-    const allowedCardNetworks = ['MASTERCARD', 'VISA', 'AMEX'];
-    const allowedCardAuthMethods = ['PAN_ONLY', 'CRYPTOGRAM_3DS'];
-
-    const tokenizationSpecification = {
-      type: 'PAYMENT_GATEWAY',
-      parameters: {
-        gateway: 'example',
-        gatewayMerchantId: GPAY_MERCHANT_ID
-      }
-    };
-
-    const baseCardPaymentMethod = {
-      type: 'CARD',
-      parameters: {
-        allowedAuthMethods: allowedCardAuthMethods,
-        allowedCardNetworks: allowedCardNetworks
-      }
-    };
-
-    const cardPaymentMethod = Object.assign({}, baseCardPaymentMethod, {
-      tokenizationSpecification: tokenizationSpecification
-    });
-
-    // ⚠️ This was hardcoded to 'TEST', which means Google Pay never charged
-    // real money — and GPay is the ONLY gateway for US/UK/CA/AU/DE/FR/BR
-    // customers, so essentially no Western customer's card was ever really
-    // charged; the "successful" callback still granted paid access for free.
-    // 'PRODUCTION' requires your Google Pay Business Console account to be
-    // fully verified for production first, or GPay will simply report
-    // itself unavailable (safe failure, not a crash) until that's done.
-    const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: 'PRODUCTION'
-    });
-
-    const isReadyToPayRequest = Object.assign({}, baseRequest);
-    isReadyToPayRequest.allowedPaymentMethods = [baseCardPaymentMethod];
-
-    try {
-      const response = await paymentsClient.isReadyToPay(isReadyToPayRequest);
-      
-      if (response.result) {
-        const paymentDataRequest = Object.assign({}, baseRequest);
-        paymentDataRequest.allowedPaymentMethods = [cardPaymentMethod];
-        paymentDataRequest.transactionInfo = {
-          totalPriceStatus: 'FINAL',
-          totalPrice: amount.toFixed(2),
-          currencyCode: pricing.currency,
-          countryCode: userCountry
-        };
-        paymentDataRequest.merchantInfo = {
-          merchantName: 'rehablix',
-          merchantId: GPAY_MERCHANT_ID
-        };
-
-        const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
-        handlePaymentSuccess('gpay', { paymentMethodData: paymentData }, amount);
-      } else {
-        showToast('Google Pay is not available on this device', 'error');
-      }
-    } catch (err) {
-      console.error('Google Pay error:', err);
-      showToast('Google Pay payment failed', 'error');
+  // FIX (was broken): this used to call Google's raw
+  // `google.payments.api.PaymentsClient` directly with
+  // `gateway: 'example'` (a placeholder Google only accepts in their own
+  // demos) and `environment: 'PRODUCTION'`. Neither of those can ever work
+  // for a real merchant: 'example' isn't a real payment processor, so
+  // Google rejects/silently no-ops the tokenization, and 'PRODUCTION' mode
+  // requires a fully Business-Console-verified Google Pay merchant account
+  // or it just reports Google Pay as "not available" — which, since GPay
+  // was the ONLY gateway configured for US/UK/CA/AU/DE/FR/BR, meant every
+  // customer in those countries hit a dead end (or, in earlier test-mode
+  // versions, got "successful" callbacks without ever being charged).
+  //
+  // Real fix: this static, backend-less site has no way to run its own
+  // Google Pay <-> processor tokenization exchange (that requires a
+  // Google-approved PSP integration id, which only an actual payment
+  // processor can issue you). Flutterwave is already wired up above and
+  // has first-class Google Pay support built into its own checkout
+  // (Flutterwave takes care of the Google Wallet handshake, card
+  // tokenization, and settlement) — so "Google Pay" in the UI now opens
+  // the Flutterwave checkout pre-configured to show only the Google Pay
+  // option. This is a fully working integration once you:
+  //   1. Set FLUTTERWAVE_PUBLIC_KEY above to your real live key.
+  //   2. In the Flutterwave dashboard -> Settings -> Checkout, enable the
+  //      "Google Pay" payment option for your account (it's opt-in).
+  function initGooglePay(amount, pricing) {
+    if (typeof FlutterwaveCheckout !== 'function') {
+      showToast('Google Pay is temporarily unavailable. Please try another payment method.', 'error');
+      return;
     }
+
+    FlutterwaveCheckout({
+      public_key: FLUTTERWAVE_PUBLIC_KEY,
+      tx_ref: `rehab_gpay_${Date.now()}`,
+      amount: amount,
+      currency: pricing.currency,
+      payment_options: 'googlepay',
+      customer: {
+        email: currentUser.email,
+        name: currentUser.displayName || 'User'
+      },
+      meta: {
+        plan: selectedPlan,
+        billing: isYearly ? 'yearly' : 'monthly',
+        user_id: currentUser.uid,
+        country: userCountry,
+        method: 'googlepay'
+      },
+      customizations: {
+        title: 'rehablix',
+        description: `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Plan - Google Pay`
+      },
+      callback: (data) => {
+        if (data.status === 'successful') {
+          handlePaymentSuccess('gpay', data, amount);
+        }
+      },
+      onclose: () => showToast('Payment cancelled', 'warning', 2000)
+    });
   }
 
   // ===== Payment Success Handler =====
@@ -849,11 +837,58 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.dispatchEvent(new CustomEvent('planUpdated', { detail: { plan: selectedPlan } }));
 
       showSuccessCelebration(selectedPlan, endDate);
+
+      // Rehablix Partners: credit the referring partner's 20% commission,
+      // if this user was referred by one. Never let this block/undo the
+      // subscription the user just paid for — failures here are swallowed
+      // and logged rather than surfaced as a payment error.
+      creditPartnerCommission(gateway, transactionRef, amount).catch(err => {
+        console.error('Partner commission crediting failed:', err);
+      });
       
     } catch (error) {
       console.error('Subscription update failed:', error);
       showToast('Payment successful but subscription update failed. Please contact support.', 'error', 5000);
     }
+  }
+
+  // ===== Rehablix Partners: Referral Commission =====
+  const PARTNER_COMMISSION_RATE = 0.20; // 20% of every subscription payment
+
+  async function creditPartnerCommission(gateway, transactionRef, amount) {
+    if (!currentUser) return;
+
+    const userSnap = await database.ref(`users/${currentUser.uid}/referredBy`).once('value');
+    const referrerUid = userSnap.val();
+    if (!referrerUid || referrerUid === currentUser.uid) return; // not referred / self-referral guard
+
+    const partnerRef = database.ref(`partners/${referrerUid}`);
+    const partnerSnap = await partnerRef.once('value');
+    const partner = partnerSnap.val();
+    if (!partner || partner.status !== 'approved') return; // only approved partners earn
+
+    const commission = Math.round(amount * PARTNER_COMMISSION_RATE * 100) / 100;
+
+    // Log the transaction
+    await partnerRef.child('transactions').push({
+      referredUid: currentUser.uid,
+      referredName: currentUser.displayName || currentUser.email,
+      referredEmail: currentUser.email,
+      plan: selectedPlan,
+      billing: isYearly ? 'yearly' : 'monthly',
+      amount: amount,
+      currency: userCurrency,
+      commissionRate: PARTNER_COMMISSION_RATE,
+      commission: commission,
+      gateway: gateway,
+      transactionRef: transactionRef,
+      date: new Date().toISOString()
+    });
+
+    // Atomically increment running totals so concurrent payments never clobber each other
+    await partnerRef.child('earnings/total').transaction(v => (v || 0) + commission);
+    await partnerRef.child('earnings/pending').transaction(v => (v || 0) + commission);
+    await partnerRef.child('earnings/count').transaction(v => (v || 0) + 1);
   }
 
   // ===== Success Celebration Modal =====

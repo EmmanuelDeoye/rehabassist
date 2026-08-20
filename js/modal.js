@@ -2,6 +2,24 @@
 // Dynamic Auth Modal Creator + Review System + Profile Modal
 // Settings now redirects to settings.html (no settings modal)
 
+// ---------- Rehablix Partners: capture ?ref=CODE on any page ----------
+// Runs immediately (not deferred to DOMContentLoaded) so a referral link
+// is captured even if the visitor lands on an inner page. The code is
+// held in localStorage until the visitor actually signs up (js/auth.js
+// reads and clears it at registration time), so it survives navigation
+// between pages before they create an account.
+(function captureReferralCode() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref) {
+      localStorage.setItem('rehablix_ref_code', ref.trim());
+    }
+  } catch (e) {
+    console.warn('Referral capture skipped:', e);
+  }
+})();
+
 function setupPasswordToggles() {
   const passwordInputs = document.querySelectorAll('#loginPassword, #regPassword, #regRepeatPassword');
   
@@ -275,6 +293,9 @@ function createAuthModal() {
             <button class="dropdown-item" id="settingsMenuItem">
               <span>⚙️</span> Settings
             </button>
+            <button class="dropdown-item" id="partnerMenuItem" style="display:none;">
+              <span>💰</span> Rehablix Partner
+            </button>
             <div class="dropdown-divider"></div>
             <button class="dropdown-item" id="logoutMenuItem">
               <span>🚪</span> Logout
@@ -285,6 +306,26 @@ function createAuthModal() {
       navRight.insertAdjacentHTML('beforeend', profileHTML);
     }
   }
+
+  // ---------- Rehablix Partners: show dropdown item for approved partners ----------
+  const partnerMenuItem = document.getElementById('partnerMenuItem');
+  if (partnerMenuItem) {
+    partnerMenuItem.addEventListener('click', () => {
+      window.location.href = 'partner.html';
+    });
+  }
+  firebase.auth().onAuthStateChanged((user) => {
+    if (!partnerMenuItem) return;
+    if (!user) {
+      partnerMenuItem.style.display = 'none';
+      return;
+    }
+    firebase.database().ref(`users/${user.uid}/partner/status`).once('value')
+      .then(snap => {
+        partnerMenuItem.style.display = snap.val() === 'approved' ? 'flex' : 'none';
+      })
+      .catch(() => { partnerMenuItem.style.display = 'none'; });
+  });
 
   // Insert modals (settings modal is REMOVED)
   document.body.insertAdjacentHTML('beforeend', modalHTML + feedbackModalHTML + profileModalHTML);

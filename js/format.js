@@ -6,6 +6,69 @@ let githubToken = '';
 let apiEndpoint = '';
 let currentUser = null;
 let historyItems = [];
+let currentPlan = 'free';
+
+// Cost control: free-plan users are capped at a monthly generation limit,
+// mirroring the pattern already used on the presentation tool. Student/Pro
+// are unlimited.
+const FREE_MONTHLY_LIMIT = 8;
+const FREE_LIMIT_DAYS = 30;
+const PLAN_STORAGE_KEY = 'rehab_format_generation_data';
+let generationCount = 0;
+let generationResetDate = null;
+
+function loadGenerationData() {
+  try {
+    const data = JSON.parse(localStorage.getItem(PLAN_STORAGE_KEY) || '{}');
+    generationCount = data.count || 0;
+    generationResetDate = data.resetDate ? new Date(data.resetDate) : null;
+
+    const now = new Date();
+    if (!generationResetDate || (now - generationResetDate) >= (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+      generationCount = 0;
+      generationResetDate = now;
+      saveGenerationData();
+    }
+  } catch (e) {
+    generationCount = 0;
+    generationResetDate = new Date();
+    saveGenerationData();
+  }
+}
+
+function saveGenerationData() {
+  localStorage.setItem(PLAN_STORAGE_KEY, JSON.stringify({
+    count: generationCount,
+    resetDate: generationResetDate ? generationResetDate.toISOString() : new Date().toISOString()
+  }));
+}
+
+function incrementGenerationCount() {
+  generationCount++;
+  saveGenerationData();
+}
+
+function canGenerateMore() {
+  if (currentPlan === 'student' || currentPlan === 'pro') return true;
+  const now = new Date();
+  if (!generationResetDate || (now - generationResetDate) >= (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000)) {
+    generationCount = 0;
+    generationResetDate = now;
+    saveGenerationData();
+    return true;
+  }
+  return generationCount < FREE_MONTHLY_LIMIT;
+}
+
+function getDaysUntilReset() {
+  if (!generationResetDate) return 0;
+  const diffTime = (FREE_LIMIT_DAYS * 24 * 60 * 60 * 1000) - (new Date() - generationResetDate);
+  return Math.max(0, Math.ceil(diffTime / (24 * 60 * 60 * 1000)));
+}
+
+document.addEventListener('planUpdated', (e) => {
+  currentPlan = e.detail?.plan || 'free';
+});
 
 document.addEventListener('DOMContentLoaded', async function() {
   console.log('Format.js loaded with subscription integration');
@@ -138,6 +201,11 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   const database = firebase.database();
+
+  loadGenerationData();
+  if (window.rehabPlans) {
+    currentPlan = window.rehabPlans.getCurrentPlan() || 'free';
+  }
 
   const tokens = await fetchTokens();
   if (tokens) {
@@ -665,6 +733,18 @@ Return ONLY the HTML.`;
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
+    if (!currentUser) {
+      showToast('Please log in to generate an assessment.', true);
+      document.getElementById('loginBtn')?.click();
+      return;
+    }
+
+    if (!canGenerateMore()) {
+      const daysLeft = getDaysUntilReset();
+      showToast(`⚠️ You've reached your ${FREE_MONTHLY_LIMIT} generation limit for this month. Upgrade to Student or Pro for unlimited access. Resets in ${daysLeft} days.`, true, 6000);
+      return;
+    }
+
     if (!githubToken || !apiEndpoint) {
       showToast('API credentials not loaded. Please refresh and try again.', true);
       return;
@@ -712,49 +792,7 @@ Return ONLY the HTML.`;
 
     try {
       const prompt = buildPrompt(formData);
-      
-      const response = await fetch(`${apiEndpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${githubToken}`
-        },
-        body: JSON.stringify({
-          messages: [
-            { role: 'system', content: 'You are a senior rehabilitation therapist. You always return clean, printable HTML forms. Never use Markdown or code fences.' },
-            { role: 'user', content: prompt }
-          ],
-          model: 'gpt-4.1',
-          temperature: 0.7,
-          max_tokens: 4000
-        })
-      });
-
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
-        if (window.reportApiError) {
-          window.reportApiError({
-            status: response.status,
-            bodyText: errBody,
-            tool: 'format',
-            context: 'generate formatted document'
-          });
-        }
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('Invalid API response structure');
-      }
-
-      let html = data.choices[0].message.content;
-      html = cleanHtml(html);
-
-      if (!html) {
-        throw new Error('Empty response from API');
-      }
+      const html = await callAIWithValidation(prompt, 1);
 
       window.currentGeneratedText = html;
       window.currentFormData = formData;
@@ -775,17 +813,88 @@ Return ONLY the HTML.`;
         showToast('Assessment generated! Login to save to history.', false, 4000);
       }
 
+      incrementGenerationCount();
       showPreviewModal(html, formData, assessmentId, hasHistoryAccess);
       
     } catch (error) {
       console.error('Generation error:', error);
-      showToast('Failed to generate. Please try again.', true);
+      showToast(error.message || 'Failed to generate. Please try again.', true);
     } finally {
       generateBtn.disabled = false;
       btnText.textContent = 'Generate Format';
       spinner.style.display = 'none';
     }
   });
+
+  // Validated, auto-retrying AI call — mirrors the fix applied to the
+  // presentation tool. A 200 OK with empty/near-empty content (content
+  // filter tripping on clinical wording, or truncation before real content
+  // was written) used to get saved and shown as-is. This now retries once
+  // with more token headroom, and reports genuinely failed attempts via
+  // error-reporter.js so they're visible in the admin Reviews tab.
+  async function callAIWithValidation(prompt, attempt) {
+    const response = await fetch(`${apiEndpoint}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${githubToken}`
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: 'You are a senior rehabilitation therapist. You always return clean, printable HTML forms. Never use Markdown or code fences.' },
+          { role: 'user', content: prompt }
+        ],
+        model: 'gpt-4.1',
+        temperature: 0.7,
+        max_tokens: attempt === 1 ? 4000 : 5500
+      })
+    });
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      if (window.reportApiError) {
+        window.reportApiError({
+          status: response.status,
+          bodyText: errBody,
+          tool: 'format',
+          context: `generate formatted document (attempt ${attempt})`
+        });
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const choice = data.choices && data.choices[0];
+    const finishReason = choice ? choice.finish_reason : null;
+    const rawContent = (choice && choice.message && typeof choice.message.content === 'string')
+      ? choice.message.content
+      : '';
+    const html = cleanHtml(rawContent);
+
+    if (finishReason === 'content_filter') {
+      if (window.reportApiError) {
+        window.reportApiError({ status: 200, bodyText: `content_filter (attempt ${attempt})`, tool: 'format', context: 'generate formatted document' });
+      }
+      throw new Error('The AI declined to generate this content, most likely due to sensitive wording in the notes. Try rephrasing and generate again.');
+    }
+
+    if (html.length < 20) {
+      if (attempt < 2) {
+        console.warn(`[format] Empty/short response (finish_reason=${finishReason}). Retrying…`);
+        return callAIWithValidation(prompt, attempt + 1);
+      }
+      if (window.reportApiError) {
+        window.reportApiError({ status: 200, bodyText: `Empty response after ${attempt} attempts, finish_reason=${finishReason}`, tool: 'format', context: 'generate formatted document' });
+      }
+      throw new Error('The AI returned an empty response after two attempts. Please try again.');
+    }
+
+    if (finishReason === 'length') {
+      showToast('⚠️ Output may be cut short — consider reducing the page count for a complete document.', false, 6000);
+    }
+
+    return html;
+  }
 
   // ===== Download Functions =====
   

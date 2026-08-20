@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const viewDashboard = document.getElementById('viewDashboard');
   const viewUsers = document.getElementById('viewUsers');
   const viewReviews = document.getElementById('viewReviews');
+  const viewPartners = document.getElementById('viewPartners');
   const viewSettings = document.getElementById('viewSettings');
   const sidebarLinks = document.querySelectorAll('.sidebar-link');
 
@@ -71,12 +72,24 @@ document.addEventListener('DOMContentLoaded', function() {
   const refreshReviewsBtn = document.getElementById('refreshReviewsBtn');
   const reviewCountBadge = document.getElementById('reviewCountBadge');
 
+  // Partners table
+  const partnerTableBody = document.getElementById('partnerTableBody');
+  const partnersEmpty = document.getElementById('partnersEmpty');
+  const partnersLoading = document.getElementById('partnersLoading');
+  const partnerSearch = document.getElementById('partnerSearch');
+  const filterPartnerStatus = document.getElementById('filterPartnerStatus');
+  const sortPartners = document.getElementById('sortPartners');
+  const refreshPartnersBtn = document.getElementById('refreshPartnersBtn');
+  const partnerCountBadge = document.getElementById('partnerCountBadge');
+
   // Modals
   const userDetailModal = document.getElementById('userDetailModal');
   const changePlanModal = document.getElementById('changePlanModal');
   const contactModal = document.getElementById('contactModal');
   const reviewDetailModal = document.getElementById('reviewDetailModal');
   const confirmModal = document.getElementById('confirmModal');
+  const partnerDetailModal = document.getElementById('partnerDetailModal');
+  const rejectReasonModal = document.getElementById('rejectReasonModal');
 
   // Settings
   const newAdminPass = document.getElementById('newAdminPass');
@@ -108,6 +121,51 @@ document.addEventListener('DOMContentLoaded', function() {
   const ADMIN_ACCESS_PATH = 'admin/access';
 
   // ==============================================================
+  // EMAILJS (client-side transactional email — this site has no backend)
+  // ==============================================================
+  // Sign up free at https://www.emailjs.com, connect an email service
+  // (Gmail, Outlook, SMTP, etc.), and create two templates: one for partner
+  // approval and one for partner rejection. Then fill these in. Until you
+  // do, emails are skipped gracefully (logged to console) rather than
+  // breaking the approve/reject flow.
+  const EMAILJS_CONFIG = {
+    PUBLIC_KEY: 'YOUR_EMAILJS_PUBLIC_KEY',
+    SERVICE_ID: 'YOUR_EMAILJS_SERVICE_ID',
+    TEMPLATE_APPROVED: 'YOUR_EMAILJS_APPROVED_TEMPLATE_ID',
+    TEMPLATE_REJECTED: 'YOUR_EMAILJS_REJECTED_TEMPLATE_ID'
+  };
+  const emailJsReady = () =>
+    typeof emailjs !== 'undefined' &&
+    !EMAILJS_CONFIG.PUBLIC_KEY.startsWith('YOUR_');
+
+  if (emailJsReady()) {
+    try { emailjs.init({ publicKey: EMAILJS_CONFIG.PUBLIC_KEY }); } catch (e) { console.warn('EmailJS init failed:', e); }
+  }
+
+  // Sends a partner status-update email. Template params available to your
+  // EmailJS template: to_email, to_name, status, reason, referral_link.
+  async function sendPartnerStatusEmail(partner, status, reason) {
+    if (!emailJsReady()) {
+      console.warn(`[EmailJS not configured] Would have emailed ${partner.email}: partner ${status}.` +
+        (reason ? ` Reason: ${reason}` : ''));
+      return;
+    }
+    const templateId = status === 'approved' ? EMAILJS_CONFIG.TEMPLATE_APPROVED : EMAILJS_CONFIG.TEMPLATE_REJECTED;
+    try {
+      await emailjs.send(EMAILJS_CONFIG.SERVICE_ID, templateId, {
+        to_email: partner.email,
+        to_name: partner.name || partner.email,
+        status: status,
+        reason: reason || '',
+        referral_link: `${window.location.origin}/index.html?ref=${encodeURIComponent(partner.code || '')}`
+      });
+    } catch (err) {
+      console.error('EmailJS send failed:', err);
+      showToast('Status updated, but the notification email failed to send.', 'warning');
+    }
+  }
+
+  // ==============================================================
   // STATE
   // ==============================================================
   let allUsers = [];
@@ -115,6 +173,10 @@ document.addEventListener('DOMContentLoaded', function() {
   let allReviews = [];
   let filteredReviews = [];
   let selectedReviewKey = null;
+  let allPartners = [];
+  let filteredPartners = [];
+  let selectedPartnerUid = null;
+  let pendingRejectUid = null;
   let contactContext = null; // { email, phone, label, kind: 'user'|'review', refId }
   let currentView = 'dashboard';
   let selectedUserId = null;
@@ -220,6 +282,10 @@ document.addEventListener('DOMContentLoaded', function() {
         viewReviews.style.display = 'block';
         currentView = 'reviews';
         loadReviews();
+      } else if (view === 'partners') {
+        viewPartners.style.display = 'block';
+        currentView = 'partners';
+        loadPartners();
       } else if (view === 'settings') {
         viewSettings.style.display = 'block';
         currentView = 'settings';
@@ -486,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (planProCount) planProCount.textContent = pro;
       if (userCountBadge) userCountBadge.textContent = totalUsers;
       updateReviewBadge();
+      updatePartnerBadge();
 
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -1113,6 +1180,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
       allReviews = Object.keys(reviews).map(key => {
         const data = reviews[key];
+        const isUserFeedback = data.rating !== undefined; // modal.js star/emoji feedback shape
+
+        // Normalize timestamp: issue reports use Firebase ServerValue (ms
+        // number), user feedback entries store an ISO string.
+        let ts = data.timestamp || 0;
+        if (typeof ts === 'string') {
+          const parsed = Date.parse(ts);
+          ts = isNaN(parsed) ? 0 : parsed;
+        }
+
+        if (isUserFeedback) {
+          const userObj = (data.user && typeof data.user === 'object') ? data.user : null;
+          return {
+            key,
+            type: 'user_feedback',
+            tool: 'feedback',
+            context: data.feedback || '',
+            status: null,
+            detail: '',
+            comment: '',
+            page: '',
+            userAgent: '',
+            userId: userObj ? userObj.uid : '',
+            userEmail: userObj ? userObj.email : '',
+            resolved: data.resolved === true,
+            timestamp: ts,
+            rating: Number(data.rating) || 0,
+            emoji: data.emoji || '',
+            feedback: data.feedback || '',
+            userName: userObj ? userObj.name : (data.user === 'anonymous' ? 'Anonymous' : '')
+          };
+        }
+
         return {
           key,
           type: data.type || 'api_error',
@@ -1126,9 +1226,27 @@ document.addEventListener('DOMContentLoaded', function() {
           userId: data.userId || '',
           userEmail: data.userEmail || '',
           resolved: data.resolved === true,
-          timestamp: data.timestamp || 0
+          timestamp: ts,
+          rating: null,
+          emoji: '',
+          feedback: '',
+          userName: ''
         };
       });
+
+      // Average rating summary (user feedback entries only)
+      const ratingEntries = allReviews.filter(r => r.type === 'user_feedback' && r.rating > 0);
+      const avgRatingEl = document.getElementById('avgRatingValue');
+      const totalRatingsEl = document.getElementById('totalRatingsCount');
+      if (avgRatingEl && totalRatingsEl) {
+        if (ratingEntries.length > 0) {
+          const avg = ratingEntries.reduce((sum, r) => sum + r.rating, 0) / ratingEntries.length;
+          avgRatingEl.textContent = `${avg.toFixed(1)} / 5`;
+        } else {
+          avgRatingEl.textContent = '—';
+        }
+        totalRatingsEl.textContent = ratingEntries.length;
+      }
 
       // Populate the tool filter dynamically from what's actually in the data
       const tools = [...new Set(allReviews.map(r => r.tool))].sort();
@@ -1167,7 +1285,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const toolMatch = r.tool.toLowerCase().includes(search);
         const contextMatch = r.context.toLowerCase().includes(search);
         const emailMatch = r.userEmail.toLowerCase().includes(search);
-        if (!toolMatch && !contextMatch && !emailMatch) return false;
+        const feedbackMatch = (r.feedback || '').toLowerCase().includes(search);
+        const nameMatch = (r.userName || '').toLowerCase().includes(search);
+        if (!toolMatch && !contextMatch && !emailMatch && !feedbackMatch && !nameMatch) return false;
       }
       if (type && r.type !== type) return false;
       if (tool && r.tool !== tool) return false;
@@ -1194,10 +1314,21 @@ document.addEventListener('DOMContentLoaded', function() {
     let html = '';
     filteredReviews.forEach(r => {
       const rowClass = r.resolved ? 'resolved-row' : '';
-      const typeLabel = r.type === 'insufficient_funds' ? 'Insufficient Funds' : 'API Error';
+      const isFeedback = r.type === 'user_feedback';
+      const typeLabel = isFeedback ? 'User Rating' : (r.type === 'insufficient_funds' ? 'Insufficient Funds' : 'API Error');
       const dateStr = r.timestamp ? new Date(r.timestamp).toLocaleDateString('en-GB', {
         day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
       }) : 'Unknown';
+
+      const starsHtml = isFeedback
+        ? `<span class="review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(Math.max(0, 5 - r.rating))}</span> ${r.emoji || ''}`
+        : '';
+      const contextLine = isFeedback
+        ? (r.feedback ? escapeHtml(r.feedback) : 'No written feedback')
+        : escapeHtml(r.context || r.detail || 'No description provided');
+      const metaLine = isFeedback
+        ? `${escapeHtml(r.userName || 'Anonymous')}${r.userEmail ? ' · ' + escapeHtml(r.userEmail) : ''} · ${dateStr}`
+        : `${r.userEmail ? escapeHtml(r.userEmail) : 'No user on file'} · ${dateStr}`;
 
       html += `
         <tr class="${rowClass}" data-key="${r.key}">
@@ -1206,10 +1337,10 @@ document.addEventListener('DOMContentLoaded', function() {
               <div class="review-cell-top">
                 <span class="badge-review-type ${r.type}">${typeLabel}</span>
                 ${r.resolved ? '<span class="badge-review-resolved">Resolved</span>' : ''}
-                <span class="review-cell-meta">${escapeHtml(r.tool)}${r.status ? ' · HTTP ' + r.status : ''}</span>
+                ${isFeedback ? starsHtml : `<span class="review-cell-meta">${escapeHtml(r.tool)}${r.status ? ' · HTTP ' + r.status : ''}</span>`}
               </div>
-              <span class="review-cell-context">${escapeHtml(r.context || r.detail || 'No description provided')}</span>
-              <span class="review-cell-meta">${r.userEmail ? escapeHtml(r.userEmail) : 'No user on file'} · ${dateStr}</span>
+              <span class="review-cell-context">${contextLine}</span>
+              <span class="review-cell-meta">${metaLine}</span>
             </div>
           </td>
           <td>
@@ -1351,22 +1482,34 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     selectedReviewKey = key;
-    const typeLabel = review.type === 'insufficient_funds' ? 'Insufficient Funds' : 'Other API Error';
     const dateStr = review.timestamp ? new Date(review.timestamp).toLocaleString() : 'Unknown';
-
     const body = document.getElementById('reviewDetailBody');
-    body.innerHTML = `
-      <div class="review-detail-row"><span class="review-detail-label">Type</span><span class="review-detail-value">${escapeHtml(typeLabel)}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Tool</span><span class="review-detail-value">${escapeHtml(review.tool)}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Context</span><span class="review-detail-value">${escapeHtml(review.context || '—')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">HTTP Status</span><span class="review-detail-value">${review.status ?? '—'}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Detail</span><span class="review-detail-value mono">${escapeHtml(review.detail || '—')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">User Comment</span><span class="review-detail-value">${escapeHtml(review.comment || '—')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">User Email</span><span class="review-detail-value">${escapeHtml(review.userEmail || 'Not signed in')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Page</span><span class="review-detail-value mono">${escapeHtml(review.page || '—')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Browser</span><span class="review-detail-value mono">${escapeHtml(review.userAgent || '—')}</span></div>
-      <div class="review-detail-row"><span class="review-detail-label">Reported</span><span class="review-detail-value">${dateStr}</span></div>
-    `;
+
+    if (review.type === 'user_feedback') {
+      const stars = '★'.repeat(review.rating) + '☆'.repeat(Math.max(0, 5 - review.rating));
+      body.innerHTML = `
+        <div class="review-detail-row"><span class="review-detail-label">Type</span><span class="review-detail-value">User Rating</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Rating</span><span class="review-detail-value review-stars">${stars} (${review.rating}/5) ${review.emoji || ''}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Feedback</span><span class="review-detail-value">${escapeHtml(review.feedback || 'No written feedback')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">User</span><span class="review-detail-value">${escapeHtml(review.userName || 'Anonymous')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">User Email</span><span class="review-detail-value">${escapeHtml(review.userEmail || 'Not signed in')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Submitted</span><span class="review-detail-value">${dateStr}</span></div>
+      `;
+    } else {
+      const typeLabel = review.type === 'insufficient_funds' ? 'Insufficient Funds' : 'Other API Error';
+      body.innerHTML = `
+        <div class="review-detail-row"><span class="review-detail-label">Type</span><span class="review-detail-value">${escapeHtml(typeLabel)}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Tool</span><span class="review-detail-value">${escapeHtml(review.tool)}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Context</span><span class="review-detail-value">${escapeHtml(review.context || '—')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">HTTP Status</span><span class="review-detail-value">${review.status ?? '—'}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Detail</span><span class="review-detail-value mono">${escapeHtml(review.detail || '—')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">User Comment</span><span class="review-detail-value">${escapeHtml(review.comment || '—')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">User Email</span><span class="review-detail-value">${escapeHtml(review.userEmail || 'Not signed in')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Page</span><span class="review-detail-value mono">${escapeHtml(review.page || '—')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Browser</span><span class="review-detail-value mono">${escapeHtml(review.userAgent || '—')}</span></div>
+        <div class="review-detail-row"><span class="review-detail-label">Reported</span><span class="review-detail-value">${dateStr}</span></div>
+      `;
+    }
 
     const resolveBtn = document.getElementById('reviewDetailResolveBtn');
     resolveBtn.textContent = review.resolved ? 'Mark Unresolved' : 'Mark Resolved';
@@ -1383,6 +1526,339 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   [reviewSearch, filterReviewType, filterReviewTool, filterReviewStatus, sortReviews].forEach(el => {
     if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', applyReviewFilters);
+  });
+
+  // ==============================================================
+  // REHABLIX PARTNERS
+  // ==============================================================
+  let isLoadingPartners = false;
+
+  async function updatePartnerBadge() {
+    try {
+      const snapshot = await database.ref('partners').once('value');
+      const data = snapshot.val() || {};
+      const pendingCount = Object.values(data).filter(p => p.status === 'pending').length;
+      if (partnerCountBadge) partnerCountBadge.textContent = pendingCount;
+    } catch (error) {
+      console.error('Error updating partner badge:', error);
+    }
+  }
+
+  async function loadPartners(force = false) {
+    if (isLoadingPartners && !force) return;
+    if (!viewPartners || viewPartners.style.display === 'none') return;
+
+    try {
+      isLoadingPartners = true;
+      partnersLoading.classList.add('show');
+      partnersEmpty.classList.remove('show');
+      partnerTableBody.innerHTML = '';
+
+      const snapshot = await database.ref('partners').once('value');
+      const partners = snapshot.val() || {};
+
+      allPartners = Object.keys(partners).map(uid => {
+        const p = partners[uid];
+        const referrals = p.referrals || {};
+        const earnings = p.earnings || {};
+        return {
+          uid,
+          name: p.name || 'Unknown',
+          email: p.email || '',
+          code: p.code || '',
+          status: p.status || 'pending',
+          audience: p.audience || '',
+          payoutMethod: p.payoutMethod || '',
+          payoutDetails: p.payoutDetails || '',
+          note: p.note || '',
+          appliedAt: p.appliedAt || '',
+          approvedAt: p.approvedAt || '',
+          rejectionReason: p.rejectionReason || '',
+          referralCount: Object.keys(referrals).length,
+          earningsTotal: Number(earnings.total) || 0,
+          earningsPending: Number(earnings.pending) || 0,
+          earningsCount: Number(earnings.count) || 0
+        };
+      });
+
+      partnersLoading.classList.remove('show');
+      isLoadingPartners = false;
+      applyPartnerFilters();
+      updatePartnerBadge();
+
+    } catch (error) {
+      console.error('Error loading partners:', error);
+      partnersLoading.classList.remove('show');
+      isLoadingPartners = false;
+      showToast('Error loading partners. Please refresh.', 'error');
+    }
+  }
+
+  function applyPartnerFilters() {
+    const search = partnerSearch.value.toLowerCase().trim();
+    const status = filterPartnerStatus.value;
+    const sort = sortPartners.value;
+
+    filteredPartners = allPartners.filter(p => {
+      if (search) {
+        const nameMatch = p.name.toLowerCase().includes(search);
+        const emailMatch = p.email.toLowerCase().includes(search);
+        const codeMatch = p.code.toLowerCase().includes(search);
+        if (!nameMatch && !emailMatch && !codeMatch) return false;
+      }
+      if (status && p.status !== status) return false;
+      return true;
+    });
+
+    filteredPartners.sort((a, b) => {
+      if (sort === 'earnings') return b.earningsTotal - a.earningsTotal;
+      const aT = Date.parse(a.appliedAt) || 0;
+      const bT = Date.parse(b.appliedAt) || 0;
+      return sort === 'oldest' ? aT - bT : bT - aT;
+    });
+
+    renderPartnersTable();
+  }
+
+  function partnerStatusBadge(status) {
+    if (status === 'approved') return '<span class="badge-success">Approved</span>';
+    if (status === 'rejected') return '<span class="badge-warning">Rejected</span>';
+    return '<span class="badge-review-type insufficient_funds">Pending Review</span>';
+  }
+
+  function renderPartnersTable() {
+    if (!partnerTableBody) return;
+
+    if (filteredPartners.length === 0) {
+      partnerTableBody.innerHTML = '';
+      partnersEmpty.classList.add('show');
+      return;
+    }
+    partnersEmpty.classList.remove('show');
+
+    let html = '';
+    filteredPartners.forEach(p => {
+      const appliedStr = p.appliedAt ? new Date(p.appliedAt).toLocaleDateString('en-GB', {
+        day: 'numeric', month: 'short', year: 'numeric'
+      }) : 'Unknown';
+
+      html += `
+        <tr data-uid="${p.uid}">
+          <td>
+            <div class="review-cell" data-uid="${p.uid}">
+              <div class="review-cell-top">
+                ${partnerStatusBadge(p.status)}
+                <span class="review-cell-meta">Code: ${escapeHtml(p.code)}</span>
+              </div>
+              <span class="review-cell-context">${escapeHtml(p.name)} · ${escapeHtml(p.email)}</span>
+              <span class="review-cell-meta partner-stat-mini">
+                ${p.referralCount} referral${p.referralCount === 1 ? '' : 's'} ·
+                $${p.earningsTotal.toFixed(2)} earned ·
+                Applied ${appliedStr}
+              </span>
+            </div>
+          </td>
+          <td>
+            <div class="table-cell-actions">
+              <button class="action-menu-btn" data-uid="${p.uid}" title="Actions">⋮</button>
+              <div class="action-dropdown" data-uid="${p.uid}">
+                <button class="action-dropdown-item" data-action="detail">
+                  <span class="action-icon">👁️</span>
+                  <span class="action-label">View Application</span>
+                </button>
+                ${p.status !== 'approved' ? `
+                <button class="action-dropdown-item" data-action="approve">
+                  <span class="action-icon">✅</span>
+                  <span class="action-label">Approve</span>
+                </button>` : ''}
+                ${p.status !== 'rejected' ? `
+                <button class="action-dropdown-item danger" data-action="reject">
+                  <span class="action-icon">🚫</span>
+                  <span class="action-label">${p.status === 'approved' ? 'Revoke' : 'Reject'}</span>
+                </button>` : ''}
+                <button class="action-dropdown-item" data-action="email">
+                  <span class="action-icon">✉️</span>
+                  <span class="action-label">Contact via Email</span>
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      `;
+    });
+
+    partnerTableBody.innerHTML = html;
+
+    partnerTableBody.querySelectorAll('.review-cell').forEach(cell => {
+      cell.addEventListener('click', () => openPartnerDetail(cell.dataset.uid));
+    });
+
+    partnerTableBody.querySelectorAll('.action-menu-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const uid = btn.dataset.uid;
+        const dropdown = document.querySelector(`#partnerTableBody .action-dropdown[data-uid="${uid}"]`);
+
+        document.querySelectorAll('.action-dropdown.show').forEach(d => {
+          if (d !== dropdown) d.classList.remove('show');
+        });
+
+        dropdown.classList.toggle('show');
+      });
+    });
+
+    partnerTableBody.querySelectorAll('.action-dropdown-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = item.dataset.action;
+        const dropdown = item.closest('.action-dropdown');
+        const uid = dropdown.dataset.uid;
+        dropdown.classList.remove('show');
+        handlePartnerAction(action, uid);
+      });
+    });
+  }
+
+  function handlePartnerAction(action, uid) {
+    const partner = allPartners.find(p => p.uid === uid);
+    if (!partner) {
+      showToast('Partner not found.', 'error');
+      return;
+    }
+
+    switch (action) {
+      case 'detail':
+        openPartnerDetail(uid);
+        break;
+      case 'approve':
+        approvePartner(uid);
+        break;
+      case 'reject':
+        openRejectReasonModal(uid);
+        break;
+      case 'email':
+        if (!partner.email) {
+          showToast('No email on file for this partner.', 'warning');
+          return;
+        }
+        openContact({
+          email: partner.email,
+          phone: '',
+          label: `Partner · ${partner.name}`,
+          kind: 'partner',
+          refId: uid
+        });
+        break;
+    }
+  }
+
+  async function approvePartner(uid) {
+    const partner = allPartners.find(p => p.uid === uid);
+    if (!partner) return;
+
+    try {
+      const now = new Date().toISOString();
+      await database.ref(`partners/${uid}`).update({ status: 'approved', approvedAt: now, rejectionReason: null });
+      await database.ref(`users/${uid}/partner`).update({ status: 'approved', approvedAt: now });
+      showToast(`✅ ${partner.name} approved as a Rehablix Partner.`);
+      partnerDetailModal.classList.remove('show');
+      await sendPartnerStatusEmail(partner, 'approved', '');
+      loadPartners(true);
+    } catch (error) {
+      console.error('Error approving partner:', error);
+      showToast('Error approving partner.', 'error');
+    }
+  }
+
+  function openRejectReasonModal(uid) {
+    pendingRejectUid = uid;
+    const input = document.getElementById('rejectReasonInput');
+    if (input) input.value = '';
+    rejectReasonModal.classList.add('show');
+  }
+
+  document.getElementById('confirmRejectBtn')?.addEventListener('click', async () => {
+    if (!pendingRejectUid) return;
+    const partner = allPartners.find(p => p.uid === pendingRejectUid);
+    if (!partner) return;
+
+    const reason = document.getElementById('rejectReasonInput').value.trim();
+
+    try {
+      const now = new Date().toISOString();
+      await database.ref(`partners/${pendingRejectUid}`).update({
+        status: 'rejected',
+        rejectedAt: now,
+        rejectionReason: reason
+      });
+      await database.ref(`users/${pendingRejectUid}/partner`).update({ status: 'rejected' });
+      showToast(`Application from ${partner.name} rejected.`);
+      rejectReasonModal.classList.remove('show');
+      partnerDetailModal.classList.remove('show');
+      await sendPartnerStatusEmail(partner, 'rejected', reason);
+      pendingRejectUid = null;
+      loadPartners(true);
+    } catch (error) {
+      console.error('Error rejecting partner:', error);
+      showToast('Error rejecting partner.', 'error');
+    }
+  });
+
+  function openPartnerDetail(uid) {
+    const partner = allPartners.find(p => p.uid === uid);
+    if (!partner) {
+      showToast('Partner not found.', 'error');
+      return;
+    }
+
+    selectedPartnerUid = uid;
+    const appliedStr = partner.appliedAt ? new Date(partner.appliedAt).toLocaleString() : 'Unknown';
+
+    const body = document.getElementById('partnerDetailBody');
+    body.innerHTML = `
+      <div class="review-detail-row"><span class="review-detail-label">Status</span><span class="review-detail-value">${partnerStatusBadge(partner.status)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Name</span><span class="review-detail-value">${escapeHtml(partner.name)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Email</span><span class="review-detail-value">${escapeHtml(partner.email)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Referral Code</span><span class="review-detail-value mono">${escapeHtml(partner.code)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">How They'll Share</span><span class="review-detail-value">${escapeHtml(partner.audience || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Payout Method</span><span class="review-detail-value">${escapeHtml(partner.payoutMethod || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Payout Details</span><span class="review-detail-value mono">${escapeHtml(partner.payoutDetails || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Note</span><span class="review-detail-value">${escapeHtml(partner.note || '—')}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Referrals</span><span class="review-detail-value">${partner.referralCount}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Total Earned</span><span class="review-detail-value">$${partner.earningsTotal.toFixed(2)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Pending Payout</span><span class="review-detail-value">$${partner.earningsPending.toFixed(2)}</span></div>
+      <div class="review-detail-row"><span class="review-detail-label">Applied</span><span class="review-detail-value">${appliedStr}</span></div>
+      ${partner.status === 'rejected' && partner.rejectionReason ? `<div class="review-detail-row"><span class="review-detail-label">Rejection Reason</span><span class="review-detail-value">${escapeHtml(partner.rejectionReason)}</span></div>` : ''}
+    `;
+
+    const approveBtn = document.getElementById('partnerApproveBtn');
+    const rejectBtn = document.getElementById('partnerRejectBtn');
+
+    approveBtn.style.display = partner.status !== 'approved' ? 'inline-flex' : 'none';
+    approveBtn.onclick = () => approvePartner(uid);
+
+    if (partner.status === 'approved') {
+      rejectBtn.textContent = 'Revoke Access';
+      rejectBtn.onclick = () => {
+        confirmAction = 'revokePartner';
+        confirmData = uid;
+        document.getElementById('confirmTitle').textContent = 'Revoke Partner Access';
+        document.getElementById('confirmMessage').textContent = `Revoke ${partner.name}'s partner access? They will stop earning commissions on new subscriptions.`;
+        confirmModal.classList.add('show');
+      };
+    } else {
+      rejectBtn.textContent = 'Reject';
+      rejectBtn.onclick = () => openRejectReasonModal(uid);
+    }
+
+    partnerDetailModal.classList.add('show');
+  }
+
+  if (refreshPartnersBtn) {
+    refreshPartnersBtn.addEventListener('click', () => loadPartners(true));
+  }
+  [partnerSearch, filterPartnerStatus, sortPartners].forEach(el => {
+    if (el) el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', applyPartnerFilters);
   });
 
   // ==============================================================
@@ -1488,12 +1964,14 @@ document.addEventListener('DOMContentLoaded', function() {
     contactContext = context;
 
     document.getElementById('contactModalTitle').textContent =
-      context.kind === 'review' ? 'Contact About Review' : 'Contact User';
+      context.kind === 'review' ? 'Contact About Review' : context.kind === 'partner' ? 'Contact Partner' : 'Contact User';
     document.getElementById('contactUserEmail').textContent = context.email || 'No email on file';
     document.getElementById('contactPhone').value = context.phone || '';
     document.getElementById('contactSubject').value = context.kind === 'review'
       ? `Regarding your rehablix issue report (${context.label || ''})`
-      : '';
+      : context.kind === 'partner'
+        ? `Regarding your Rehablix Partners application`
+        : '';
     document.getElementById('contactMessage').value = '';
     document.getElementById('contactMsg').textContent = '';
     document.getElementById('contactMsg').className = 'form-msg';
@@ -1640,6 +2118,22 @@ document.addEventListener('DOMContentLoaded', function() {
       } catch (error) {
         console.error('Error deleting review:', error);
         showToast('Error deleting review.', 'error');
+      }
+    }
+
+    if (confirmAction === 'revokePartner' && confirmData) {
+      const uid = confirmData;
+      try {
+        await database.ref(`partners/${uid}/status`).set('rejected');
+        await database.ref(`partners/${uid}/revokedAt`).set(new Date().toISOString());
+        await database.ref(`users/${uid}/partner/status`).set('rejected');
+        showToast('✅ Partner access revoked.');
+        modal.classList.remove('show');
+        loadPartners(true);
+        updatePartnerBadge();
+      } catch (error) {
+        console.error('Error revoking partner:', error);
+        showToast('Error revoking partner access.', 'error');
       }
     }
 

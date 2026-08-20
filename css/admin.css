@@ -1743,6 +1743,22 @@
   color: #b91c1c;
 }
 
+.badge-review-type.user_feedback {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.review-stars {
+  color: #f59e0b;
+  letter-spacing: 1px;
+  font-size: 0.85rem;
+}
+
+.partner-stat-mini {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 .badge-review-resolved {
   display: inline-block;
   padding: 0.15rem 0.6rem;
@@ -1820,6 +1836,11 @@
 [data-theme="dark"] .badge-review-type.api_error {
   background: #3a0a0a;
   color: #f87171;
+}
+
+[data-theme="dark"] .badge-review-type.user_feedback {
+  background: #0a1a3a;
+  color: #93c5fd;
 }
 
 [data-theme="dark"] .badge-review-resolved {

@@ -14,6 +14,48 @@
   box-sizing: border-box;
 }
 
+/* Interface-only disclaimer — deliberately NOT included in the generated
+   result content, the print/PDF output, or the downloaded document. */
+.standardized-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  max-width: 1000px;
+  margin: 0 auto 1.25rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.standardized-disclaimer-icon {
+  font-size: 1.1rem;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.standardized-disclaimer p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #92400e;
+}
+
+[data-theme="dark"] .standardized-disclaimer {
+  background: #2a2109;
+  border-color: #4a3a10;
+}
+
+[data-theme="dark"] .standardized-disclaimer p {
+  color: #fbbf24;
+}
+
+@media (max-width: 640px) {
+  .standardized-disclaimer {
+    margin: 0 1rem 1.25rem;
+  }
+}
+
 .tool-container {
   display: flex;
   flex-direction: column;
